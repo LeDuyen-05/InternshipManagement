@@ -1,0 +1,20 @@
+# Backend (.NET)
+backend/**/bin/
+backend/**/obj/
+*.user
+
+# Frontend (Node)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# ML Service (Python)
+ml-service/venv/
+ml-service/__pycache__/
+ml-service/**/__pycache__/
+ml-service/.env
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
