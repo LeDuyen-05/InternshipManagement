@@ -107,9 +107,4 @@ git push origin feature/<ten>-<module>
 # Rồi tạo Pull Request trên GitHub, nhờ  review + merge vào main
 ```
 
-**Quan trọng**: pull code mới nhất từ `main` về nhánh của mình **mỗi ngày** trước khi code tiếp, tránh để lâu dễ bị conflict lớn.
 
-## ⚠️ Điểm cần xác nhận thêm với GVHD (xem comment "ĐỀ XUẤT"/"GHI CHÚ" trong code)
-- `GoiYCongTy`: khóa phức hợp (maHoSo, maCongTy) — đề xuất, chưa xác nhận chính thức.
-- `GioiThieu`: thuộc tính `ngayGioiThieu`, `trangThaiKetNoi` — cần đối chiếu lại sơ đồ lớp mới nhất.
-- `PhanBoThucTap`: đã thêm `maSinhVien` theo yêu cầu — cần đối chiếu lại multiplicity trong sơ đồ lớp phân tích.
