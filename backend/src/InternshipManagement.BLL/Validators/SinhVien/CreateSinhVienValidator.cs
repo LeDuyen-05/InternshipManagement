@@ -2,7 +2,6 @@ using InternshipManagement.BLL.DTOs.SinhVien;
 
 namespace InternshipManagement.BLL.Validators.SinhVien;
 
-/// <summary>Validator thủ công đơn giản — không dùng thư viện ngoài, giữ đồ án gọn nhẹ.</summary>
 public class CreateSinhVienValidator
 {
     public List<string> Validate(CreateSinhVienDto dto)

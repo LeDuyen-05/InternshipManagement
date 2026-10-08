@@ -1,10 +1,5 @@
 namespace InternshipManagement.DAL.Entities;
 
-/// <summary>
-/// Giữ lại theo xác nhận của nhóm. Thuộc tính giữ nguyên như đã thống nhất
-/// trước đó (dựa trên sơ đồ lớp .mdl gốc): MaDeXuat làm khóa chính,
-/// liên kết CongTy, SinhVien, GiangVien.
-/// </summary>
 public class DeXuatCongTy
 {
     public string MaDeXuat { get; set; } = default!;

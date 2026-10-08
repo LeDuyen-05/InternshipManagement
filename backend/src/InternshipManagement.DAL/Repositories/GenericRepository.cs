@@ -15,7 +15,7 @@ public class GenericRepository<T> : IRepository<T> where T : class
     }
 
     public async Task<T?> GetByIdAsync(string id) => await DbSet.FindAsync(id);
-    public async Task<IReadOnlyList<T>> GetAllAsync() => await DbSet.ToListAsync();
+    public async Task<IReadOnlyList<T>> GetAllAsync() => await DbSet.AsNoTracking().ToListAsync();
     public async Task AddAsync(T entity) => await DbSet.AddAsync(entity);
     public void Update(T entity) => DbSet.Update(entity);
     public void Delete(T entity) => DbSet.Remove(entity);

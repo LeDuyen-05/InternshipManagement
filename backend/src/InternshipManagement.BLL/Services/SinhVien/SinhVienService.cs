@@ -5,11 +5,6 @@ using InternshipManagement.DAL.Repositories;
 
 namespace InternshipManagement.BLL.Services.SinhVien;
 
-/// <summary>
-/// Module MẪU — dùng làm khuôn mẫu cho các module còn lại (CongTy, GiangVien...).
-/// Chứa hành vi nghiệp vụ của lớp SinhVien (CapNhatThongTin...) trong sơ đồ phân tích.
-/// Đây là class KỸ THUẬT phục vụ triển khai, KHÔNG phải lớp trong sơ đồ lớp phân tích.
-/// </summary>
 public class SinhVienService : ISinhVienService
 {
     private readonly ISinhVienRepository _repository;
@@ -57,7 +52,6 @@ public class SinhVienService : ISinhVienService
         return ToDto(entity);
     }
 
-    /// <summary>Tương ứng CapNhatThongTin() trong sơ đồ lớp phân tích.</summary>
     public async Task UpdateAsync(string maSV, UpdateSinhVienDto dto)
     {
         var entity = await _repository.GetByIdAsync(maSV)

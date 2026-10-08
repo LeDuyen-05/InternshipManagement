@@ -4,11 +4,12 @@ public class CongTy
 {
     public string MaCongTy { get; set; } = default!;
     public string TenCongTy { get; set; } = default!;
-    public string ViTriTuyen { get; set; } = default!;
-    public DateTime ThoiGian { get; set; }
-    public int SoLuongNhan { get; set; }
-    public string YeuCau { get; set; } = default!;
-    public string TrangThai { get; set; } = default!;
+    public string? ViTriTuyen { get; set; }
+    public string? ThoiGian { get; set; }
+    public int? SoLuongNhan { get; set; }
+    public string? YeuCau { get; set; }
+    public string TrangThai { get; set; } = "ChoDuyet";
+    public string? EmbeddingYeuCau { get; set; }
 
     public ICollection<DaiDienDoanhNghiep> DaiDienDoanhNghieps { get; set; } = new List<DaiDienDoanhNghiep>();
     public ICollection<DangKyThucTap> DangKyThucTaps { get; set; } = new List<DangKyThucTap>();

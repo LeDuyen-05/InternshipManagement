@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace InternshipManagement.DAL.Configurations;
 
-/// <summary>File Configuration mẫu — dùng làm pattern cho các bảng khác nếu cần.</summary>
 public class SinhVienConfiguration : IEntityTypeConfiguration<SinhVien>
 {
     public void Configure(EntityTypeBuilder<SinhVien> builder)

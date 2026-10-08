@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace InternshipManagement.DAL.Configurations;
 
-/// <summary>
-/// DangKyThucTap dùng khóa chính riêng (MaDangKy) theo xác nhận của nhóm,
-/// không dùng khóa phức hợp (MaSinhVien, MaCongTy, MaDot).
-/// </summary>
 public class DangKyThucTapConfiguration : IEntityTypeConfiguration<DangKyThucTap>
 {
     public void Configure(EntityTypeBuilder<DangKyThucTap> builder)

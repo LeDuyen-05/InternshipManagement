@@ -16,7 +16,7 @@ public class SinhVienServiceTests
         var validator = new CreateSinhVienValidator();
         var service = new SinhVienService(repoMock.Object, validator);
 
-        var dto = new CreateSinhVienDto { MaSV = "SV001", HoTen = "Nguyen Van A", Gpa = 5.0 };
+        var dto = new CreateSinhVienDto { MaSV = "SV001", HoTen = "Nguyen Van A", Gpa = 5.0m };
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.CreateAsync(dto));
     }

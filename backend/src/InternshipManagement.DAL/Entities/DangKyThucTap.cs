@@ -1,9 +1,5 @@
 namespace InternshipManagement.DAL.Entities;
 
-/// <summary>
-/// Lớp kết hợp giữa SinhVien và CongTy, có thuộc tính nghiệp vụ riêng
-/// nên dùng khóa chính riêng (MaDangKy) thay vì khóa phức hợp — theo xác nhận của nhóm.
-/// </summary>
 public class DangKyThucTap
 {
     public string MaDangKy { get; set; } = default!;

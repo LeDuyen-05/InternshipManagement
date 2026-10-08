@@ -1,24 +1,35 @@
 using InternshipManagement.BLL.Services.SinhVien;
 using InternshipManagement.BLL.Validators.SinhVien;
+using InternshipManagement.BLL.Services.GioiThieu;
+using InternshipManagement.BLL.Validators.GioiThieu;
+using InternshipManagement.BLL.Services.GVHuongDan;
+using InternshipManagement.BLL.Services.TienDoThucTap;
+using InternshipManagement.BLL.Services.PhieuChamDiem;
 using InternshipManagement.DAL;
 using InternshipManagement.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---- Database ----
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ---- Đăng ký Repository ----
-// Mỗi khi thêm module mới, đăng ký thêm 1 dòng theo đúng khuôn mẫu này.
 builder.Services.AddScoped<ISinhVienRepository, SinhVienRepository>();
+builder.Services.AddScoped<IGioiThieuRepository, GioiThieuRepository>();
+builder.Services.AddScoped<IGVHuongDanRepository, GVHuongDanRepository>();
+builder.Services.AddScoped<ITienDoThucTapRepository, TienDoThucTapRepository>();
+builder.Services.AddScoped<IPhieuChamDiemRepository, PhieuChamDiemRepository>();
 
-// ---- Đăng ký Service (Business Logic) ----
 builder.Services.AddScoped<ISinhVienService, SinhVienService>();
 builder.Services.AddScoped<CreateSinhVienValidator>();
 
-// ---- API infrastructure ----
+builder.Services.AddScoped<IGioiThieuService, GioiThieuService>();
+builder.Services.AddScoped<CreateGioiThieuValidator>();
+
+builder.Services.AddScoped<IGVHuongDanService, GVHuongDanService>();
+builder.Services.AddScoped<ITienDoThucTapService, TienDoThucTapService>();
+builder.Services.AddScoped<IPhieuChamDiemService, PhieuChamDiemService>();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -28,8 +39,6 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
         policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod());
 });
-
-// TODO: đăng ký JWT Authentication khi module đăng nhập/phân quyền được triển khai.
 
 var app = builder.Build();
 
