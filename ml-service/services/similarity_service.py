@@ -1,28 +1,32 @@
-"""
-Tính độ tương đồng giữa hồ sơ sinh viên và JD công ty bằng TF-IDF + Cosine Similarity.
-Đúng theo hướng đã thống nhất với GVHD (18/9): dữ liệu ảo, không cần chạy service sống —
-script này chạy khi cần cập nhật gợi ý, kết quả ghi thẳng vào bảng GOIYCONGTY.
-"""
+"""TF-IDF baseline + Cosine Similarity + ranking + NDCG@K."""
+from math import log2
+from typing import Dict, List, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from typing import List, Tuple
 
 
-def tinh_do_tuong_dong(noi_dung_ho_so: str, danh_sach_jd: List[Tuple[str, str]], top_k: int = 5):
-    """
-    noi_dung_ho_so: văn bản mô tả năng lực 1 sinh viên (gộp kỹ năng + đồ án + GPA)
-    danh_sach_jd: list các tuple (maCongTy, noiDungJD)
-    Trả về top_k (maCongTy, điểm tương đồng) cao nhất.
-    """
+def xep_hang_tfidf_cosine(noi_dung_ho_so: str, danh_sach_jd: List[Tuple[str, str]], top_k: int = 5):
     if not danh_sach_jd:
         return []
-
-    ma_cong_ty_list = [item[0] for item in danh_sach_jd]
-    corpus = [noi_dung_ho_so] + [item[1] for item in danh_sach_jd]
-
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(corpus)
-    scores = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:])[0]
-
-    ranked = sorted(zip(ma_cong_ty_list, scores), key=lambda x: x[1], reverse=True)
+    ids = [x[0] for x in danh_sach_jd]
+    corpus = [noi_dung_ho_so or ""] + [x[1] or "" for x in danh_sach_jd]
+    vectorizer = TfidfVectorizer(lowercase=True, token_pattern=r"(?u)\b\w+\b")
+    matrix = vectorizer.fit_transform(corpus)
+    scores = cosine_similarity(matrix[0:1], matrix[1:])[0]
+    ranked = sorted(zip(ids, scores.tolist()), key=lambda x: (-x[1], x[0]))
     return ranked[:top_k]
+
+
+def dcg(relevances: List[float]) -> float:
+    return sum((2 ** rel - 1) / log2(i + 2) for i, rel in enumerate(relevances))
+
+
+def ndcg_at_k(ranked_ids: List[str], relevance: Dict[str, float], k: int = 5) -> float:
+    predicted = [relevance.get(x, 0.0) for x in ranked_ids[:k]]
+    ideal = sorted(relevance.values(), reverse=True)[:k]
+    idcg = dcg(ideal)
+    return 0.0 if idcg == 0 else dcg(predicted) / idcg
+
+# Tương thích tên hàm cũ.
+def tinh_do_tuong_dong(noi_dung_ho_so: str, danh_sach_jd: List[Tuple[str, str]], top_k: int = 5):
+    return xep_hang_tfidf_cosine(noi_dung_ho_so, danh_sach_jd, top_k)
