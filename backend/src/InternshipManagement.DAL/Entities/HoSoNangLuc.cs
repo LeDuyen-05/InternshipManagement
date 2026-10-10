@@ -8,5 +8,4 @@ public class HoSoNangLuc
     public DateTime NgayCapNhat { get; set; }
 
     public SinhVien SinhVien { get; set; } = default!;
-    public ICollection<GoiYCongTy> GoiYCongTys { get; set; } = new List<GoiYCongTy>();
 }

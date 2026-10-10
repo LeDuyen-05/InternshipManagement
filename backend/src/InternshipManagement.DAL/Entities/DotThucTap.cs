@@ -4,10 +4,10 @@ public class DotThucTap
 {
     public string MaSo { get; set; } = default!;
     public string TenDot { get; set; } = default!;
-    public DateTime NamHoc { get; set; }
+    public string NamHoc { get; set; }
     public DateTime ThoiGianBD { get; set; }
     public DateTime ThoiGianKT { get; set; }
-    public bool TrangThai { get; set; }
+    public string TrangThai { get; set; }
 
     public ICollection<DangKyThucTap> DangKyThucTaps { get; set; } = new List<DangKyThucTap>();
     public ICollection<PhanBoThucTap> PhanBoThucTaps { get; set; } = new List<PhanBoThucTap>();

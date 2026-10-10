@@ -9,5 +9,4 @@ public class GiangVien
 
     public ICollection<GVHuongDan> GVHuongDans { get; set; } = new List<GVHuongDan>();
     public ICollection<GioiThieu> GioiThieus { get; set; } = new List<GioiThieu>();
-    public ICollection<DeXuatCongTy> DeXuatCongTys { get; set; } = new List<DeXuatCongTy>();
 }

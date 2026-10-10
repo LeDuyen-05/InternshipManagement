@@ -12,7 +12,7 @@ public class DangKyThucTap
     public string MaDot { get; set; } = default!;
     public DateTime NgayDangKy { get; set; }
     public int ThuTuUuTien { get; set; }
-    public bool TrangThai { get; set; }
+    public string TrangThai { get; set; }
 
     public SinhVien SinhVien { get; set; } = default!;
     public CongTy CongTy { get; set; } = default!;
