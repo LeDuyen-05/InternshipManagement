@@ -24,4 +24,5 @@ public class SinhVien
     public ICollection<PhongVan> PhongVans { get; set; } = new List<PhongVan>();
     public ICollection<GVHuongDan> GVHuongDans { get; set; } = new List<GVHuongDan>();
     public ICollection<DeXuatCongTy> DeXuatCongTys { get; set; } = new List<DeXuatCongTy>();
+    public ICollection<TienDoThucTap> TienDoThucTaps { get; set; } = new List<TienDoThucTap>();
 }
