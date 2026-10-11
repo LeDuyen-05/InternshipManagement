@@ -10,4 +10,5 @@ public class DaiDienDoanhNghiep
 
     public CongTy CongTy { get; set; } = default!;
     public ICollection<HuongDanDoanhNghiep> HuongDanDoanhNghieps { get; set; } = new List<HuongDanDoanhNghiep>();
+    public ICollection<PhongVan> PhongVans { get; set; } = new List<PhongVan>();
 }

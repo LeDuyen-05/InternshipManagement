@@ -13,5 +13,4 @@ public class DangKyThucTap
     public SinhVien SinhVien { get; set; } = default!;
     public CongTy CongTy { get; set; } = default!;
     public DotThucTap DotThucTap { get; set; } = default!;
-    public ICollection<HuongDanDoanhNghiep> HuongDanDoanhNghieps { get; set; } = new List<HuongDanDoanhNghiep>();
 }

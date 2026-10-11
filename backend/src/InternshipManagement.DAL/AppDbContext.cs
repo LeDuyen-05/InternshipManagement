@@ -35,6 +35,13 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<GiangVien>().ToTable("GIANGVIEN").HasKey(x => x.MaGV);
         modelBuilder.Entity<CongTy>().ToTable("CONGTY").HasKey(x => x.MaCongTy);
         modelBuilder.Entity<DaiDienDoanhNghiep>().ToTable("DAIDIENDOANHNGHIEP").HasKey(x => x.MaSo);
+        modelBuilder.Entity<DaiDienDoanhNghiep>().Property(x => x.MaSo).HasColumnName("maSo");
+        modelBuilder.Entity<DaiDienDoanhNghiep>().Property(x => x.MaCongTy).HasColumnName("maCongTy");
+        modelBuilder.Entity<DaiDienDoanhNghiep>().Property(x => x.HoTen).HasColumnName("hoTen");
+        modelBuilder.Entity<DaiDienDoanhNghiep>().Property(x => x.ChucVu).HasColumnName("chucVu");
+        modelBuilder.Entity<DaiDienDoanhNghiep>().Property(x => x.Email).HasColumnName("email");
+        modelBuilder.Entity<DaiDienDoanhNghiep>()
+            .HasOne(d => d.CongTy).WithMany(c => c.DaiDienDoanhNghieps).HasForeignKey(d => d.MaCongTy);
         modelBuilder.Entity<HoSoNangLuc>().ToTable("HOSONANGLUC").HasKey(x => x.MaHoSo);
         modelBuilder.Entity<DotThucTap>().ToTable("DOTTHUCTAP").HasKey(x => x.MaSo);
         modelBuilder.Entity<PhongVan>().ToTable("PHONGVAN").HasKey(x => x.MaPV);
@@ -55,23 +62,43 @@ public class AppDbContext : DbContext
             .WithOne(s => s.HoSoNangLuc)
             .HasForeignKey<HoSoNangLuc>(h => h.MaSV);
 
-        // PhongVan: 2 FK tới SinhVien và CongTy
+        // PhongVan: FK tới SinhVien và DaiDienDoanhNghiep
+        modelBuilder.Entity<PhongVan>().ToTable("PHONGVAN").HasKey(x => x.MaPV);
+        modelBuilder.Entity<PhongVan>().Property(x => x.MaPV).HasColumnName("maPV");
+        modelBuilder.Entity<PhongVan>().Property(x => x.MaSinhVien).HasColumnName("maSV");
+        modelBuilder.Entity<PhongVan>().Property(x => x.MaDaiDien).HasColumnName("maDaiDien");
+        modelBuilder.Entity<PhongVan>().Property(x => x.HinhThuc).HasColumnName("hinhThuc");
+        modelBuilder.Entity<PhongVan>().Property(x => x.NgayPV).HasColumnName("ngayPV");
+        modelBuilder.Entity<PhongVan>().Property(x => x.KetQua).HasColumnName("ketQua");
         modelBuilder.Entity<PhongVan>()
             .HasOne(p => p.SinhVien).WithMany(s => s.PhongVans).HasForeignKey(p => p.MaSinhVien);
         modelBuilder.Entity<PhongVan>()
-            .HasOne(p => p.CongTy).WithMany(c => c.PhongVans).HasForeignKey(p => p.MaCongTy);
+            .HasOne(p => p.DaiDienDoanhNghiep).WithMany(d => d.PhongVans).HasForeignKey(p => p.MaDaiDien);
 
         // GVHuongDan: lớp kết hợp GiangVien - SinhVien
+        modelBuilder.Entity<GVHuongDan>().ToTable("GVHUONGDAN").HasKey(x => x.MaSo);
+        modelBuilder.Entity<GVHuongDan>().Property(x => x.MaSo).HasColumnName("maSo");
+        modelBuilder.Entity<GVHuongDan>().Property(x => x.MaGiangVien).HasColumnName("maGV");
+        modelBuilder.Entity<GVHuongDan>().Property(x => x.MaSinhVien).HasColumnName("maSV");
+        modelBuilder.Entity<GVHuongDan>().Property(x => x.NgayPC).HasColumnName("ngayPC");
+        modelBuilder.Entity<GVHuongDan>().Property(x => x.TrangThai).HasColumnName("trangThai");
         modelBuilder.Entity<GVHuongDan>()
             .HasOne(g => g.GiangVien).WithMany(gv => gv.GVHuongDans).HasForeignKey(g => g.MaGiangVien);
         modelBuilder.Entity<GVHuongDan>()
             .HasOne(g => g.SinhVien).WithMany(s => s.GVHuongDans).HasForeignKey(g => g.MaSinhVien);
 
-        // HuongDanDoanhNghiep: lớp kết hợp DaiDienDoanhNghiep - DangKyThucTap
+        // HuongDanDoanhNghiep: lớp kết hợp DaiDienDoanhNghiep - PhanBoThucTap
+        modelBuilder.Entity<HuongDanDoanhNghiep>().ToTable("HUONGDANDOANHNGHIEP").HasKey(x => x.MaSo);
+        modelBuilder.Entity<HuongDanDoanhNghiep>().Property(x => x.MaSo).HasColumnName("maSo");
+        modelBuilder.Entity<HuongDanDoanhNghiep>().Property(x => x.MaPhanBo).HasColumnName("maPB");
+        modelBuilder.Entity<HuongDanDoanhNghiep>().Property(x => x.MaDaiDien).HasColumnName("maDaiDien");
+        modelBuilder.Entity<HuongDanDoanhNghiep>().Property(x => x.NgayBD).HasColumnName("ngayBD");
+        modelBuilder.Entity<HuongDanDoanhNghiep>().Property(x => x.VaiTro).HasColumnName("vaiTro");
+        modelBuilder.Entity<HuongDanDoanhNghiep>().Property(x => x.DanhGia).HasColumnName("danhGia");
         modelBuilder.Entity<HuongDanDoanhNghiep>()
             .HasOne(h => h.DaiDienDoanhNghiep).WithMany(d => d.HuongDanDoanhNghieps).HasForeignKey(h => h.MaDaiDien);
         modelBuilder.Entity<HuongDanDoanhNghiep>()
-            .HasOne(h => h.DangKyThucTap).WithMany(d => d.HuongDanDoanhNghieps).HasForeignKey(h => h.MaDangKy);
+            .HasOne(h => h.PhanBoThucTap).WithMany(p => p.HuongDanDoanhNghieps).HasForeignKey(h => h.MaPhanBo);
 
         // PhieuChamDiem: 3 FK
         modelBuilder.Entity<PhieuChamDiem>()
