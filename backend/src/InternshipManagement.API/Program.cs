@@ -1,4 +1,5 @@
 using InternshipManagement.BLL.Services.SinhVien;
+using InternshipManagement.BLL.Services.HoSoNangLuc;
 using InternshipManagement.BLL.Validators.SinhVien;
 using InternshipManagement.DAL;
 using InternshipManagement.DAL.Repositories;
@@ -13,10 +14,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // ---- Đăng ký Repository ----
 // Mỗi khi thêm module mới, đăng ký thêm 1 dòng theo đúng khuôn mẫu này.
 builder.Services.AddScoped<ISinhVienRepository, SinhVienRepository>();
+builder.Services.AddScoped<IHoSoNangLucRepository, HoSoNangLucRepository>();
 
 // ---- Đăng ký Service (Business Logic) ----
 builder.Services.AddScoped<ISinhVienService, SinhVienService>();
 builder.Services.AddScoped<CreateSinhVienValidator>();
+builder.Services.AddScoped<IHoSoNangLucService, HoSoNangLucService>();
 
 // ---- API infrastructure ----
 builder.Services.AddControllers();

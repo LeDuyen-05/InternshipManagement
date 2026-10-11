@@ -1,12 +1,17 @@
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import MainLayout from '../components/layout/MainLayout.jsx'
+import HoSoNangLucPage from '../pages/SinhVien/HoSoNangLucPage.jsx'
 import SinhVienListPage from '../pages/SinhVien/SinhVienListPage.jsx'
 
-// Khung định tuyến ban đầu — bổ sung dần route cho GiangVien, GiaoVuKhoa, Auth...
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<SinhVienListPage />} />
-      <Route path="/sinh-vien" element={<SinhVienListPage />} />
+      <Route element={<MainLayout />}>
+        <Route path="/" element={<Navigate to="/sinh-vien/ho-so" replace />} />
+        <Route path="/sinh-vien" element={<Navigate to="/sinh-vien/ho-so" replace />} />
+        <Route path="/sinh-vien/ho-so" element={<HoSoNangLucPage />} />
+        <Route path="/sinh-vien/danh-sach" element={<SinhVienListPage />} />
+      </Route>
     </Routes>
   )
 }

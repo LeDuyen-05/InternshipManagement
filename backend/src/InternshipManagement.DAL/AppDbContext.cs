@@ -32,30 +32,28 @@ public class AppDbContext : DbContext
         // Áp dụng các file Configuration riêng cho các bảng có khóa đặc biệt / là pattern mẫu.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        // --- Các entity còn lại: khai báo khóa chính trực tiếp tại đây để tránh
-        // tạo quá nhiều file Configuration nhỏ lẻ (giữ đồ án gọn, dễ bảo trì) ---
-        modelBuilder.Entity<GiangVien>().HasKey(x => x.MaGV);
-        modelBuilder.Entity<CongTy>().HasKey(x => x.MaCongTy);
-        modelBuilder.Entity<DaiDienDoanhNghiep>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<HoSoNangLuc>().HasKey(x => x.MaHoSo);
-        modelBuilder.Entity<DotThucTap>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<PhongVan>().HasKey(x => x.MaPV);
-        modelBuilder.Entity<GVHuongDan>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<HuongDanDoanhNghiep>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<TienDoThucTap>().HasKey(x => x.MaTienDo);
-        modelBuilder.Entity<PhieuChamDiem>().HasKey(x => x.MaPhieu);
-        modelBuilder.Entity<TieuChi>().HasKey(x => x.MaTieuChi);
-        modelBuilder.Entity<GioiThieu>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<DeXuatCongTy>().HasKey(x => x.MaDeXuat);
+        modelBuilder.Entity<GiangVien>().ToTable("GIANGVIEN").HasKey(x => x.MaGV);
+        modelBuilder.Entity<CongTy>().ToTable("CONGTY").HasKey(x => x.MaCongTy);
+        modelBuilder.Entity<DaiDienDoanhNghiep>().ToTable("DAIDIENDOANHNGHIEP").HasKey(x => x.MaSo);
+        modelBuilder.Entity<HoSoNangLuc>().ToTable("HOSONANGLUC").HasKey(x => x.MaHoSo);
+        modelBuilder.Entity<DotThucTap>().ToTable("DOTTHUCTAP").HasKey(x => x.MaSo);
+        modelBuilder.Entity<PhongVan>().ToTable("PHONGVAN").HasKey(x => x.MaPV);
+        modelBuilder.Entity<GVHuongDan>().ToTable("GVHUONGDAN").HasKey(x => x.MaSo);
+        modelBuilder.Entity<HuongDanDoanhNghiep>().ToTable("HUONGDANDOANHNGHIEP").HasKey(x => x.MaSo);
+        modelBuilder.Entity<TienDoThucTap>().ToTable("TIENDOTHUCTAP").HasKey(x => x.MaTienDo);
+        modelBuilder.Entity<PhieuChamDiem>().ToTable("PHIEUCHAMDIEM").HasKey(x => x.MaPhieu);
+        modelBuilder.Entity<TieuChi>().ToTable("TIEUCHI").HasKey(x => x.MaTieuChi);
+        modelBuilder.Entity<GioiThieu>().ToTable("GIOITHIEU").HasKey(x => x.MaSo);
+        modelBuilder.Entity<DeXuatCongTy>().ToTable("DEXUATCONGTY").HasKey(x => x.MaDeXuat);
 
         // GoiYCongTy: ĐỀ XUẤT khóa phức hợp (xem ghi chú trong Domain/Entities/GoiYCongTy.cs)
-        modelBuilder.Entity<GoiYCongTy>().HasKey(x => new { x.MaHoSo, x.MaCongTy });
+        modelBuilder.Entity<GoiYCongTy>().ToTable("GOIYCONGTY").HasKey(x => new { x.MaHoSo, x.MaCongTy });
 
         // Quan hệ 1-1 SinhVien - HoSoNangLuc
         modelBuilder.Entity<HoSoNangLuc>()
             .HasOne(h => h.SinhVien)
             .WithOne(s => s.HoSoNangLuc)
-            .HasForeignKey<HoSoNangLuc>(h => h.MaSinhVien);
+            .HasForeignKey<HoSoNangLuc>(h => h.MaSV);
 
         // PhongVan: 2 FK tới SinhVien và CongTy
         modelBuilder.Entity<PhongVan>()

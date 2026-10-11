@@ -19,5 +19,10 @@ public class SinhVienConfiguration : IEntityTypeConfiguration<SinhVien>
         builder.Property(x => x.CongNghe).HasMaxLength(255);
         builder.Property(x => x.KyNang).HasMaxLength(500);
         builder.Property(x => x.DuAnDaThucHien).HasMaxLength(1000);
+        builder.Property(x => x.Gpa)
+            .HasColumnType("decimal(4,2)")
+            .HasConversion<decimal>(
+                v => (decimal)v,
+                v => (double)v);
     }
 }
