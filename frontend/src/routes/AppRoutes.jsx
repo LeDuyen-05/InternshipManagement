@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import MainLayout from '../components/layout/MainLayout.jsx'
 import HoSoNangLucPage from '../pages/SinhVien/HoSoNangLucPage.jsx'
+import DangKyThucTapPage from '../pages/SinhVien/DangKyThucTapPage.jsx'
 import SinhVienListPage from '../pages/SinhVien/SinhVienListPage.jsx'
 
 function AppRoutes() {
@@ -10,6 +11,7 @@ function AppRoutes() {
         <Route path="/" element={<Navigate to="/sinh-vien/ho-so" replace />} />
         <Route path="/sinh-vien" element={<Navigate to="/sinh-vien/ho-so" replace />} />
         <Route path="/sinh-vien/ho-so" element={<HoSoNangLucPage />} />
+        <Route path="/sinh-vien/dang-ky" element={<DangKyThucTapPage />} />
         <Route path="/sinh-vien/danh-sach" element={<SinhVienListPage />} />
       </Route>
     </Routes>
