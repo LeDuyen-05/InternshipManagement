@@ -8,7 +8,7 @@ public class TienDoThucTap
     public DateTime MocThoiGian { get; set; }
     public string? NoiDungBaoCao { get; set; }
     public DateTime? NgayNop { get; set; }
-    public string TrangThaiDuyet { get; set; } = default!;
+    public string TrangThaiDuyet { get; set; } = "ChuaNop";
 
     public DotThucTap DotThucTap { get; set; } = default!;
     public SinhVien SinhVien { get; set; } = default!;

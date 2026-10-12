@@ -18,4 +18,9 @@ ml-service/.env
 .DS_Store
 .vscode/
 .idea/
+.vs/
+*.suo
+*.userosscache
+*.sln.docstates
 *.code-workspace
+

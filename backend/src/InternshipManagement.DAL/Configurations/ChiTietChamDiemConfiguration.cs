@@ -13,7 +13,10 @@ public class ChiTietChamDiemConfiguration : IEntityTypeConfiguration<ChiTietCham
     public void Configure(EntityTypeBuilder<ChiTietChamDiem> builder)
     {
         builder.ToTable("CHITIETCHAMDIEM");
-        builder.HasKey(x => new { x.MaPhieuCham, x.MaTieuChi });
+        builder.HasKey(x => x.MaSo);
+        builder.Property(x => x.MaSo).HasColumnName("maSo");
+        builder.Property(x => x.MaPhieuCham).HasColumnName("maPhieu");
+        builder.Property(x => x.MaTieuChi).HasColumnName("maTieuChi");
 
         builder.HasOne(x => x.PhieuChamDiem).WithMany(p => p.ChiTietChamDiems).HasForeignKey(x => x.MaPhieuCham);
         builder.HasOne(x => x.TieuChi).WithMany(t => t.ChiTietChamDiems).HasForeignKey(x => x.MaTieuChi);

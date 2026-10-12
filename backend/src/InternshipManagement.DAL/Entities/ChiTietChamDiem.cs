@@ -6,10 +6,10 @@ namespace InternshipManagement.DAL.Entities;
 /// </summary>
 public class ChiTietChamDiem
 {
+    public string MaSo { get; set; } = default!;
     public string MaPhieuCham { get; set; } = default!;
     public string MaTieuChi { get; set; } = default!;
-    public double DiemCham { get; set; }
-    public string NhanXet { get; set; } = default!;
+    public decimal DiemCham { get; set; }
 
     public PhieuChamDiem PhieuChamDiem { get; set; } = default!;
     public TieuChi TieuChi { get; set; } = default!;

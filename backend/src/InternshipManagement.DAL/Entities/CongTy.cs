@@ -16,5 +16,4 @@ public class CongTy
     public ICollection<PhanBoThucTap> PhanBoThucTaps { get; set; } = new List<PhanBoThucTap>();
     public ICollection<GoiYCongTy> GoiYCongTys { get; set; } = new List<GoiYCongTy>();
     public ICollection<GioiThieu> GioiThieus { get; set; } = new List<GioiThieu>();
-    public ICollection<DeXuatCongTy> DeXuatCongTys { get; set; } = new List<DeXuatCongTy>();
 }
