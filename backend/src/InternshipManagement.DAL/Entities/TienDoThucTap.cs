@@ -13,3 +13,4 @@ public class TienDoThucTap
     public DotThucTap DotThucTap { get; set; } = default!;
     public SinhVien SinhVien { get; set; } = default!;
 }
+

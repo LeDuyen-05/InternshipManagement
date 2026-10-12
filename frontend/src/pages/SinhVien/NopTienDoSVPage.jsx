@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
-
-const MA_SV_DEFAULT = 'SV001'
-const MA_DOT_DEFAULT = 'DOT01'
+import { useAuth } from '../../contexts/AuthContext'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
 
 // Danh mục 10 tuần chuẩn thực tập tốt nghiệp
 const WEEKS_TEMPLATE = [
@@ -19,6 +18,11 @@ const WEEKS_TEMPLATE = [
 ]
 
 export default function NopTienDoSVPage() {
+  const { user } = useAuth()
+  const { selectedDot } = useDotThucTap()
+  const currentMaSV = user?.maSV || 'SV001'
+  const currentMaDot = selectedDot?.maDot || 'DOT01'
+
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [openWeek, setOpenWeek] = useState(1) // Tuần đang mở accordion
@@ -38,7 +42,7 @@ export default function NopTienDoSVPage() {
   const fetchReports = async () => {
     setLoading(true)
     try {
-      const data = await tienDoThucTapService.getTienDoBySinhVien(MA_SV_DEFAULT)
+      const data = await tienDoThucTapService.getTienDoBySinhVien(currentMaSV)
       setReports(data || [])
     } catch (err) {
       console.error('Lỗi khi tải tiến độ thực tập:', err)
@@ -50,7 +54,7 @@ export default function NopTienDoSVPage() {
 
   useEffect(() => {
     fetchReports()
-  }, [])
+  }, [currentMaSV])
 
   // Tìm báo cáo tương ứng với tuần theo thứ tự hoặc ID
   const getReportForWeek = (weekIndex) => {
@@ -82,8 +86,8 @@ export default function NopTienDoSVPage() {
 
       await tienDoThucTapService.nopBaoCao({
         maTienDo: existingReport?.maTienDo || null,
-        maSV: MA_SV_DEFAULT,
-        maDot: MA_DOT_DEFAULT,
+        maSV: currentMaSV,
+        maDot: currentMaDot,
         mocThoiGian: selectedWeekData.targetDate,
         noiDungBaoCao: reportContent,
       })

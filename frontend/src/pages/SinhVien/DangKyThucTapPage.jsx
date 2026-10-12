@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
+import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { dangKyThucTapService } from '../../services/dangKyThucTapService'
 
-const MA_SV_DEFAULT = 'SV001'
-const MA_DOT_DEFAULT = 'DOT01'
-
 export default function DangKyThucTapPage() {
+  const { user } = useAuth()
+  const { selectedDot } = useDotThucTap()
+  const currentMaSV = user?.maSV || (user?.tenDangNhap?.toLowerCase().startsWith('sv') ? user.tenDangNhap.toUpperCase() : 'SV001')
+  const currentMaDot = selectedDot?.maDot || 'DOT02'
+
   const [activeTab, setActiveTab] = useState('companies') // 'companies' | 'my-applications'
   const [companies, setCompanies] = useState([])
   const [myApplications, setMyApplications] = useState([])
@@ -39,7 +43,7 @@ export default function DangKyThucTapPage() {
     try {
       const [compRes, appRes] = await Promise.all([
         dangKyThucTapService.getDanhSachCongTy(),
-        dangKyThucTapService.getDangKyBySinhVien(MA_SV_DEFAULT),
+        dangKyThucTapService.getDangKyBySinhVien(currentMaSV),
       ])
       setCompanies(compRes || [])
       setMyApplications(appRes || [])
@@ -53,7 +57,7 @@ export default function DangKyThucTapPage() {
 
   useEffect(() => {
     fetchData()
-  }, [])
+  }, [currentMaSV])
 
   // Mở modal đăng ký cho 1 công ty
   const handleOpenApply = (company) => {
@@ -74,9 +78,9 @@ export default function DangKyThucTapPage() {
     setIsSubmittingApply(true)
     try {
       await dangKyThucTapService.dangKyThucTap({
-        maSV: MA_SV_DEFAULT,
+        maSV: currentMaSV,
         maCongTy: selectedCompany.maCongTy,
-        maDot: MA_DOT_DEFAULT,
+        maDot: currentMaDot,
         thuTuUuTien: parseInt(applyPriority, 10),
       })
       showToast(`Đã nộp nguyện vọng vào "${selectedCompany.tenCongTy}" thành công!`)
@@ -118,7 +122,7 @@ export default function DangKyThucTapPage() {
       await dangKyThucTapService.deXuatCongTy({
         ...proposalForm,
         soLuongNhan: parseInt(proposalForm.soLuongNhan, 10) || 1,
-        maSV: MA_SV_DEFAULT,
+        maSV: currentMaSV,
       })
       showToast('Đã gửi đề xuất doanh nghiệp thành công! Đang chờ Khoa duyệt.')
       setProposalModalOpen(false)

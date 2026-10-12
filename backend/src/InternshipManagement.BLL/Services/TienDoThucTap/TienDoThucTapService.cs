@@ -6,27 +6,92 @@ namespace InternshipManagement.BLL.Services.TienDoThucTap;
 
 public class TienDoThucTapService : ITienDoThucTapService
 {
-    private readonly ITienDoThucTapRepository _repository;
+    private readonly ITienDoThucTapRepository _tienDoThucTapRepository;
 
-    public TienDoThucTapService(ITienDoThucTapRepository repository)
+    public TienDoThucTapService(ITienDoThucTapRepository tienDoThucTapRepository)
     {
-        _repository = repository;
+        _tienDoThucTapRepository = tienDoThucTapRepository;
     }
 
     public async Task<IReadOnlyList<TienDoThucTapDto>> GetTienDoBySinhVienAsync(string maSV)
     {
-        var list = await _repository.GetBySinhVienAsync(maSV);
-        return list.Select(t => new TienDoThucTapDto
+        var entities = await _tienDoThucTapRepository.GetBySinhVienAsync(maSV);
+        return entities.Select(e => new TienDoThucTapDto
         {
-            MaTienDo = t.MaTienDo,
-            MaDot = t.MaDot,
-            TenDot = t.DotThucTap?.TenDot,
-            MaSV = t.MaSV,
-            MocThoiGian = t.MocThoiGian,
-            NoiDungBaoCao = t.NoiDungBaoCao,
-            NgayNop = t.NgayNop,
-            TrangThaiDuyet = t.TrangThaiDuyet,
+            MaTienDo = e.MaTienDo,
+            MocThoiGian = e.MocThoiGian,
+            NoiDungBaoCao = e.NoiDungBaoCao,
+            NgayNop = e.NgayNop,
+            TrangThaiDuyet = e.TrangThaiDuyet,
+            MaDot = e.MaDot,
+            TenDot = e.DotThucTap?.TenDot,
+            MaSV = e.MaSV,
+            HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
         }).ToList();
+    }
+
+    public async Task<IEnumerable<TienDoThucTapDto>> GetTienDoBySinhVienAndDotAsync(string maSV, string maDot)
+    {
+        var entities = await _tienDoThucTapRepository.GetBySinhVienAndDotAsync(maSV, maDot);
+        return entities.Select(e => new TienDoThucTapDto
+        {
+            MaTienDo = e.MaTienDo,
+            MocThoiGian = e.MocThoiGian,
+            NoiDungBaoCao = e.NoiDungBaoCao,
+            NgayNop = e.NgayNop,
+            TrangThaiDuyet = e.TrangThaiDuyet,
+            MaDot = e.MaDot,
+            TenDot = e.DotThucTap?.TenDot,
+            MaSV = e.MaSV,
+            HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
+        });
+    }
+
+    public async Task<IEnumerable<TienDoThucTapDto>> GetBaoCaoChoDuyetByGiangVienAsync(string maGV)
+    {
+        var entities = await _tienDoThucTapRepository.GetBaoCaoChoDuyetByGiangVienAsync(maGV);
+        return entities.Select(e => new TienDoThucTapDto
+        {
+            MaTienDo = e.MaTienDo,
+            MocThoiGian = e.MocThoiGian,
+            NoiDungBaoCao = e.NoiDungBaoCao,
+            NgayNop = e.NgayNop,
+            TrangThaiDuyet = e.TrangThaiDuyet,
+            MaDot = e.MaDot,
+            TenDot = e.DotThucTap?.TenDot,
+            MaSV = e.MaSV,
+            HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
+        });
+    }
+
+    public async Task<TienDoThucTapDto?> GetChiTietTienDoAsync(string maTienDo)
+    {
+        var e = await _tienDoThucTapRepository.GetChiTietAsync(maTienDo);
+        if (e == null) return null;
+
+        return new TienDoThucTapDto
+        {
+            MaTienDo = e.MaTienDo,
+            MocThoiGian = e.MocThoiGian,
+            NoiDungBaoCao = e.NoiDungBaoCao,
+            NgayNop = e.NgayNop,
+            TrangThaiDuyet = e.TrangThaiDuyet,
+            MaDot = e.MaDot,
+            TenDot = e.DotThucTap?.TenDot,
+            MaSV = e.MaSV,
+            HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
+        };
+    }
+
+    public async Task<bool> DuyetTienDoAsync(string maTienDo, DuyetTienDoRequest request)
+    {
+        var validStatuses = new[] { "ChuaNop", "DaNop", "DaDuyet", "YeuCauSua" };
+        if (!validStatuses.Contains(request.TrangThaiDuyet))
+        {
+            throw new ArgumentException("Trạng thái duyệt không hợp lệ.");
+        }
+
+        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet);
     }
 
     public async Task<TienDoThucTapDto> NopBaoCaoTienDoAsync(NopBaoCaoRequest request)
@@ -40,13 +105,13 @@ public class TienDoThucTapService : ITienDoThucTapService
 
         if (!string.IsNullOrWhiteSpace(request.MaTienDo))
         {
-            var existing = await _repository.GetByIdAsync(request.MaTienDo);
+            var existing = await _tienDoThucTapRepository.GetByIdAsync(request.MaTienDo);
             if (existing != null)
             {
                 existing.NoiDungBaoCao = request.NoiDungBaoCao;
                 existing.NgayNop = DateTime.Now;
                 existing.TrangThaiDuyet = "DaNop"; // Đã nộp, chờ giảng viên phê duyệt
-                entity = await _repository.UpdateAsync(existing);
+                entity = await _tienDoThucTapRepository.UpdateAsync(existing);
             }
             else
             {
@@ -60,7 +125,7 @@ public class TienDoThucTapService : ITienDoThucTapService
                     NgayNop = DateTime.Now,
                     TrangThaiDuyet = "DaNop"
                 };
-                entity = await _repository.CreateAsync(entity);
+                entity = await _tienDoThucTapRepository.CreateAsync(entity);
             }
         }
         else
@@ -76,7 +141,7 @@ public class TienDoThucTapService : ITienDoThucTapService
                 NgayNop = DateTime.Now,
                 TrangThaiDuyet = "DaNop"
             };
-            entity = await _repository.CreateAsync(entity);
+            entity = await _tienDoThucTapRepository.CreateAsync(entity);
         }
 
         return new TienDoThucTapDto
@@ -92,3 +157,4 @@ public class TienDoThucTapService : ITienDoThucTapService
         };
     }
 }
+

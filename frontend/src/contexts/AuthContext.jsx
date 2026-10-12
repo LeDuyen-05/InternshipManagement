@@ -15,7 +15,12 @@ export function AuthProvider({ children }) {
     setUser(data)
     return data
   }
-  const logout = () => { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); setUser(null) }
+  const logout = () => {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+    localStorage.removeItem('selected_dot_thuc_tap')
+    setUser(null)
+  }
   const value = useMemo(() => ({ user, login, logout }), [user])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

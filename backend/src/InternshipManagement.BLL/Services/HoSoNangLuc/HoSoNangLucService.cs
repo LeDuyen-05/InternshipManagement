@@ -32,8 +32,9 @@ public class HoSoNangLucService : IHoSoNangLucService
             HoTen = sv.HoTen,
             Lop = sv.Lop,
             KhoaHoc = sv.KhoaHoc,
-            Gpa = sv.Gpa,
+            Gpa = sv.Gpa.HasValue ? (double)sv.Gpa.Value : null,
             KyNang = sv.KyNang,
+
             ChuyenNganh = sv.ChuyenNganh,
             CongNghe = sv.CongNghe,
             DuAnDaThucHien = sv.DuAnDaThucHien,
@@ -51,8 +52,9 @@ public class HoSoNangLucService : IHoSoNangLucService
         if (!string.IsNullOrWhiteSpace(request.HoTen)) sv.HoTen = request.HoTen;
         if (!string.IsNullOrWhiteSpace(request.Lop)) sv.Lop = request.Lop;
         if (!string.IsNullOrWhiteSpace(request.KhoaHoc)) sv.KhoaHoc = request.KhoaHoc;
-        if (request.Gpa.HasValue) sv.Gpa = request.Gpa.Value;
+        if (request.Gpa.HasValue) sv.Gpa = (decimal)request.Gpa.Value;
         if (request.KyNang != null) sv.KyNang = request.KyNang;
+
         if (request.ChuyenNganh != null) sv.ChuyenNganh = request.ChuyenNganh;
         if (request.CongNghe != null) sv.CongNghe = request.CongNghe;
         if (request.DuAnDaThucHien != null) sv.DuAnDaThucHien = request.DuAnDaThucHien;
@@ -90,8 +92,9 @@ public class HoSoNangLucService : IHoSoNangLucService
             HoTen = sv.HoTen,
             Lop = sv.Lop,
             KhoaHoc = sv.KhoaHoc,
-            Gpa = sv.Gpa,
+            Gpa = sv.Gpa.HasValue ? (double)sv.Gpa.Value : null,
             KyNang = sv.KyNang,
+
             ChuyenNganh = sv.ChuyenNganh,
             CongNghe = sv.CongNghe,
             DuAnDaThucHien = sv.DuAnDaThucHien,

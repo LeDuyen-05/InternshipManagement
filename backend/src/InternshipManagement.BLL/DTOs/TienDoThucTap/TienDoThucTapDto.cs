@@ -10,7 +10,9 @@ public class TienDoThucTapDto
     public string? NoiDungBaoCao { get; set; }
     public DateTime? NgayNop { get; set; }
     public string TrangThaiDuyet { get; set; } = default!;
+    public string? HoTenSinhVien { get; set; }
 }
+
 
 public class NopBaoCaoRequest
 {

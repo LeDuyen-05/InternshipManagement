@@ -8,8 +8,9 @@ public class CongTy
     public string? ThoiGian { get; set; }
     public int? SoLuongNhan { get; set; }
     public string? YeuCau { get; set; }
-    public string TrangThai { get; set; } = "DaDuyet";
+    public string TrangThai { get; set; } = "ChoDuyet";
     public string? EmbeddingYeuCau { get; set; }
+
 
     public ICollection<DaiDienDoanhNghiep> DaiDienDoanhNghieps { get; set; } = new List<DaiDienDoanhNghiep>();
     public ICollection<DangKyThucTap> DangKyThucTaps { get; set; } = new List<DangKyThucTap>();

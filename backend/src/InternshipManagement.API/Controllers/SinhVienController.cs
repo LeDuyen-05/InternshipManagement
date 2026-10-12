@@ -4,10 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace InternshipManagement.API.Controllers;
 
-/// <summary>
-/// Controller MẪU — dùng làm khuôn mẫu (pattern) cho các module còn lại.
-/// Controller CHỈ điều phối request/response, không chứa business logic.
-/// </summary>
 [ApiController]
 [Route("api/[controller]")]
 public class SinhVienController : ControllerBase

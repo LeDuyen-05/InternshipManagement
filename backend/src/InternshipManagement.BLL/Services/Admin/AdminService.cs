@@ -182,8 +182,9 @@ public class AdminService
         if (activeCount >= 15) throw new InvalidOperationException("Giảng viên đã đạt định mức tối đa 15 sinh viên.");
         var assignment = await _db.GVHuongDans.FirstOrDefaultAsync(x => x.MaSinhVien == maSV && x.TrangThai == "DangHuongDan");
         var previousLecturer = assignment?.MaGiangVien;
-        if (assignment == null) _db.GVHuongDans.Add(new GVHuongDan { MaSo = $"GVHD{Guid.NewGuid():N}"[..20], MaSinhVien = maSV, MaGiangVien = lecturer.MaGV, NgayPC = DateTime.Today, TrangThai = "DangHuongDan" });
+        if (assignment == null) _db.GVHuongDans.Add(new InternshipManagement.DAL.Entities.GVHuongDan { MaSo = $"GVHD{Guid.NewGuid():N}"[..20], MaSinhVien = maSV, MaGiangVien = lecturer.MaGV, NgayPC = DateTime.Today, TrangThai = "DangHuongDan" });
         else assignment.MaGiangVien = lecturer.MaGV;
+
         lecturer.SoLuongSVHD = activeCount + 1;
         if (previousLecturer != null && previousLecturer != lecturer.MaGV)
         {
@@ -234,15 +235,16 @@ public class AdminService
 
     public async Task CreateStudentAsync(CreateStudentRequest r)
     {
-        _db.SinhViens.Add(new InternshipManagement.DAL.Entities.SinhVien{ MaSV =r.MaSV, HoTen=r.HoTen, Lop=r.Lop ?? "", KhoaHoc=r.KhoaHoc ?? "", Gpa=r.Gpa ?? 0, KyNang=r.KyNang ?? "", ChuyenNganh=r.ChuyenNganh ?? "", CongNghe=r.CongNghe ?? "", DuAnDaThucHien=r.DuAnDaThucHien ?? "" });
+        _db.SinhViens.Add(new InternshipManagement.DAL.Entities.SinhVien{ MaSV =r.MaSV, HoTen=r.HoTen, Lop=r.Lop ?? "", KhoaHoc=r.KhoaHoc ?? "", Gpa=r.Gpa.HasValue ? (decimal)r.Gpa.Value : 0m, KyNang=r.KyNang ?? "", ChuyenNganh=r.ChuyenNganh ?? "", CongNghe=r.CongNghe ?? "", DuAnDaThucHien=r.DuAnDaThucHien ?? "" });
         await _db.SaveChangesAsync();
     }
     public async Task UpdateStudentAsync(string id, CreateStudentRequest r)
     {
         var x = await _db.SinhViens.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy sinh viên.");
-        x.HoTen=r.HoTen; x.Lop=r.Lop ?? ""; x.KhoaHoc=r.KhoaHoc ?? ""; x.Gpa=r.Gpa ?? 0; x.KyNang=r.KyNang ?? ""; x.ChuyenNganh=r.ChuyenNganh ?? ""; x.CongNghe=r.CongNghe ?? ""; x.DuAnDaThucHien=r.DuAnDaThucHien ?? "";
+        x.HoTen=r.HoTen; x.Lop=r.Lop ?? ""; x.KhoaHoc=r.KhoaHoc ?? ""; x.Gpa=r.Gpa.HasValue ? (decimal)r.Gpa.Value : 0m; x.KyNang=r.KyNang ?? ""; x.ChuyenNganh=r.ChuyenNganh ?? ""; x.CongNghe=r.CongNghe ?? ""; x.DuAnDaThucHien=r.DuAnDaThucHien ?? "";
         await _db.SaveChangesAsync();
     }
+
     public async Task CreateLecturerAsync(CreateLecturerRequest r)
     {
         _db.GiangViens.Add(new GiangVien { MaGV=r.MaGV, HoTen=r.HoTen, ChuyenMon=r.ChuyenMon ?? "", SoLuongSVHD=0 });

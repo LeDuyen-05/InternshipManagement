@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
 import { phongVanService } from '../../services/phongVanService'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { hoSoNangLucService } from '../../services/hoSoNangLucService'
 
-const MA_SV_DEFAULT = 'SV001'
-
 export default function DashboardSinhVienPage() {
+  const { user } = useAuth()
+  const currentMaSV = user?.maSV || (user?.tenDangNhap?.toLowerCase().startsWith('sv') ? user.tenDangNhap.toUpperCase() : 'SV001')
+
   const [profile, setProfile] = useState(null)
   const [placement, setPlacement] = useState(null)
   const [reports, setReports] = useState([])
@@ -17,9 +19,9 @@ export default function DashboardSinhVienPage() {
       setLoading(true)
       try {
         const [profData, pbData, repData] = await Promise.all([
-          hoSoNangLucService.getHoSoBySinhVien(MA_SV_DEFAULT),
-          phongVanService.getPhanBoThucTap(MA_SV_DEFAULT),
-          tienDoThucTapService.getTienDoBySinhVien(MA_SV_DEFAULT),
+          hoSoNangLucService.getHoSoBySinhVien(currentMaSV),
+          phongVanService.getPhanBoThucTap(currentMaSV),
+          tienDoThucTapService.getTienDoBySinhVien(currentMaSV),
         ])
         setProfile(profData || null)
         setPlacement(pbData || null)
@@ -31,7 +33,7 @@ export default function DashboardSinhVienPage() {
       }
     }
     fetchData()
-  }, [])
+  }, [currentMaSV])
 
   const approvedReports = reports.filter((r) => r.trangThaiDuyet === 'DaDuyet').length
   const pendingReports = reports.filter((r) => r.trangThaiDuyet === 'DaNop' || r.trangThaiDuyet === 'ChoDuyet').length
@@ -49,7 +51,7 @@ export default function DashboardSinhVienPage() {
             Bảng Điều Khiển Sinh Viên
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Chào mừng {profile?.hoTen || 'Phạm Minh Đức'} (MSSV: {MA_SV_DEFAULT}) trở lại cổng thông tin thực tập.
+            Chào mừng {profile?.hoTen || user?.hoTen || user?.tenDangNhap || 'Sinh viên'} (MSSV: {currentMaSV}) trở lại cổng thông tin thực tập.
           </p>
         </div>
 

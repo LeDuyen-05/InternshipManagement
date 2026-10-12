@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { phongVanService } from '../../services/phongVanService'
-
-const MA_SV_DEFAULT = 'SV001'
+import { useAuth } from '../../contexts/AuthContext'
 
 export default function LichTrinhPhongVanPage() {
+  const { user } = useAuth()
+  const currentMaSV = user?.maSV || 'SV001'
+
   const [interviews, setInterviews] = useState([])
   const [placement, setPlacement] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -13,8 +15,8 @@ export default function LichTrinhPhongVanPage() {
       setLoading(true)
       try {
         const [pvData, pbData] = await Promise.all([
-          phongVanService.getLichPhongVan(MA_SV_DEFAULT),
-          phongVanService.getPhanBoThucTap(MA_SV_DEFAULT),
+          phongVanService.getLichPhongVan(currentMaSV),
+          phongVanService.getPhanBoThucTap(currentMaSV),
         ])
         setInterviews(pvData || [])
         setPlacement(pbData || null)
@@ -25,7 +27,7 @@ export default function LichTrinhPhongVanPage() {
       }
     }
     fetchData()
-  }, [])
+  }, [currentMaSV])
 
   return (
     <div className="flex flex-col gap-6">

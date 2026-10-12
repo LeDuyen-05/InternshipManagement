@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useAuth } from '../../contexts/AuthContext'
 import hoSoNangLucService from '../../services/hoSoNangLucService.js'
 
 export default function HoSoNangLucPage() {
-  const currentMaSV = 'SV001' // Mặc định tài khoản sinh viên demo
+  const { user } = useAuth()
+  const currentMaSV = user?.maSV || (user?.tenDangNhap?.toLowerCase().startsWith('sv') ? user.tenDangNhap.toUpperCase() : 'SV001')
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -25,7 +27,7 @@ export default function HoSoNangLucPage() {
 
   useEffect(() => {
     fetchProfile()
-  }, [])
+  }, [currentMaSV])
 
   const fetchProfile = async () => {
     try {

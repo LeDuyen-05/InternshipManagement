@@ -36,7 +36,7 @@ export default function AuthPage() {
       const role = u?.maVaiTro || u?.MaVaiTro
       if (role === 'VT01') navigate('/admin')
       else if (role === 'VT02') navigate('/khoa')
-      else if (role === 'VT03') navigate('/gvhd/sinh-vien')
+      else if (role === 'VT03') navigate('/giang-vien/dashboard')
       else if (role === 'VT04') navigate('/sinh-vien')
       else navigate('/dashboard')
     } catch (err) {
