@@ -11,6 +11,7 @@ import EnterpriseDashboardPage from '../pages/DoanhNghiep/EnterpriseDashboardPag
 import QuanLyTinTuyenDungPage from '../pages/DoanhNghiep/QuanLyTinTuyenDungPage.jsx'
 import QuanLyUngVienPage from '../pages/DoanhNghiep/QuanLyUngVienPage.jsx'
 import LichPhongVanDNPage from '../pages/DoanhNghiep/LichPhongVanDNPage.jsx'
+import DanhGiaThucTapSinhPage from '../pages/DoanhNghiep/DanhGiaThucTapSinhPage.jsx'
 
 function AppRoutes() {
   return (
@@ -32,6 +33,7 @@ function AppRoutes() {
         <Route path="tuyen-dung" element={<QuanLyTinTuyenDungPage />} />
         <Route path="ung-vien" element={<QuanLyUngVienPage />} />
         <Route path="phong-van" element={<LichPhongVanDNPage />} />
+        <Route path="danh-gia" element={<DanhGiaThucTapSinhPage />} />
       </Route>
     </Routes>
   )

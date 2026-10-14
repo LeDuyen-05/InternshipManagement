@@ -403,6 +403,139 @@ namespace InternshipManagement.API.Controllers
                 ketQua = pv.KetQua
             });
         }
+
+        /// <summary>
+        /// Lấy danh sách thực tập sinh chính thức tại doanh nghiệp
+        /// </summary>
+        [HttpGet("thuc-tap-sinh/{maCongTy}")]
+        public async Task<IActionResult> GetDanhSachThucTapSinh(string maCongTy)
+        {
+            var phanBos = await _context.PhanBoThucTaps
+                .Where(p => p.MaCongTy == maCongTy)
+                .OrderByDescending(p => p.NgayPhanBo)
+                .ToListAsync();
+
+            var sinhVienIds = phanBos.Select(p => p.MaSinhVien).Distinct().ToList();
+            var sinhViens = await _context.SinhViens
+                .Where(s => sinhVienIds.Contains(s.MaSV))
+                .ToDictionaryAsync(s => s.MaSV);
+
+            var maPBList = phanBos.Select(p => p.MaPhanBo).Distinct().ToList();
+            var huongDans = await _context.HuongDanDoanhNghieps
+                .Where(h => maPBList.Contains(h.MaPhanBo))
+                .ToListAsync();
+
+            var daiDienIds = huongDans.Select(h => h.MaDaiDien).Distinct().ToList();
+            var daiDiens = await _context.DaiDienDoanhNghieps
+                .Where(d => daiDienIds.Contains(d.MaSo))
+                .ToDictionaryAsync(d => d.MaSo);
+
+            var gvHuongDans = await _context.GVHuongDans
+                .Where(g => sinhVienIds.Contains(g.MaSinhVien))
+                .ToListAsync();
+
+            var gvIds = gvHuongDans.Select(g => g.MaGiangVien).Distinct().ToList();
+            var giangViens = await _context.GiangViens
+                .Where(g => gvIds.Contains(g.MaGV))
+                .ToDictionaryAsync(g => g.MaGV);
+
+            var congTy = await _context.CongTys.FirstOrDefaultAsync(c => c.MaCongTy == maCongTy);
+
+            var result = phanBos.Select(pb =>
+            {
+                sinhViens.TryGetValue(pb.MaSinhVien, out var sv);
+                var hd = huongDans.FirstOrDefault(h => h.MaPhanBo == pb.MaPhanBo);
+                DaiDienDoanhNghiep? dd = null;
+                if (hd != null) daiDiens.TryGetValue(hd.MaDaiDien, out dd);
+
+                var gvhd = gvHuongDans.FirstOrDefault(g => g.MaSinhVien == pb.MaSinhVien);
+                GiangVien? gv = null;
+                if (gvhd != null) giangViens.TryGetValue(gvhd.MaGiangVien, out gv);
+
+                var danhGiaStr = hd?.DanhGia ?? "Chưa có đánh giá từ Mentor doanh nghiệp.";
+                var daDanhGia = danhGiaStr.Contains("Kỷ luật:");
+
+                return new
+                {
+                    pb.MaPhanBo,
+                    pb.MaSinhVien,
+                    pb.MaCongTy,
+                    pb.MaDot,
+                    pb.NgayPhanBo,
+                    pb.TrangThai,
+                    HoTenSV = sv?.HoTen ?? pb.MaSinhVien,
+                    LopSV = sv?.Lop ?? "CNTT",
+                    GpaSV = sv?.Gpa ?? 3.0,
+                    ChuyenNganhSV = sv?.ChuyenNganh ?? "Công nghệ thông tin",
+                    ViTriThucTap = congTy?.ViTriTuyen ?? "Lập trình viên Web Fullstack",
+                    ThoiGianThucTap = congTy?.ThoiGian ?? "Từ 14/09/2026 đến 25/12/2026",
+                    TenMentor = dd?.HoTen ?? "Nguyễn Hoàng Long",
+                    ChucVuMentor = dd?.ChucVu ?? "Team Leader",
+                    EmailMentor = dd?.Email ?? "",
+                    TenGVHD = gv?.HoTen ?? "TS. Nguyễn Văn An",
+                    DanhGia = danhGiaStr,
+                    DaDanhGia = daDanhGia
+                };
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Doanh nghiệp đánh giá và chấm điểm thực tập sinh
+        /// </summary>
+        [HttpPost("danh-gia")]
+        public async Task<IActionResult> DanhGiaThucTapSinh([FromBody] DanhGiaThucTapSinhRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.MaPhanBo))
+            {
+                return BadRequest(new { message = "Mã phân bổ thực tập không được để trống" });
+            }
+
+            var pb = await _context.PhanBoThucTaps.FirstOrDefaultAsync(p => p.MaPhanBo == request.MaPhanBo);
+            if (pb == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy phân bổ thực tập {request.MaPhanBo}" });
+            }
+
+            var hd = await _context.HuongDanDoanhNghieps.FirstOrDefaultAsync(h => h.MaPhanBo == request.MaPhanBo);
+            if (hd == null)
+            {
+                var daiDien = await _context.DaiDienDoanhNghieps.FirstOrDefaultAsync(d => d.MaCongTy == pb.MaCongTy);
+                hd = new HuongDanDoanhNghiep
+                {
+                    MaSo = "HD" + DateTime.Now.ToString("yyMMddHHmmss"),
+                    MaPhanBo = pb.MaPhanBo,
+                    MaDaiDien = daiDien?.MaSo ?? "DD001",
+                    NgayBD = DateTime.Now,
+                    VaiTro = "Mentor hướng dẫn chuyên môn"
+                };
+                _context.HuongDanDoanhNghieps.Add(hd);
+            }
+
+            var diemTongKet = Math.Round((request.DiemKyLuat * 0.3) + (request.DiemChuyenMon * 0.5) + (request.DiemLamViecNhom * 0.2), 1);
+            hd.DanhGia = $"Kỷ luật: {request.DiemKyLuat}/10 | Chuyên môn: {request.DiemChuyenMon}/10 | Làm việc nhóm: {request.DiemLamViecNhom}/10 | Tổng kết DN: {diemTongKet}/10. Nhận xét: {request.NhanXet}";
+            pb.TrangThai = "HoanThanh";
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Ghi nhận đánh giá thực tập sinh thành công",
+                maPhanBo = pb.MaPhanBo,
+                danhGia = hd.DanhGia,
+                diemTongKet
+            });
+        }
+    }
+
+    public class DanhGiaThucTapSinhRequest
+    {
+        public string MaPhanBo { get; set; } = default!;
+        public double DiemKyLuat { get; set; } = 9.0;
+        public double DiemChuyenMon { get; set; } = 8.5;
+        public double DiemLamViecNhom { get; set; } = 9.0;
+        public string NhanXet { get; set; } = "Hoàn thành xuất sắc nhiệm vụ được giao, chủ động học hỏi và hòa nhập tốt với văn hóa dự án.";
     }
 
     public class TaoPhongVanRequest
