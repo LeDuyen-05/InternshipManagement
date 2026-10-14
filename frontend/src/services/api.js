@@ -11,4 +11,14 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+apiClient.interceptors.response.use(r => r, (err) => {
+  const url = err.config?.url || ''
+  if (err.response?.status === 401 && !url.includes('/auth/login')) {
+    localStorage.removeItem('internship_token')
+    localStorage.removeItem('internship_user')
+    window.location.assign('/auth')
+  }
+  return Promise.reject(err)
+})
+
 export default apiClient

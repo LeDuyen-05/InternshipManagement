@@ -8,23 +8,132 @@ namespace InternshipManagement.BLL.Services.Admin;
 public class AdminService
 {
     private readonly AppDbContext _db;
-    public AdminService(AppDbContext db) => _db = db;
+    private readonly InternshipManagement.BLL.Services.GVHuongDan.IGVHuongDanService _gv;
+    private readonly InternshipManagement.BLL.Services.Auth.IPasswordService _passwords;
+    private readonly InternshipManagement.BLL.Validators.SinhVien.SinhVienValidator _svValidator;
 
-    public async Task CreateAccountAsync(CreateAccountRequest r)
+    public AdminService(
+        AppDbContext db,
+        InternshipManagement.BLL.Services.GVHuongDan.IGVHuongDanService gv,
+        InternshipManagement.BLL.Services.Auth.IPasswordService passwords,
+        InternshipManagement.BLL.Validators.SinhVien.SinhVienValidator svValidator)
     {
-        if (await _db.TaiKhoans.AnyAsync(x => x.MaTaiKhoan == r.MaTaiKhoan || x.TenDangNhap == r.TenDangNhap)) throw new InvalidOperationException("Mã tài khoản hoặc tên đăng nhập đã tồn tại.");
-        _db.TaiKhoans.Add(new TaiKhoan { MaTaiKhoan=r.MaTaiKhoan, TenDangNhap=r.TenDangNhap, MatKhau=InternshipManagement.BLL.Services.Auth.AuthService.HashPassword(r.MatKhau), TrangThai="HoatDong", MaVaiTro=r.MaVaiTro, MaSV=r.MaSV, MaGV=r.MaGV, MaDaiDien=r.MaDaiDien });
+        _db = db;
+        _gv = gv;
+        _passwords = passwords;
+        _svValidator = svValidator;
+    }
+
+    public async Task CreateAccountAsync(CreateAccountRequest r, bool callerIsAdmin = true, string? callerAccountId = null)
+    {
+        if (string.IsNullOrWhiteSpace(r.MatKhau) || r.MatKhau.Length < 6)
+            throw new ArgumentException("Mật khẩu tối thiểu 6 ký tự.");
+
+        if (!callerIsAdmin && (r.MaVaiTro is "VT01" or "VT02"))
+            throw new UnauthorizedAccessException("Bạn không có quyền tạo tài khoản Quản trị hoặc Khoa.");
+
+        if (!await _db.VaiTros.AnyAsync(v => v.MaVaiTro == r.MaVaiTro))
+            throw new InvalidOperationException("Vai trò không tồn tại.");
+
+        if (r.MaVaiTro == "VT04")
+        {
+            if (string.IsNullOrWhiteSpace(r.MaSV) || !await _db.SinhViens.AnyAsync(s => s.MaSV == r.MaSV))
+                throw new InvalidOperationException("Tài khoản sinh viên phải gắn với mã sinh viên hợp lệ.");
+        }
+        else if (r.MaVaiTro == "VT03")
+        {
+            if (string.IsNullOrWhiteSpace(r.MaGV) || !await _db.GiangViens.AnyAsync(g => g.MaGV == r.MaGV))
+                throw new InvalidOperationException("Tài khoản giảng viên phải gắn với mã giảng viên hợp lệ.");
+        }
+        else if (r.MaVaiTro == "VT05")
+        {
+            if (string.IsNullOrWhiteSpace(r.MaDaiDien) || !await _db.DaiDienDoanhNghieps.AnyAsync(d => d.MaSo == r.MaDaiDien))
+                throw new InvalidOperationException("Tài khoản đại diện doanh nghiệp phải gắn với mã đại diện hợp lệ.");
+        }
+        else if (r.MaVaiTro is "VT01" or "VT02")
+        {
+            if (r.MaSV != null || r.MaGV != null || r.MaDaiDien != null)
+                throw new InvalidOperationException("Tài khoản Quản trị / Khoa không gắn với sinh viên, giảng viên hay doanh nghiệp.");
+        }
+
+        if (await _db.TaiKhoans.AnyAsync(x => x.MaTaiKhoan == r.MaTaiKhoan || x.TenDangNhap == r.TenDangNhap))
+            throw new InvalidOperationException("Mã tài khoản hoặc tên đăng nhập đã tồn tại.");
+
+        _db.TaiKhoans.Add(new TaiKhoan
+        {
+            MaTaiKhoan = r.MaTaiKhoan,
+            TenDangNhap = r.TenDangNhap,
+            MatKhau = _passwords.Hash(r.MatKhau),
+            TrangThai = "HoatDong",
+            MaVaiTro = r.MaVaiTro,
+            MaSV = r.MaVaiTro == "VT04" ? r.MaSV : null,
+            MaGV = r.MaVaiTro == "VT03" ? r.MaGV : null,
+            MaDaiDien = r.MaVaiTro == "VT05" ? r.MaDaiDien : null
+        });
         await _db.SaveChangesAsync();
     }
 
-    public Task<List<TaiKhoan>> AccountsAsync() => _db.TaiKhoans.Include(x => x.VaiTro).AsNoTracking().OrderBy(x => x.TenDangNhap).ToListAsync();
-    public async Task UpdateAccountAsync(string id, UpdateAccountRequest req)
+    public Task<List<AccountDto>> AccountsAsync() =>
+        _db.TaiKhoans
+            .Include(x => x.VaiTro)
+            .AsNoTracking()
+            .OrderBy(x => x.TenDangNhap)
+            .Select(x => new AccountDto(
+                x.MaTaiKhoan,
+                x.TenDangNhap,
+                x.TrangThai,
+                x.MaVaiTro,
+                x.VaiTro != null ? x.VaiTro.TenVaiTro : null,
+                x.MaSV,
+                x.MaGV,
+                x.MaDaiDien
+            ))
+            .ToListAsync();
+
+    public async Task UpdateAccountAsync(string id, UpdateAccountRequest req, bool callerIsAdmin = true, string? callerAccountId = null)
     {
         var x = await _db.TaiKhoans.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tài khoản.");
-        if (req.TrangThai is not ("HoatDong" or "BiKhoa" or "ChuaKichHoat")) throw new InvalidOperationException("Trạng thái tài khoản không hợp lệ.");
-        if (!await _db.VaiTros.AnyAsync(v => v.MaVaiTro == req.MaVaiTro)) throw new InvalidOperationException("Vai trò không tồn tại.");
-        if ((req.MaSV != null ? 1 : 0) + (req.MaGV != null ? 1 : 0) + (req.MaDaiDien != null ? 1 : 0) > 1) throw new InvalidOperationException("Tài khoản chỉ được liên kết với một chủ tài khoản.");
-        x.TrangThai = req.TrangThai; x.MaVaiTro = req.MaVaiTro; x.MaSV=req.MaSV; x.MaGV=req.MaGV; x.MaDaiDien=req.MaDaiDien; await _db.SaveChangesAsync();
+        if (req.TrangThai is not ("HoatDong" or "BiKhoa" or "ChuaKichHoat"))
+            throw new InvalidOperationException("Trạng thái tài khoản không hợp lệ.");
+        if (!await _db.VaiTros.AnyAsync(v => v.MaVaiTro == req.MaVaiTro))
+            throw new InvalidOperationException("Vai trò không tồn tại.");
+
+        if (string.Equals(id, callerAccountId, StringComparison.OrdinalIgnoreCase))
+        {
+            if (req.TrangThai != "HoatDong" || req.MaVaiTro != x.MaVaiTro)
+                throw new InvalidOperationException("Không thể tự khóa hoặc tự đổi vai trò của chính mình.");
+        }
+
+        if (!callerIsAdmin && (x.MaVaiTro is "VT01" or "VT02" || req.MaVaiTro is "VT01" or "VT02"))
+            throw new UnauthorizedAccessException("Bạn không có quyền quản lý tài khoản Quản trị hoặc Khoa.");
+
+        if (req.MaVaiTro == "VT04")
+        {
+            if (string.IsNullOrWhiteSpace(req.MaSV) || !await _db.SinhViens.AnyAsync(s => s.MaSV == req.MaSV))
+                throw new InvalidOperationException("Tài khoản sinh viên phải gắn với mã sinh viên hợp lệ.");
+        }
+        else if (req.MaVaiTro == "VT03")
+        {
+            if (string.IsNullOrWhiteSpace(req.MaGV) || !await _db.GiangViens.AnyAsync(g => g.MaGV == req.MaGV))
+                throw new InvalidOperationException("Tài khoản giảng viên phải gắn với mã giảng viên hợp lệ.");
+        }
+        else if (req.MaVaiTro == "VT05")
+        {
+            if (string.IsNullOrWhiteSpace(req.MaDaiDien) || !await _db.DaiDienDoanhNghieps.AnyAsync(d => d.MaSo == req.MaDaiDien))
+                throw new InvalidOperationException("Tài khoản đại diện doanh nghiệp phải gắn với mã đại diện hợp lệ.");
+        }
+        else if (req.MaVaiTro is "VT01" or "VT02")
+        {
+            if (req.MaSV != null || req.MaGV != null || req.MaDaiDien != null)
+                throw new InvalidOperationException("Tài khoản Quản trị / Khoa không gắn với sinh viên, giảng viên hay doanh nghiệp.");
+        }
+
+        x.TrangThai = req.TrangThai;
+        x.MaVaiTro = req.MaVaiTro;
+        x.MaSV = req.MaVaiTro == "VT04" ? req.MaSV : null;
+        x.MaGV = req.MaVaiTro == "VT03" ? req.MaGV : null;
+        x.MaDaiDien = req.MaVaiTro == "VT05" ? req.MaDaiDien : null;
+        await _db.SaveChangesAsync();
     }
 
     public Task<List<InternshipManagement.DAL.Entities.SinhVien>> StudentsAsync()=> _db.SinhViens.AsNoTracking().OrderBy(x => x.MaSV).ToListAsync();
@@ -87,11 +196,11 @@ public class AdminService
             if (score.DiemCham < 0 || (decimal)score.DiemCham > criterion.DiemToiDa) throw new InvalidOperationException($"Điểm {criterion.TenTieuChi} phải nằm trong khoảng 0–{criterion.DiemToiDa}.");
         }
         if (request.ChiTiet.Sum(x => x.DiemCham) > 10) throw new InvalidOperationException("Tổng điểm phiếu chấm không được vượt quá 10.");
-        var existing = await _db.ChiTietChamDiems.Where(x => x.MaPhieuCham == id).ToListAsync();
+        var existing = await _db.ChiTietChamDiems.Where(x => x.MaPhieu == id).ToListAsync();
         foreach (var score in request.ChiTiet)
         {
             var detail = existing.FirstOrDefault(x => x.MaTieuChi == score.MaTieuChi);
-            if (detail == null) _db.ChiTietChamDiems.Add(new ChiTietChamDiem { MaSo = Guid.NewGuid().ToString("N")[..20], MaPhieuCham = id, MaTieuChi = score.MaTieuChi, DiemCham = (decimal)score.DiemCham });
+            if (detail == null) _db.ChiTietChamDiems.Add(new ChiTietChamDiem { MaSo = InternshipManagement.DAL.Common.IdGenerator.New("CT"), MaPhieu = id, MaTieuChi = score.MaTieuChi, DiemCham = (decimal)score.DiemCham });
             else detail.DiemCham = (decimal)score.DiemCham;
         }
         assessment.TongDiem = (decimal)request.ChiTiet.Sum(x => x.DiemCham);
@@ -103,16 +212,16 @@ public class AdminService
     {
         var assessmentsQuery = _db.PhieuChamDiems.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(maDot)) assessmentsQuery = assessmentsQuery.Where(x => x.MaDot == maDot);
-        var assessments = await assessmentsQuery.Select(x => new { x.MaPhieu, x.MaDot, x.MaSinhVien, x.TongDiem, x.NgayCham }).ToListAsync();
-        var studentIds = assessments.Select(x => x.MaSinhVien).Distinct().ToList();
+        var assessments = await assessmentsQuery.Select(x => new { x.MaPhieu, x.MaDot, x.MaSV, x.TongDiem, x.NgayCham }).ToListAsync();
+        var studentIds = assessments.Select(x => x.MaSV).Distinct().ToList();
         var students = await _db.SinhViens.AsNoTracking().Where(x => studentIds.Contains(x.MaSV)).ToDictionaryAsync(x => x.MaSV, x => new { x.HoTen, x.Lop });
         var roundIds = assessments.Select(x => x.MaDot).Distinct().ToList();
         var roundNames = await _db.DotThucTaps.AsNoTracking().Where(x => roundIds.Contains(x.MaSo)).ToDictionaryAsync(x => x.MaSo, x => x.TenDot);
         var criteria = await _db.TieuChis.AsNoTracking().OrderBy(x => x.MaTieuChi).Select(x => new { x.MaTieuChi, x.TenTieuChi, x.DiemToiDa }).ToListAsync();
         var assessmentIds = assessments.Select(x => x.MaPhieu).ToList();
-        var details = assessmentIds.Count == 0 ? new List<ChiTietChamDiem>() : await _db.ChiTietChamDiems.AsNoTracking().Where(x => assessmentIds.Contains(x.MaPhieuCham)).ToListAsync();
+        var details = assessmentIds.Count == 0 ? new List<ChiTietChamDiem>() : await _db.ChiTietChamDiems.AsNoTracking().Where(x => assessmentIds.Contains(x.MaPhieu)).ToListAsync();
         var byCriteria = criteria.Select(c => new { c.MaTieuChi, c.TenTieuChi, c.DiemToiDa, submissions = details.Count(x => x.MaTieuChi == c.MaTieuChi), average = (double)(details.Where(x => x.MaTieuChi == c.MaTieuChi).Select(x => (decimal?)x.DiemCham).Average() ?? 0) }).ToList();
-        var rows = assessments.Select(x => new { x.MaPhieu, x.MaSinhVien, sinhVien = students.TryGetValue(x.MaSinhVien, out var s) ? s.HoTen : x.MaSinhVien, lop = students.TryGetValue(x.MaSinhVien, out var sv) ? sv.Lop : "", x.MaDot, dot = roundNames.TryGetValue(x.MaDot, out var name) ? name : x.MaDot, tongDiem = x.TongDiem, x.NgayCham, chiTiet = details.Where(d => d.MaPhieuCham == x.MaPhieu).Select(d => new { maTieuChi = d.MaTieuChi, diemCham = d.DiemCham }) }).OrderByDescending(x => x.tongDiem).ToList();
+        var rows = assessments.Select(x => new { x.MaPhieu, MaSinhVien = x.MaSV, sinhVien = students.TryGetValue(x.MaSV, out var s) ? s.HoTen : x.MaSV, lop = students.TryGetValue(x.MaSV, out var sv) ? sv.Lop : "", x.MaDot, dot = roundNames.TryGetValue(x.MaDot, out var name) ? name : x.MaDot, tongDiem = x.TongDiem, x.NgayCham, chiTiet = details.Where(d => d.MaPhieu == x.MaPhieu).Select(d => new { maTieuChi = d.MaTieuChi, diemCham = d.DiemCham }) }).OrderByDescending(x => x.tongDiem).ToList();
         var scored = assessments.Where(x => x.TongDiem.HasValue).Select(x => (double)x.TongDiem!.Value).ToList();
         return new { criteria = byCriteria, assessments = rows, total = assessments.Count, averageScore = scored.Count == 0 ? 0 : Math.Round(scored.Average(), 2), complete = assessments.Count(x => x.TongDiem.HasValue), pending = assessments.Count(x => !x.TongDiem.HasValue), scoreDistribution = new[] { new { label = "Dưới 5", count = scored.Count(x => x < 5) }, new { label = "5–6.9", count = scored.Count(x => x >= 5 && x < 7) }, new { label = "7–8.4", count = scored.Count(x => x >= 7 && x < 8.5) }, new { label = "8.5–10", count = scored.Count(x => x >= 8.5) } } };
     }
@@ -151,6 +260,25 @@ public class AdminService
         {
             var company = await _db.CongTys.FindAsync(registration.MaCongTy);
             if (company?.TrangThai != "DaDuyet") throw new InvalidOperationException("Chỉ có thể duyệt nguyện vọng vào doanh nghiệp đã được duyệt.");
+
+            var hasOtherApproved = await _db.DangKyThucTaps.AnyAsync(r =>
+                r.MaSV == registration.MaSV &&
+                r.MaDot == registration.MaDot &&
+                r.MaDK != registration.MaDK &&
+                r.TrangThai == "DaDuyet");
+            if (hasOtherApproved)
+                throw new InvalidOperationException("Sinh viên đã có một nguyện vọng khác được phê duyệt trong đợt này.");
+
+            if (company != null && company.SoLuongNhan > 0)
+            {
+                var approvedCount = await _db.DangKyThucTaps.CountAsync(r =>
+                    r.MaCongTy == registration.MaCongTy &&
+                    r.MaDot == registration.MaDot &&
+                    r.MaDK != registration.MaDK &&
+                    r.TrangThai == "DaDuyet");
+                if (approvedCount >= company.SoLuongNhan)
+                    throw new InvalidOperationException($"Doanh nghiệp '{company.TenCongTy}' đã đủ chỉ tiêu tiếp nhận ({company.SoLuongNhan} sinh viên) trong đợt này.");
+            }
         }
         registration.TrangThai = request.TrangThai;
         await _db.SaveChangesAsync();
@@ -170,28 +298,18 @@ public class AdminService
                     select new { s.MaSV, s.HoTen, s.Lop, s.ChuyenNganh, maGiangVien = g == null ? null : g.MaGV, giangVien = g == null ? null : g.HoTen, maDot = r == null ? null : r.MaDot, congTy = c == null ? null : c.TenCongTy };
         if (!string.IsNullOrWhiteSpace(maDot)) query = query.Where(x => x.maDot == maDot);
         var rows = await query.OrderBy(x => x.HoTen).ToListAsync();
-        var lecturers = await _db.GiangViens.AsNoTracking().Select(g => new { g.MaGV, g.HoTen, g.ChuyenMon, assignedCount = _db.GVHuongDans.Count(a => a.MaGiangVien == g.MaGV && a.TrangThai == "DangHuongDan") }).OrderBy(g => g.HoTen).ToListAsync();
+        var lecturers = await _db.GiangViens.AsNoTracking().Select(g => new { g.MaGV, g.HoTen, g.ChuyenMon, chiTieu = g.ChiTieuHD, assignedCount = _db.GVHuongDans.Count(a => a.MaGiangVien == g.MaGV && a.TrangThai == "DangHuongDan") }).OrderBy(g => g.HoTen).ToListAsync();
         return new { students = rows, lecturers, assigned = rows.Count(x => x.maGiangVien != null), unassigned = rows.Count(x => x.maGiangVien == null) };
     }
 
-    public async Task AssignSupervisorAsync(string maSV, SupervisorAssignmentRequest request)
+    public async Task AssignSupervisorAsync(string maSV, SupervisorAssignmentRequest r)
     {
-        if (!await _db.SinhViens.AnyAsync(x => x.MaSV == maSV)) throw new KeyNotFoundException("Không tìm thấy sinh viên.");
-        var lecturer = await _db.GiangViens.FindAsync(request.MaGiangVien) ?? throw new KeyNotFoundException("Không tìm thấy giảng viên.");
-        var activeCount = await _db.GVHuongDans.CountAsync(x => x.MaGiangVien == request.MaGiangVien && x.TrangThai == "DangHuongDan" && x.MaSinhVien != maSV);
-        if (activeCount >= 15) throw new InvalidOperationException("Giảng viên đã đạt định mức tối đa 15 sinh viên.");
-        var assignment = await _db.GVHuongDans.FirstOrDefaultAsync(x => x.MaSinhVien == maSV && x.TrangThai == "DangHuongDan");
-        var previousLecturer = assignment?.MaGiangVien;
-        if (assignment == null) _db.GVHuongDans.Add(new InternshipManagement.DAL.Entities.GVHuongDan { MaSo = $"GVHD{Guid.NewGuid():N}"[..20], MaSinhVien = maSV, MaGiangVien = lecturer.MaGV, NgayPC = DateTime.Today, TrangThai = "DangHuongDan" });
-        else assignment.MaGiangVien = lecturer.MaGV;
-
-        lecturer.SoLuongSVHD = activeCount + 1;
-        if (previousLecturer != null && previousLecturer != lecturer.MaGV)
-        {
-            var previous = await _db.GiangViens.FindAsync(previousLecturer);
-            if (previous != null) previous.SoLuongSVHD = await _db.GVHuongDans.CountAsync(x => x.MaGiangVien == previousLecturer && x.TrangThai == "DangHuongDan") - 1;
-        }
-        await _db.SaveChangesAsync();
+        var current = await _db.GVHuongDans.AsNoTracking()
+            .FirstOrDefaultAsync(x => x.MaSinhVien == maSV && x.TrangThai == "DangHuongDan");
+        if (current is null)
+            await _gv.PhanCongDonLeAsync(new InternshipManagement.BLL.DTOs.GVHuongDan.PhanCongDonLeRequest { MaGV = r.MaGiangVien, MaSV = maSV });
+        else if (current.MaGiangVien != r.MaGiangVien)
+            await _gv.DoiGiangVienAsync(new InternshipManagement.BLL.DTOs.GVHuongDan.DoiGiangVienRequest { MaSo = current.MaSo, MaGVMoi = r.MaGiangVien });
     }
 
     public async Task<object> ProgressAsync(string? maDot)
@@ -227,33 +345,140 @@ public class AdminService
 
     public async Task ApproveProgressAsync(string id, ReportApprovalRequest request)
     {
-        if (request.TrangThai is not ("DaDuyet" or "YeuCauSua")) throw new InvalidOperationException("Chỉ được duyệt báo cáo hoặc yêu cầu sinh viên sửa báo cáo.");
-        var report = await _db.TienDoThucTaps.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy báo cáo tiến độ.");
-        if (report.TrangThaiDuyet == "ChuaNop") throw new InvalidOperationException("Sinh viên chưa nộp báo cáo này.");
-        report.TrangThaiDuyet=request.TrangThai; await _db.SaveChangesAsync();
+        if (request.TrangThai is not ("DaDuyet" or "YeuCauSua"))
+            throw new InvalidOperationException("Chỉ được duyệt báo cáo hoặc yêu cầu sinh viên sửa báo cáo.");
+        var report = await _db.TienDoThucTaps.FindAsync(id)
+            ?? throw new KeyNotFoundException("Không tìm thấy báo cáo tiến độ.");
+        if (report.TrangThaiDuyet != "DaNop")
+            throw new InvalidOperationException("Chỉ có thể duyệt hoặc yêu cầu sửa báo cáo khi ở trạng thái Đã nộp.");
+
+        report.TrangThaiDuyet = request.TrangThai;
+        if (!string.IsNullOrWhiteSpace(request.NhanXet))
+        {
+            report.NhanXet = request.NhanXet;
+            report.NhanXetGV = request.NhanXet;
+        }
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task<int> GenerateReportSlotsAsync(GenerateReportSlotsRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.MaDot))
+            throw new ArgumentException("Mã đợt thực tập không được để trống.");
+
+        var round = await _db.DotThucTaps.FindAsync(request.MaDot)
+            ?? throw new KeyNotFoundException($"Không tìm thấy đợt thực tập {request.MaDot}.");
+
+        var startDate = request.NgayBatDau ?? round.ThoiGianBD;
+        var weeks = request.SoTuan > 0 ? request.SoTuan : 10;
+
+        var assignedStudents = await _db.PhanBoThucTaps
+            .AsNoTracking()
+            .Where(p => p.MaDot == request.MaDot && p.TrangThai != "Huy")
+            .Select(p => p.MaSinhVien)
+            .ToListAsync();
+
+        var approvedStudents = await _db.DangKyThucTaps
+            .AsNoTracking()
+            .Where(d => d.MaDot == request.MaDot && d.TrangThai == "DaDuyet")
+            .Select(d => d.MaSV)
+            .ToListAsync();
+
+        var studentIds = assignedStudents.Concat(approvedStudents).Distinct().ToList();
+        if (studentIds.Count == 0) return 0;
+
+        var existingSlots = await _db.TienDoThucTaps
+            .AsNoTracking()
+            .Where(t => t.MaDot == request.MaDot)
+            .Select(t => new { t.MaSV, t.MocThoiGian })
+            .ToListAsync();
+
+        var existingSet = new HashSet<(string MaSV, DateTime Moc)>(
+            existingSlots.Select(x => (x.MaSV, x.MocThoiGian.Date))
+        );
+
+        int createdCount = 0;
+        foreach (var svId in studentIds)
+        {
+            for (int k = 1; k <= weeks; k++)
+            {
+                var moc = startDate.Date.AddDays(7 * k);
+                if (existingSet.Contains((svId, moc.Date)))
+                    continue;
+
+                _db.TienDoThucTaps.Add(new InternshipManagement.DAL.Entities.TienDoThucTap
+                {
+                    MaTienDo = DAL.Common.IdGenerator.New("TD"),
+                    MaDot = request.MaDot,
+                    MaSV = svId,
+                    MocThoiGian = moc,
+                    TrangThaiDuyet = "ChuaNop"
+                });
+                existingSet.Add((svId, moc.Date));
+                createdCount++;
+            }
+        }
+
+        if (createdCount > 0)
+        {
+            await _db.SaveChangesAsync();
+        }
+        return createdCount;
     }
 
     public async Task CreateStudentAsync(CreateStudentRequest r)
     {
-        _db.SinhViens.Add(new InternshipManagement.DAL.Entities.SinhVien{ MaSV =r.MaSV, HoTen=r.HoTen, Lop=r.Lop ?? "", KhoaHoc=r.KhoaHoc ?? "", Gpa=r.Gpa.HasValue ? (decimal)r.Gpa.Value : 0m, KyNang=r.KyNang ?? "", ChuyenNganh=r.ChuyenNganh ?? "", CongNghe=r.CongNghe ?? "", DuAnDaThucHien=r.DuAnDaThucHien ?? "" });
+        var gpa = r.Gpa.HasValue ? (decimal?)r.Gpa.Value : null;
+        var errors = _svValidator.Validate(r.MaSV, r.HoTen, gpa, r.Lop, r.KhoaHoc, r.CongNghe, r.KyNang, r.DuAnDaThucHien);
+        if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors));
+
+        if (await _db.SinhViens.AnyAsync(s => s.MaSV == r.MaSV))
+            throw new InvalidOperationException($"Sinh viên với mã {r.MaSV} đã tồn tại.");
+
+        _db.SinhViens.Add(new InternshipManagement.DAL.Entities.SinhVien
+        {
+            MaSV = r.MaSV.Trim(),
+            HoTen = r.HoTen.Trim(),
+            Lop = string.IsNullOrWhiteSpace(r.Lop) ? null : r.Lop.Trim(),
+            KhoaHoc = string.IsNullOrWhiteSpace(r.KhoaHoc) ? null : r.KhoaHoc.Trim(),
+            Gpa = gpa,
+            KyNang = string.IsNullOrWhiteSpace(r.KyNang) ? null : r.KyNang.Trim(),
+            ChuyenNganh = string.IsNullOrWhiteSpace(r.ChuyenNganh) ? null : r.ChuyenNganh.Trim(),
+            CongNghe = string.IsNullOrWhiteSpace(r.CongNghe) ? null : r.CongNghe.Trim(),
+            DuAnDaThucHien = string.IsNullOrWhiteSpace(r.DuAnDaThucHien) ? null : r.DuAnDaThucHien.Trim()
+        });
         await _db.SaveChangesAsync();
     }
+
     public async Task UpdateStudentAsync(string id, CreateStudentRequest r)
     {
+        var gpa = r.Gpa.HasValue ? (decimal?)r.Gpa.Value : null;
+        var errors = _svValidator.Validate(id, r.HoTen, gpa, r.Lop, r.KhoaHoc, r.CongNghe, r.KyNang, r.DuAnDaThucHien);
+        if (errors.Count > 0) throw new ArgumentException(string.Join(" ", errors));
+
         var x = await _db.SinhViens.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy sinh viên.");
-        x.HoTen=r.HoTen; x.Lop=r.Lop ?? ""; x.KhoaHoc=r.KhoaHoc ?? ""; x.Gpa=r.Gpa.HasValue ? (decimal)r.Gpa.Value : 0m; x.KyNang=r.KyNang ?? ""; x.ChuyenNganh=r.ChuyenNganh ?? ""; x.CongNghe=r.CongNghe ?? ""; x.DuAnDaThucHien=r.DuAnDaThucHien ?? "";
+        x.HoTen = r.HoTen.Trim();
+        x.Lop = string.IsNullOrWhiteSpace(r.Lop) ? null : r.Lop.Trim();
+        x.KhoaHoc = string.IsNullOrWhiteSpace(r.KhoaHoc) ? null : r.KhoaHoc.Trim();
+        x.Gpa = gpa;
+        x.KyNang = string.IsNullOrWhiteSpace(r.KyNang) ? null : r.KyNang.Trim();
+        x.ChuyenNganh = string.IsNullOrWhiteSpace(r.ChuyenNganh) ? null : r.ChuyenNganh.Trim();
+        x.CongNghe = string.IsNullOrWhiteSpace(r.CongNghe) ? null : r.CongNghe.Trim();
+        x.DuAnDaThucHien = string.IsNullOrWhiteSpace(r.DuAnDaThucHien) ? null : r.DuAnDaThucHien.Trim();
         await _db.SaveChangesAsync();
     }
 
     public async Task CreateLecturerAsync(CreateLecturerRequest r)
     {
-        _db.GiangViens.Add(new GiangVien { MaGV=r.MaGV, HoTen=r.HoTen, ChuyenMon=r.ChuyenMon ?? "", SoLuongSVHD=0 });
+        _db.GiangViens.Add(new GiangVien { MaGV=r.MaGV, HoTen=r.HoTen, ChuyenMon=r.ChuyenMon ?? "", SoLuongSVHD=0, ChiTieuHD=r.ChiTieuHD > 0 ? r.ChiTieuHD : 10 });
         await _db.SaveChangesAsync();
     }
     public async Task UpdateLecturerAsync(string id, CreateLecturerRequest r)
     {
         var x = await _db.GiangViens.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy giảng viên.");
-        x.HoTen=r.HoTen; x.ChuyenMon=r.ChuyenMon ?? ""; await _db.SaveChangesAsync();
+        x.HoTen=r.HoTen; x.ChuyenMon=r.ChuyenMon ?? "";
+        if (r.ChiTieuHD > 0) x.ChiTieuHD = r.ChiTieuHD;
+        await _db.SaveChangesAsync();
     }
     public async Task CreateCompanyAsync(CreateCompanyRequest r)
     {

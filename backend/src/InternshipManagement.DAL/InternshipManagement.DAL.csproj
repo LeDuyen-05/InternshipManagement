@@ -12,4 +12,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\database\QuanLyThucTap_TSQL.sql" LogicalName="InternshipManagement.DAL.schema.sql" />
+  </ItemGroup>
 </Project>

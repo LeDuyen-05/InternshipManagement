@@ -5,4 +5,5 @@ namespace InternshipManagement.DAL.Repositories;
 public interface ICongTyRepository : IRepository<CongTy>
 {
     Task<IReadOnlyList<CongTy>> GetDanhSachTuyenDungAsync();
+    Task<bool> ExistsByNameAsync(string tenCongTy);
 }

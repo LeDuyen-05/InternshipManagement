@@ -3,22 +3,23 @@ export default function PhieuDiemPdfModal({
   onClose,
   currentStudent,
   selectedDot,
-  scores,
-  comments,
-  finalScore,
-  gradeInfo,
-  generalReview,
+  criteria = [],
+  scores = {},
+  totalScore = '0.00',
+  gradeInfo = { letter: '-', rank: 'Chưa chấm' },
+  generalReview = '',
+  lecturerName = '',
 }) {
   if (!isOpen || !currentStudent) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
         {/* Header Toolbar */}
         <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-rose-400">picture_as_pdf</span>
-            <span className="font-bold text-sm">Xem Trước Phiếu Điểm BM-KD-08/FIT - {currentStudent.hoTen}</span>
+            <span className="font-bold text-sm">Xem Trước Phiếu Điểm - {currentStudent.hoTen}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -39,104 +40,74 @@ export default function PhieuDiemPdfModal({
           </div>
         </div>
 
-        {/* Document Content Container (Mô phỏng tờ A4 chính thức) */}
+        {/* Document Content Container (A4) */}
         <div className="p-8 overflow-y-auto bg-slate-100 flex justify-center">
-          <div className="bg-white w-full p-8 shadow-md rounded-lg border border-slate-200 text-slate-900 space-y-6 font-serif">
+          <div
+            className="bg-white w-full p-8 shadow-md rounded-lg border border-slate-200 text-slate-900 space-y-6"
+            style={{ fontFamily: "'Times New Roman', Times, serif" }}
+          >
             {/* Quốc hiệu & Tên trường */}
             <div className="flex justify-between items-start border-b pb-4 text-xs">
-              <div className="text-center font-sans">
+              <div className="text-center">
                 <p className="font-bold text-slate-800 uppercase">TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP.HCM (HUIT)</p>
                 <p className="font-semibold text-blue-700 uppercase">KHOA CÔNG NGHỆ THÔNG TIN</p>
-                <p className="text-[10px] text-slate-500">Mã biểu mẫu: BM-KD-08/FIT - Thực tập 12 tuần</p>
+                <p className="text-[11px] text-slate-500">Thực tập tốt nghiệp</p>
               </div>
-              <div className="text-center font-sans">
+              <div className="text-center">
                 <p className="font-bold uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
-                <p className="text-[11px] underline">Độc lập - Tự do - Hạnh phúc</p>
+                <p className="text-[12px] font-semibold underline underline-offset-2">Độc lập - Tự do - Hạnh phúc</p>
               </div>
             </div>
 
             {/* Tiêu đề biểu mẫu */}
             <div className="text-center">
-              <h2 className="text-base font-bold uppercase tracking-wide">
+              <h2 className="text-lg font-bold uppercase text-slate-900">
                 PHIẾU ĐÁNH GIÁ KẾT QUẢ THỰC TẬP TỐT NGHIỆP
               </h2>
               <p className="text-xs italic text-slate-600 mt-1">
-                (Dành cho Giảng viên hướng dẫn đánh giá theo chuẩn CLO - {selectedDot?.tenDot || 'Học kỳ 1'})
+                (Dành cho Giảng viên hướng dẫn đánh giá - {(selectedDot?.tenDot || 'Đợt thực tập').normalize('NFC')})
               </p>
             </div>
 
             {/* Thông tin sinh viên */}
-            <div className="grid grid-cols-2 gap-2 text-xs font-sans p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <p>• Họ và tên: <strong>{currentStudent?.hoTen || '---'}</strong></p>
-              <p>• Mã số sinh viên: <strong>{currentStudent?.maSV || '---'}</strong></p>
-              <p>• Lớp sinh hoạt: <strong>{currentStudent?.lop || '---'}</strong></p>
-              <p>• Đơn vị thực tập: <strong>{currentStudent?.tenCongTy || '---'}</strong></p>
-              <p>• Giảng viên hướng dẫn: <strong>ThS. Nguyễn Văn An (GV001)</strong></p>
-              <p>• Tiến độ báo cáo: <strong className="text-emerald-700">{currentStudent?.tienDo || '---'}</strong></p>
+            <div className="grid grid-cols-2 gap-2.5 text-xs p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+              <p>• Họ và tên: <strong>{currentStudent?.hoTen || '—'}</strong></p>
+              <p>• Mã số sinh viên: <strong>{currentStudent?.maSV || '—'}</strong></p>
+              <p>• Lớp sinh hoạt: <strong>{currentStudent?.lop || '—'}</strong></p>
+              <p>• Đơn vị thực tập: <strong>{currentStudent?.tenCongTy || '—'}</strong></p>
+              <p>• Giảng viên hướng dẫn: <strong>{lecturerName || '—'}</strong></p>
             </div>
 
             {/* Bảng điểm chi tiết */}
-            <div className="font-sans">
+            <div>
               <table className="w-full text-left text-xs border border-slate-300 border-collapse">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-300 text-center font-bold">
-                    <th className="p-2 border-r border-slate-300 w-16">Mã CLO</th>
+                    <th className="p-2 border-r border-slate-300 w-20">Mã tiêu chí</th>
                     <th className="p-2 border-r border-slate-300">Nội dung đánh giá</th>
-                    <th className="p-2 border-r border-slate-300 w-16">Trọng số</th>
-                    <th className="p-2 border-r border-slate-300 w-20">Điểm (0-10)</th>
-                    <th className="p-2 border-r border-slate-300 w-20">Quy đổi</th>
-                    <th className="p-2">Nhận xét chi tiết</th>
+                    <th className="p-2 border-r border-slate-300 w-24">Điểm tối đa</th>
+                    <th className="p-2 w-24">Điểm chấm</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  <tr>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">CLO 1</td>
-                    <td className="p-2 border-r border-slate-200">Kiến thức chuyên môn & giải quyết vấn đề</td>
-                    <td className="p-2 border-r border-slate-200 text-center">30%</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">{scores.clo1}</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold text-blue-700">
-                      {((scores.clo1 || 0) * 0.3).toFixed(2)}
-                    </td>
-                    <td className="p-2 text-[11px]">{comments.clo1}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">CLO 2</td>
-                    <td className="p-2 border-r border-slate-200">Kỹ năng kỹ thuật, công cụ & công nghệ</td>
-                    <td className="p-2 border-r border-slate-200 text-center">35%</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">{scores.clo2}</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold text-blue-700">
-                      {((scores.clo2 || 0) * 0.35).toFixed(2)}
-                    </td>
-                    <td className="p-2 text-[11px]">{comments.clo2}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">CLO 3</td>
-                    <td className="p-2 border-r border-slate-200">Thái độ làm việc & đạo đức nghề nghiệp</td>
-                    <td className="p-2 border-r border-slate-200 text-center">20%</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">{scores.clo3}</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold text-blue-700">
-                      {((scores.clo3 || 0) * 0.2).toFixed(2)}
-                    </td>
-                    <td className="p-2 text-[11px]">{comments.clo3}</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">CLO 4</td>
-                    <td className="p-2 border-r border-slate-200">Báo cáo tổng kết & tư duy phản biện</td>
-                    <td className="p-2 border-r border-slate-200 text-center">15%</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold">{scores.clo4}</td>
-                    <td className="p-2 border-r border-slate-200 text-center font-bold text-blue-700">
-                      {((scores.clo4 || 0) * 0.15).toFixed(2)}
-                    </td>
-                    <td className="p-2 text-[11px]">{comments.clo4}</td>
-                  </tr>
+                  {criteria.map((c) => (
+                    <tr key={c.maTieuChi}>
+                      <td className="p-2 border-r border-slate-200 text-center font-bold">{c.maTieuChi}</td>
+                      <td className="p-2 border-r border-slate-200">{c.tenTieuChi}</td>
+                      <td className="p-2 border-r border-slate-200 text-center">{c.diemToiDa} đ</td>
+                      <td className="p-2 text-center font-bold text-blue-700">
+                        {scores[c.maTieuChi] ?? 0}
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-blue-50/70 border-t border-slate-300 font-bold">
-                    <td colSpan={4} className="p-2 text-right border-r border-slate-300">
-                      TỔNG ĐIỂM CLO GIẢNG VIÊN (Thang 10):
+                  <tr className="bg-slate-50 border-t-2 border-slate-300 font-bold">
+                    <td colSpan={2} className="p-2.5 text-right uppercase border-r border-slate-300">
+                      Tổng điểm kết luận:
                     </td>
-                    <td className="p-2 text-center text-blue-800 text-sm font-mono border-r border-slate-300">
-                      {finalScore}
+                    <td className="p-2.5 text-center font-bold font-mono text-blue-800 border-r border-slate-300">
+                      {totalScore} / 10.0
                     </td>
                     <td className="p-2 text-center">
                       Xếp loại: <strong>{gradeInfo.letter} ({gradeInfo.rank})</strong>
@@ -147,13 +118,15 @@ export default function PhieuDiemPdfModal({
             </div>
 
             {/* Nhận xét chung */}
-            <div className="font-sans text-xs p-3 bg-slate-50 rounded-lg border border-slate-200">
-              <strong className="block text-slate-800 mb-1">Nhận xét chung của Giảng viên hướng dẫn:</strong>
-              <p className="italic text-slate-700 leading-relaxed">{generalReview}</p>
-            </div>
+            {generalReview && (
+              <div className="text-xs p-3.5 bg-slate-50 rounded-lg border border-slate-200">
+                <strong className="block text-slate-800 mb-1">Ghi chú của Giảng viên hướng dẫn:</strong>
+                <p className="italic text-slate-700 leading-relaxed">{generalReview}</p>
+              </div>
+            )}
 
             {/* Chữ ký xác nhận */}
-            <div className="flex justify-between items-end pt-8 text-xs font-sans">
+            <div className="flex justify-between items-end pt-8 text-xs">
               <div className="text-center w-48">
                 <p className="font-semibold text-slate-600">Trưởng Bộ Môn Duyệt</p>
                 <p className="text-[10px] italic text-slate-400 mt-0.5">(Ký và ghi rõ họ tên)</p>
@@ -164,14 +137,10 @@ export default function PhieuDiemPdfModal({
                   TP. Hồ Chí Minh, ngày {new Date().getDate()} tháng {new Date().getMonth() + 1} năm {new Date().getFullYear()}
                 </p>
                 <p className="font-semibold text-slate-900">Giảng viên hướng dẫn</p>
-                <p className="text-[10px] italic text-slate-400 mt-0.5">(Ký điện tử xác nhận)</p>
-                <div className="h-10 flex items-center justify-center font-serif italic text-blue-800 font-bold text-sm">
-                  ThS. Nguyễn Văn An
+                <p className="text-[10px] italic text-slate-400 mt-0.5">(Ký, ghi rõ họ tên)</p>
+                <div className="h-12 flex items-center justify-center italic text-slate-800 font-bold text-sm">
+                  {lecturerName || ''}
                 </div>
-                <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  <span className="material-symbols-outlined text-xs">verified</span>
-                  Đã ký số xác thực
-                </span>
               </div>
             </div>
           </div>

@@ -33,48 +33,67 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         return entities.Select(MapToDto).ToList();
     }
 
-    public async Task<PhieuChamDiemDto> LuuPhieuChamDiemAsync(LuuPhieuChamRequest request)
+    public async Task<PhieuChamDiemDto> LuuPhieuChamDiemAsync(LuuPhieuChamRequest request, string? actorMaGV = null, bool isStaff = false)
     {
         if (string.IsNullOrWhiteSpace(request.MaSV))
-            throw new ArgumentException("Mã sinh viên không được để trống", nameof(request.MaSV));
+            throw new ArgumentException("Mã sinh viên không được để trống.", nameof(request.MaSV));
         if (string.IsNullOrWhiteSpace(request.MaDot))
-            throw new ArgumentException("Mã đợt thực tập không được để trống", nameof(request.MaDot));
+            throw new ArgumentException("Mã đợt thực tập không được để trống.", nameof(request.MaDot));
+        if (request.ChiTiets == null || request.ChiTiets.Count == 0)
+            throw new ArgumentException("Chi tiết điểm không được để trống.", nameof(request.ChiTiets));
+
+        var dot = await _repo.GetDotThucTapAsync(request.MaDot);
+        if (dot != null && string.Equals(dot.TrangThai, "DaKetThuc", StringComparison.OrdinalIgnoreCase) && !isStaff)
+        {
+            throw new InvalidOperationException("Đợt thực tập đã kết thúc, không thể chấm hoặc sửa điểm.");
+        }
+
+        var gvhd = await _repo.GetActiveAssignmentAsync(request.MaSV);
+        if (!isStaff)
+        {
+            if (gvhd == null || !string.Equals(gvhd.MaGiangVien, actorMaGV, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException("Giảng viên không phụ trách hướng dẫn sinh viên này.");
+            }
+        }
 
         var tieuChis = await _repo.GetDanhSachTieuChiAsync();
         var tieuChiDict = tieuChis.ToDictionary(t => t.MaTieuChi);
 
-        decimal tongDiem = request.TongDiem ?? 0;
+        var seenTieuChi = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var chiTiets = new List<ChiTietChamDiem>();
 
-        if (request.ChiTiets != null && request.ChiTiets.Count > 0)
+        foreach (var ct in request.ChiTiets)
         {
-            decimal sum = 0;
-            foreach (var ct in request.ChiTiets)
+            if (string.IsNullOrWhiteSpace(ct.MaTieuChi) || !tieuChiDict.TryGetValue(ct.MaTieuChi, out var tc))
             {
-                if (tieuChiDict.TryGetValue(ct.MaTieuChi, out var tc))
-                {
-                    var diem = Math.Min(ct.DiemCham, tc.DiemToiDa);
-                    diem = Math.Max(diem, 0);
-                    sum += diem;
+                throw new ArgumentException($"Tiêu chí {ct.MaTieuChi} không tồn tại.");
+            }
 
-                    chiTiets.Add(new ChiTietChamDiem
-                    {
-                        MaTieuChi = ct.MaTieuChi,
-                        DiemCham = diem
-                    });
-                }
-            }
-            if (request.TongDiem == null || request.TongDiem == 0)
+            if (!seenTieuChi.Add(ct.MaTieuChi))
             {
-                tongDiem = sum;
+                throw new ArgumentException($"Trùng lặp tiêu chí chấm điểm: {ct.MaTieuChi}.");
             }
+
+            if (ct.DiemCham < 0 || ct.DiemCham > tc.DiemToiDa)
+            {
+                throw new ArgumentException($"Điểm cho tiêu chí '{tc.TenTieuChi}' phải từ 0 đến {tc.DiemToiDa}. Điểm gửi lên: {ct.DiemCham}.");
+            }
+
+            chiTiets.Add(new ChiTietChamDiem
+            {
+                MaTieuChi = ct.MaTieuChi,
+                DiemCham = ct.DiemCham
+            });
         }
+
+        decimal tongDiem = chiTiets.Sum(c => c.DiemCham);
 
         var phieu = new DAL.Entities.PhieuChamDiem
         {
             MaSV = request.MaSV,
             MaDot = request.MaDot,
-            MaGVHuongDan = request.MaGVHuongDan,
+            MaGVHuongDan = gvhd?.MaSo,
             TongDiem = tongDiem,
             NgayCham = DateTime.Now
         };

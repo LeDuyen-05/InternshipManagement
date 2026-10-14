@@ -41,15 +41,22 @@ public class DangKyThucTapService : IDangKyThucTapService
         if (string.IsNullOrWhiteSpace(request.TenCongTy))
             throw new ArgumentException("Tên công ty không được để trống.");
 
-        var maCT = "CT" + DateTime.Now.ToString("yyMMddHHmmss");
+        var trimmedName = request.TenCongTy.Trim();
+        if (trimmedName.Length > 200)
+            throw new ArgumentException("Tên công ty không được vượt quá 200 ký tự.");
+
+        if (await _congTyRepo.ExistsByNameAsync(trimmedName))
+            throw new ArgumentException($"Doanh nghiệp \"{trimmedName}\" đã tồn tại trong hệ thống. Vui lòng kiểm tra lại.");
+
+        var maCT = DAL.Common.IdGenerator.New("CT");
         var congTy = new CongTy
         {
             MaCongTy = maCT,
-            TenCongTy = request.TenCongTy,
-            ViTriTuyen = request.ViTriTuyen ?? "Thực tập sinh",
-            ThoiGian = request.ThoiGian ?? "3 tháng",
-            SoLuongNhan = request.SoLuongNhan ?? 1,
-            YeuCau = request.YeuCau ?? "Theo thỏa thuận",
+            TenCongTy = trimmedName,
+            ViTriTuyen = request.ViTriTuyen?.Trim() ?? "Thực tập sinh",
+            ThoiGian = request.ThoiGian?.Trim() ?? "3 tháng",
+            SoLuongNhan = request.SoLuongNhan > 0 ? request.SoLuongNhan.Value : 1,
+            YeuCau = request.YeuCau?.Trim() ?? "Theo thỏa thuận",
             TrangThai = "ChoDuyet"
         };
 
@@ -86,19 +93,52 @@ public class DangKyThucTapService : IDangKyThucTapService
         }).ToList();
     }
 
+    public const int MaxNguyenVong = 3;
+
     public async Task<DangKyThucTapDto> DangKyNguyenVongAsync(CreateDangKyThucTapRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.MaSV))
+            throw new ArgumentException("Mã sinh viên không được để trống.", nameof(request.MaSV));
+        if (string.IsNullOrWhiteSpace(request.MaCongTy))
+            throw new ArgumentException("Mã công ty không được để trống.", nameof(request.MaCongTy));
+        if (string.IsNullOrWhiteSpace(request.MaDot))
+            throw new ArgumentException("Mã đợt thực tập không được để trống.", nameof(request.MaDot));
+
         var sv = await _sinhVienRepo.GetByIdAsync(request.MaSV)
             ?? throw new NotFoundException("SinhVien", request.MaSV);
 
         var congTy = await _congTyRepo.GetByIdAsync(request.MaCongTy)
             ?? throw new NotFoundException("CongTy", request.MaCongTy);
 
+        if (congTy.TrangThai != "DaDuyet")
+            throw new InvalidOperationException("Chỉ có thể đăng ký các doanh nghiệp đã được phê duyệt.");
+
+        var dot = await _dangKyRepo.GetDotAsync(request.MaDot)
+            ?? throw new NotFoundException("DotThucTap", request.MaDot);
+
+        if (dot.TrangThai != "DangDienRa")
+            throw new InvalidOperationException("Đợt thực tập không trong thời gian tiếp nhận đăng ký nguyện vọng.");
+
+        if (request.ThuTuUuTien < 1 || request.ThuTuUuTien > MaxNguyenVong)
+            throw new ArgumentException($"Thứ tự ưu tiên phải từ 1 đến {MaxNguyenVong}.");
+
+        var count = await _dangKyRepo.CountBySinhVienDotAsync(request.MaSV, request.MaDot);
+        if (count >= MaxNguyenVong)
+            throw new InvalidOperationException($"Sinh viên chỉ được đăng ký tối đa {MaxNguyenVong} nguyện vọng trong một đợt.");
+
         var already = await _dangKyRepo.HasRegisteredAsync(request.MaSV, request.MaCongTy, request.MaDot);
         if (already)
             throw new InvalidOperationException("Sinh viên đã đăng ký công ty này trong đợt hiện tại.");
 
-        var maDK = "DK" + DateTime.Now.ToString("yyMMddHHmmss");
+        var priorityUsed = await _dangKyRepo.HasPriorityInDotAsync(request.MaSV, request.MaDot, request.ThuTuUuTien);
+        if (priorityUsed)
+            throw new InvalidOperationException($"Thứ tự ưu tiên {request.ThuTuUuTien} đã được sử dụng cho một nguyện vọng khác.");
+
+        var hasApproved = await _dangKyRepo.HasApprovedRegistrationInDotAsync(request.MaSV, request.MaDot);
+        if (hasApproved)
+            throw new InvalidOperationException("Sinh viên đã có một nguyện vọng được phê duyệt trong đợt này.");
+
+        var maDK = DAL.Common.IdGenerator.New("DK");
         var dangKy = new DAL.Entities.DangKyThucTap
         {
             MaDK = maDK,
@@ -121,19 +161,30 @@ public class DangKyThucTapService : IDangKyThucTapService
             TenCongTy = congTy.TenCongTy,
             ViTriTuyen = congTy.ViTriTuyen,
             MaDot = dangKy.MaDot,
+            TenDot = dot.TenDot,
             NgayDangKy = dangKy.NgayDangKy,
             ThuTuUuTien = dangKy.ThuTuUuTien,
             TrangThai = dangKy.TrangThai
         };
     }
 
-    public async Task<bool> HuyDangKyAsync(string maDK)
+    public async Task<bool> HuyDangKyAsync(string maDK, string? requesterMaSV, bool isStaff)
     {
         var dangKy = await _dangKyRepo.GetByIdAsync(maDK);
         if (dangKy == null) return false;
+
+        if (!isStaff)
+        {
+            if (!string.Equals(dangKy.MaSV, requesterMaSV, StringComparison.OrdinalIgnoreCase))
+                throw new UnauthorizedAccessException("Bạn không có quyền hủy nguyện vọng của sinh viên khác.");
+            if (dangKy.TrangThai != "ChoDuyet")
+                throw new InvalidOperationException("Chỉ có thể hủy đăng ký khi ở trạng thái Chờ duyệt.");
+        }
 
         _dangKyRepo.Delete(dangKy);
         await _dangKyRepo.SaveChangesAsync();
         return true;
     }
+
+    public Task<bool> HuyDangKyAsync(string maDK) => HuyDangKyAsync(maDK, null, true);
 }

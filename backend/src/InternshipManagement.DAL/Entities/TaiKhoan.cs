@@ -6,6 +6,8 @@ public class TaiKhoan
     public string TenDangNhap { get; set; } = default!;
     public string MatKhau { get; set; } = default!;
     public string TrangThai { get; set; } = "HoatDong";
+    public string? Email { get; set; }
+    public string? SoDienThoai { get; set; }
     public string MaVaiTro { get; set; } = default!;
     public string? MaSV { get; set; }
     public string? MaGV { get; set; }

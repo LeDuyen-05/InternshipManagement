@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Layout from '../../components/Layout'
 import apiClient from '../../services/api'
+import { downloadCsv } from '../../utils/csv'
 
 export default function PhanBoGVHDPage() {
   const [data, setData] = useState({ students: [], lecturers: [], assigned: 0, unassigned: 0 })
@@ -24,7 +25,7 @@ export default function PhanBoGVHDPage() {
     try {
       for (const student of pending) {
         const keywords = String(student.chuyenNganh||'').toLocaleLowerCase('vi').split(/\W+/).filter(x=>x.length>2)
-        const eligible = data.lecturers.filter(x => (loads[x.maGV]||0) < 15)
+        const eligible = data.lecturers.filter(x => (loads[x.maGV]||0) < (x.chiTieu || 10))
         if (!eligible.length) { setError('Đã hết giảng viên còn chỉ tiêu; một số sinh viên chưa được phân công.'); break }
         eligible.sort((a,b) => {
           const rank = item => { const spec=String(item.chuyenMon||'').toLocaleLowerCase('vi'); return keywords.reduce((n,k)=>n+(spec.includes(k)?1:0),0) }
@@ -38,9 +39,23 @@ export default function PhanBoGVHDPage() {
     } catch(e) { setError(e.response?.data?.message || 'Phân công tự động dừng do lỗi API.') }
     finally { setSaving('') }
   }
-  const exportDecision = () => { const values=[['MaSV','SinhVien','Lop','ChuyenNganh','DoanhNghiep','MaGVHD','GiangVien'],...rows.filter(x=>x.maGiangVien).map(x=>[x.maSV,x.hoTen,x.lop,x.chuyenNganh,x.congTy,x.maGiangVien,x.giangVien])]; const csv='\uFEFF'+values.map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\r\n'); const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='quyet-dinh-phan-cong-gvhd.csv';a.click();URL.revokeObjectURL(a.href) }
+  const exportDecision = () => {
+    const values = [
+      ['MaSV', 'SinhVien', 'Lop', 'ChuyenNganh', 'DoanhNghiep', 'MaGVHD', 'GiangVien'],
+      ...rows.filter(x => x.maGiangVien).map(x => [
+        x.maSV,
+        x.hoTen,
+        x.lop,
+        x.chuyenNganh,
+        x.congTy,
+        x.maGiangVien,
+        x.giangVien
+      ])
+    ]
+    downloadCsv('quyet-dinh-phan-cong-gvhd.csv', values)
+  }
   const rows = data.students.filter(x => (!search || `${x.maSV} ${x.hoTen} ${x.congTy||''}`.toLowerCase().includes(search.toLowerCase())) && (status==='all' || (status==='unassigned' ? !x.maGiangVien : !!x.maGiangVien)))
-  return <Layout><div className="page-head"><div><span className="eyebrow">GIÁO VỤ KHOA</span><h2>Phân bổ sinh viên & phân công GVHD</h2><p>Gán giảng viên theo chuyên môn và tải hướng dẫn; giới hạn tối đa 15 sinh viên trên mỗi giảng viên.</p></div><div className="khoa-actions"><button className="small" onClick={exportDecision}>Xuất quyết định CSV</button><button className="primary" disabled={saving==='batch'} onClick={autoAssign}>{saving==='batch'?'Đang phân công…':'Phân công tự động'}</button><button className="small" onClick={load}>Làm mới</button></div></div>{error&&<div className="alert error">{error}</div>}
+  return <Layout><div className="page-head"><div><span className="eyebrow">GIÁO VỤ KHOA</span><h2>Phân bổ sinh viên & phân công GVHD</h2><p>Gán giảng viên theo chuyên môn và tải hướng dẫn; giới hạn theo chỉ tiêu của từng giảng viên.</p></div><div className="khoa-actions"><button className="small" onClick={exportDecision}>Xuất quyết định CSV</button><button className="primary" disabled={saving==='batch'} onClick={autoAssign}>{saving==='batch'?'Đang phân công…':'Phân công tự động'}</button><button className="small" onClick={load}>Làm mới</button></div></div>{error&&<div className="alert error">{error}</div>}
     <div className="tabbar"><span className="badge">Đã phân công: {data.assigned}</span><span className="badge">Chưa phân công: {data.unassigned}</span><label>Đợt <select value={round} onChange={e=>setRound(e.target.value)}><option value="">Tất cả</option>{rounds.map(r=><option key={r.maSo} value={r.maSo}>{r.tenDot} · {r.namHoc}</option>)}</select></label><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Tất cả sinh viên</option><option value="unassigned">Chưa có GVHD</option><option value="assigned">Đã có GVHD</option></select><input placeholder="Tìm mã SV, tên hoặc công ty" value={search} onChange={e=>setSearch(e.target.value)} /></div>
-    <div className="info-card"><div className="table-wrap"><table><thead><tr><th>Mã SV</th><th>Sinh viên / Lớp</th><th>Chuyên ngành</th><th>Doanh nghiệp</th><th>GV hướng dẫn</th><th>Tải GV</th><th>Thao tác</th></tr></thead><tbody>{rows.map(s=><tr key={s.maSV}><td>{s.maSV}</td><td>{s.hoTen}<div className="hint">{s.lop}</div></td><td>{s.chuyenNganh}</td><td>{s.congTy || 'Chưa được duyệt nơi thực tập'}</td><td><select value={choices[s.maSV] ?? s.maGiangVien ?? ''} onChange={e=>setChoices({...choices,[s.maSV]:e.target.value})}><option value="">-- Chọn GVHD --</option>{data.lecturers.map(g=><option key={g.maGV} value={g.maGV} disabled={g.assignedCount>=15 && g.maGV!==s.maGiangVien}>{g.hoTen} ({g.assignedCount}/15)</option>)}</select>{s.giangVien&&<div className="hint">Hiện tại: {s.giangVien}</div>}</td><td>{data.lecturers.find(g=>g.maGV===(choices[s.maSV]??s.maGiangVien))?.assignedCount ?? '—'}/15</td><td><button className="small primary" disabled={saving===s.maSV} onClick={()=>assign(s)}>{saving===s.maSV?'Đang lưu…':'Lưu phân công'}</button></td></tr>)}{!rows.length&&<tr><td colSpan="7">Không có sinh viên phù hợp.</td></tr>}</tbody></table></div></div></Layout>
+    <div className="info-card"><div className="table-wrap"><table><thead><tr><th>Mã SV</th><th>Sinh viên / Lớp</th><th>Chuyên ngành</th><th>Doanh nghiệp</th><th>GV hướng dẫn</th><th>Tải GV</th><th>Thao tác</th></tr></thead><tbody>{rows.map(s=><tr key={s.maSV}><td>{s.maSV}</td><td>{s.hoTen}<div className="hint">{s.lop}</div></td><td>{s.chuyenNganh}</td><td>{s.congTy || 'Chưa được duyệt nơi thực tập'}</td><td><select value={choices[s.maSV] ?? s.maGiangVien ?? ''} onChange={e=>setChoices({...choices,[s.maSV]:e.target.value})}><option value="">-- Chọn GVHD --</option>{data.lecturers.map(g=><option key={g.maGV} value={g.maGV} disabled={g.assignedCount >= (g.chiTieu || 10) && g.maGV!==s.maGiangVien}>{g.hoTen} ({g.assignedCount}/{g.chiTieu || 10})</option>)}</select>{s.giangVien&&<div className="hint">Hiện tại: {s.giangVien}</div>}</td><td>{(() => { const g = data.lecturers.find(x => x.maGV === (choices[s.maSV] ?? s.maGiangVien)); return g ? `${g.assignedCount}/${g.chiTieu || 10}` : '—'; })()}</td><td><button className="small primary" disabled={saving===s.maSV} onClick={()=>assign(s)}>{saving===s.maSV?'Đang lưu…':'Lưu phân công'}</button></td></tr>)}{!rows.length&&<tr><td colSpan="7">Không có sinh viên phù hợp.</td></tr>}</tbody></table></div></div></Layout>
 }

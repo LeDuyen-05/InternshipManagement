@@ -10,19 +10,38 @@ public class JwtTokenService(IConfiguration configuration)
 {
     public string Create(TaiKhoan account)
     {
-        var key = configuration["Jwt:Key"] ?? "InternshipManagement-Development-Key-2026-Change-Me";
-        var claims = new[]
+        var key = configuration["Jwt:Key"]
+            ?? throw new InvalidOperationException("Thiếu Jwt:Key trong cấu hình (>= 32 byte).");
+        var issuer = configuration["Jwt:Issuer"] ?? "InternshipManagement";
+        var audience = configuration["Jwt:Audience"] ?? "InternshipManagement.Web";
+
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, account.MaTaiKhoan),
-            new Claim(ClaimTypes.Name, account.TenDangNhap),
-            new Claim(ClaimTypes.Role, account.VaiTro?.TenVaiTro ?? account.MaVaiTro),
-            new Claim("maVaiTro", account.MaVaiTro),
-            new Claim("maSV", account.MaSV ?? ""),
-            new Claim("maGV", account.MaGV ?? ""),
-            new Claim("maDaiDien", account.MaDaiDien ?? "")
+            new(JwtRegisteredClaimNames.Sub, account.MaTaiKhoan),
+            new(ClaimTypes.NameIdentifier, account.MaTaiKhoan),
+            new(ClaimTypes.Name, account.TenDangNhap),
+            new(ClaimTypes.Role, account.VaiTro?.TenVaiTro ?? account.MaVaiTro),
+            new("maVaiTro", account.MaVaiTro)
         };
-        var credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)), SecurityAlgorithms.HmacSha256);
-        var token = new JwtSecurityToken(claims: claims, expires: DateTime.UtcNow.AddHours(8), signingCredentials: credentials);
+
+        if (!string.IsNullOrWhiteSpace(account.MaSV))
+            claims.Add(new Claim("maSV", account.MaSV));
+        if (!string.IsNullOrWhiteSpace(account.MaGV))
+            claims.Add(new Claim("maGV", account.MaGV));
+        if (!string.IsNullOrWhiteSpace(account.MaDaiDien))
+            claims.Add(new Claim("maDaiDien", account.MaDaiDien));
+
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+            SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: issuer,
+            audience: audience,
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(8),
+            signingCredentials: credentials);
+
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

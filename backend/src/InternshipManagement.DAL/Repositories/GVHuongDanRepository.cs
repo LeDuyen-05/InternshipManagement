@@ -15,7 +15,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             .Include(g => g.SinhVien)
                 .ThenInclude(s => s.PhanBoThucTaps)
                     .ThenInclude(pb => pb.CongTy)
-            .Where(g => g.MaGiangVien == maGV);
+            .Where(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan");
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -142,7 +142,17 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         var gv = await Context.GiangViens.FirstOrDefaultAsync(g => g.MaGV == maGV);
         if (gv == null) return false;
 
-        gv.SoLuongSVHD = soLuongMoi;
+        gv.ChiTieuHD = soLuongMoi;
+        await Context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> UpdateGiangVienChuyenMonAsync(string maGV, string? chuyenMon)
+    {
+        var gv = await Context.GiangViens.FirstOrDefaultAsync(g => g.MaGV == maGV);
+        if (gv == null) return false;
+
+        gv.ChuyenMon = chuyenMon ?? string.Empty;
         await Context.SaveChangesAsync();
         return true;
     }

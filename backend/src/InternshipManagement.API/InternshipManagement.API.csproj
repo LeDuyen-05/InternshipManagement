@@ -14,8 +14,4 @@
     <ProjectReference Include="..\InternshipManagement.BLL\InternshipManagement.BLL.csproj" />
     <ProjectReference Include="..\InternshipManagement.DAL\InternshipManagement.DAL.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Compile Remove="Infrastructure\**\*.cs" />
-    <Compile Include="Infrastructure\JwtTokenService.cs" />
-  </ItemGroup>
 </Project>

@@ -18,10 +18,6 @@ public class PhieuChamDiemConfiguration : IEntityTypeConfiguration<PhieuChamDiem
         builder.Property(x => x.MaSV).HasColumnName("maSV").HasMaxLength(20);
         builder.Property(x => x.MaDaiDien).HasColumnName("maHuongDanDN").HasMaxLength(20);
         builder.Property(x => x.MaGVHuongDan).HasColumnName("maGVHuongDan").HasMaxLength(20);
-        builder.Ignore(x => x.MaSinhVien);
-        builder.Ignore(x => x.MaGV);
-        builder.Ignore(x => x.MaDoanhNghiep);
-        builder.Ignore(x => x.HuongDanDoanhNghiep);
 
         builder.HasOne(x => x.DotThucTap)
             .WithMany(d => d.PhieuChamDiems)

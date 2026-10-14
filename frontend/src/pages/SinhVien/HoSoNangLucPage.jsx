@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../contexts/AuthContext'
+import { useIdentity } from '../../hooks/useIdentity'
+import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import hoSoNangLucService from '../../services/hoSoNangLucService.js'
 
 export default function HoSoNangLucPage() {
-  const { user } = useAuth()
-  const currentMaSV = user?.maSV || (user?.tenDangNhap?.toLowerCase().startsWith('sv') ? user.tenDangNhap.toUpperCase() : 'SV001')
+  const { user, maSV: currentMaSV } = useIdentity()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -16,7 +16,7 @@ export default function HoSoNangLucPage() {
     hoTen: '',
     lop: '',
     khoaHoc: '',
-    gpa: 3.2,
+    gpa: '',
     chuyenNganh: '',
     kyNang: '',
     congNghe: '',
@@ -26,7 +26,11 @@ export default function HoSoNangLucPage() {
   })
 
   useEffect(() => {
-    fetchProfile()
+    if (currentMaSV) {
+      fetchProfile()
+    } else {
+      setLoading(false)
+    }
   }, [currentMaSV])
 
   const fetchProfile = async () => {
@@ -38,7 +42,7 @@ export default function HoSoNangLucPage() {
         hoTen: data.hoTen || '',
         lop: data.lop || '',
         khoaHoc: data.khoaHoc || '',
-        gpa: data.gpa || 3.2,
+        gpa: data.gpa != null ? data.gpa : '',
         chuyenNganh: data.chuyenNganh || '',
         kyNang: data.kyNang || '',
         congNghe: data.congNghe || '',
@@ -58,21 +62,29 @@ export default function HoSoNangLucPage() {
     const { name, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: name === 'gpa' ? parseFloat(value) || 0 : value,
+      [name]: value,
     }))
   }
 
   const handleSubmitEdit = async (e) => {
     e.preventDefault()
     try {
-      const res = await hoSoNangLucService.update(currentMaSV, formData)
-      setProfile(res.data || { ...profile, ...formData })
+      const payload = {
+        ...formData,
+        gpa: formData.gpa === '' ? null : Number(formData.gpa),
+      }
+      const res = await hoSoNangLucService.update(currentMaSV, payload)
+      setProfile(res.data || { ...profile, ...payload })
       setIsEditModalOpen(false)
       setSaveSuccessMsg('Hồ sơ năng lực đã được cập nhật thành công!')
       setTimeout(() => setSaveSuccessMsg(''), 4000)
     } catch (err) {
       alert('Lỗi cập nhật hồ sơ: ' + (err.response?.data?.message || err.message))
     }
+  }
+
+  if (!currentMaSV) {
+    return <NoLinkedAccount type="sinh viên" />
   }
 
   if (loading) {
@@ -136,8 +148,17 @@ export default function HoSoNangLucPage() {
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => window.open(profile.fileCV || '#', '_blank')}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm transition-colors"
+            disabled={!profile?.fileCV || !/^https?:\/\//i.test(profile.fileCV)}
+            onClick={() => {
+              if (profile?.fileCV && /^https?:\/\//i.test(profile.fileCV)) {
+                window.open(profile.fileCV, '_blank')
+              }
+            }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-medium text-sm transition-colors ${
+              profile?.fileCV && /^https?:\/\//i.test(profile.fileCV)
+                ? 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                : 'bg-slate-50 text-slate-300 cursor-not-allowed'
+            }`}
           >
             <span className="material-symbols-outlined text-[18px]">visibility</span>
             <span>Xem trước CV</span>
@@ -225,7 +246,7 @@ export default function HoSoNangLucPage() {
                 </span>
               </div>
 
-              {profile.fileCV ? (
+              {profile.fileCV && /^https?:\/\//i.test(profile.fileCV) ? (
                 <div className="flex items-center justify-between p-2.5 bg-blue-50/70 border border-blue-200 rounded-lg">
                   <div className="flex items-center gap-2 overflow-hidden">
                     <span className="material-symbols-outlined text-rose-600 text-[20px]">
@@ -252,7 +273,11 @@ export default function HoSoNangLucPage() {
               ) : (
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs flex items-center gap-2">
                   <span className="material-symbols-outlined text-amber-600 text-[18px]">info</span>
-                  <span>Chưa có link CV. Hãy bấm "Chỉnh sửa hồ sơ" để đính kèm.</span>
+                  <span>
+                    {profile.fileCV
+                      ? 'Link CV không hợp lệ (phải bắt đầu bằng http:// hoặc https://).'
+                      : 'Chưa có link CV. Hãy bấm "Chỉnh sửa hồ sơ" để đính kèm.'}
+                  </span>
                 </div>
               )}
             </div>
@@ -351,14 +376,16 @@ export default function HoSoNangLucPage() {
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-sm text-slate-900">
-                  {profile.duAnDaThucHien || 'Hệ thống Quản lý thực tập'}
+                  {profile.duAnDaThucHien ? 'Dự án đã thực hiện' : 'Chưa cập nhật'}
                 </span>
-                <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-100 text-emerald-800">
-                  Đã hoàn thành
-                </span>
+                {profile.duAnDaThucHien && (
+                  <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-100 text-emerald-800">
+                    Minh chứng
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Ứng dụng kiến trúc 3 lớp API - BLL - DAL, kết hợp ReactJS, Tailwind CSS và SQL Server.
+              <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">
+                {profile.duAnDaThucHien || 'Sinh viên chưa cập nhật thông tin dự án hoặc sản phẩm đã thực hiện.'}
               </p>
             </div>
           </div>

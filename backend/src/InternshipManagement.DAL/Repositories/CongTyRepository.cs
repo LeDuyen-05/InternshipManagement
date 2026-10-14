@@ -13,4 +13,10 @@ public class CongTyRepository : GenericRepository<CongTy>, ICongTyRepository
             .Where(c => c.TrangThai == "DaDuyet")
             .ToListAsync();
     }
+
+    public async Task<bool> ExistsByNameAsync(string tenCongTy)
+    {
+        var name = tenCongTy.Trim();
+        return await DbSet.AnyAsync(c => c.TenCongTy.Trim().ToLower() == name.ToLower());
+    }
 }

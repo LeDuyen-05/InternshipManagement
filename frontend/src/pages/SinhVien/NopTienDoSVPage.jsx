@@ -1,36 +1,21 @@
 import { useState, useEffect } from 'react'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
-import { useAuth } from '../../contexts/AuthContext'
+import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
-
-// Danh mục 10 tuần chuẩn thực tập tốt nghiệp
-const WEEKS_TEMPLATE = [
-  { week: 1, title: 'Tuần 1: Onboarding, làm quen môi trường & tiếp nhận dự án', targetDate: '2026-03-02' },
-  { week: 2, title: 'Tuần 2: Nghiên cứu kiến trúc hệ thống & UI Design System', targetDate: '2026-03-09' },
-  { week: 3, title: 'Tuần 3: Thiết kế CSDL & cài đặt môi trường phát triển', targetDate: '2026-03-16' },
-  { week: 4, title: 'Tuần 4: Xây dựng module nghiệp vụ cốt lõi & API nội bộ', targetDate: '2026-03-23' },
-  { week: 5, title: 'Tuần 5: Phát triển giao diện người dùng & tích hợp API', targetDate: '2026-04-06' },
-  { week: 6, title: 'Tuần 6: Kiểm thử đơn vị (Unit Test) & tối ưu hiệu năng', targetDate: '2026-04-13' },
-  { week: 7, title: 'Tuần 7: Tích hợp dịch vụ bên thứ ba & bảo mật ứng dụng', targetDate: '2026-04-20' },
-  { week: 8, title: 'Tuần 8: Triển khai thử nghiệm (Staging/Docker) & fix bugs', targetDate: '2026-04-27' },
-  { week: 9, title: 'Tuần 9: Đánh giá kết quả cùng Mentor & viết tài liệu kỹ thuật', targetDate: '2026-05-04' },
-  { week: 10, title: 'Tuần 10: Tổng kết thực tập, nghiệm thu & báo cáo đồ án', targetDate: '2026-05-10' },
-]
+import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 
 export default function NopTienDoSVPage() {
-  const { user } = useAuth()
-  const { selectedDot } = useDotThucTap()
-  const currentMaSV = user?.maSV || 'SV001'
-  const currentMaDot = selectedDot?.maDot || 'DOT01'
+  const { maSV } = useIdentity()
+  const { selectedDot, isReadOnly } = useDotThucTap()
 
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
-  const [openWeek, setOpenWeek] = useState(1) // Tuần đang mở accordion
+  const [openSlotId, setOpenSlotId] = useState(null)
   const [toast, setToast] = useState(null)
 
   // Modal nộp báo cáo
   const [modalOpen, setModalOpen] = useState(false)
-  const [selectedWeekData, setSelectedWeekData] = useState(null)
+  const [selectedSlot, setSelectedSlot] = useState(null)
   const [reportContent, setReportContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -40,10 +25,19 @@ export default function NopTienDoSVPage() {
   }
 
   const fetchReports = async () => {
+    if (!maSV) return
     setLoading(true)
     try {
-      const data = await tienDoThucTapService.getTienDoBySinhVien(currentMaSV)
-      setReports(data || [])
+      const data = await tienDoThucTapService.getTienDoBySinhVien(maSV)
+      const list = Array.isArray(data) ? data : []
+      // Lọc theo đợt đang chọn nếu có
+      const filtered = selectedDot?.maDot ? list.filter((r) => r.maDot === selectedDot.maDot) : list
+      // Sắp xếp theo mốc thời gian tăng dần
+      filtered.sort((a, b) => new Date(a.mocThoiGian) - new Date(b.mocThoiGian))
+      setReports(filtered)
+      if (filtered.length > 0 && !openSlotId) {
+        setOpenSlotId(filtered[0].maTienDo)
+      }
     } catch (err) {
       console.error('Lỗi khi tải tiến độ thực tập:', err)
       showToast('Không thể kết nối đến máy chủ API', 'error')
@@ -54,18 +48,16 @@ export default function NopTienDoSVPage() {
 
   useEffect(() => {
     fetchReports()
-  }, [currentMaSV])
+  }, [maSV, selectedDot?.maDot])
 
-  // Tìm báo cáo tương ứng với tuần theo thứ tự hoặc ID
-  const getReportForWeek = (weekIndex) => {
-    if (!reports || reports.length === 0) return null
-    return reports[weekIndex] || null
+  if (!maSV) {
+    return <NoLinkedAccount />
   }
 
-  // Mở modal nộp báo cáo
-  const handleOpenSubmitModal = (wItem, existingReport) => {
-    setSelectedWeekData(wItem)
-    setReportContent(existingReport?.noiDungBaoCao || '')
+  // Mở modal nộp / sửa báo cáo
+  const handleOpenSubmitModal = (slot) => {
+    setSelectedSlot(slot)
+    setReportContent(slot.noiDungBaoCao || '')
     setModalOpen(true)
   }
 
@@ -77,22 +69,19 @@ export default function NopTienDoSVPage() {
       return
     }
 
+    if (!selectedSlot?.maTienDo) {
+      showToast('Không tìm thấy mốc báo cáo hợp lệ!', 'error')
+      return
+    }
+
     setIsSubmitting(true)
     try {
-      const existingReport = reports.find((r) =>
-        r.mocThoiGian?.startsWith(selectedWeekData.targetDate) ||
-        r.noiDungBaoCao?.includes(`Tuần ${selectedWeekData.week}`)
-      )
-
       await tienDoThucTapService.nopBaoCao({
-        maTienDo: existingReport?.maTienDo || null,
-        maSV: currentMaSV,
-        maDot: currentMaDot,
-        mocThoiGian: selectedWeekData.targetDate,
-        noiDungBaoCao: reportContent,
+        maTienDo: selectedSlot.maTienDo,
+        noiDungBaoCao: reportContent.trim(),
       })
 
-      showToast(`Nộp báo cáo ${selectedWeekData.title.split(':')[0]} thành công!`)
+      showToast('Nộp báo cáo tiến độ thành công!')
       setModalOpen(false)
       fetchReports()
     } catch (err) {
@@ -103,10 +92,41 @@ export default function NopTienDoSVPage() {
     }
   }
 
-  // Tính thống kê
+  // Thống kê tiến độ
+  const totalSlots = reports.length
   const approvedCount = reports.filter((r) => r.trangThaiDuyet === 'DaDuyet').length
-  const pendingCount = reports.filter((r) => r.trangThaiDuyet === 'DaNop' || r.trangThaiDuyet === 'ChoDuyet').length
-  const totalCompleted = reports.length
+  const pendingCount = reports.filter((r) => r.trangThaiDuyet === 'DaNop').length
+  const needEditCount = reports.filter((r) => r.trangThaiDuyet === 'YeuCauSua').length
+  const submittedCount = reports.filter((r) => r.trangThaiDuyet !== 'ChuaNop').length
+
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'DaDuyet':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Đã duyệt ✓
+          </span>
+        )
+      case 'DaNop':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            Chờ duyệt
+          </span>
+        )
+      case 'YeuCauSua':
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+            Cần chỉnh sửa
+          </span>
+        )
+      default:
+        return (
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
+            Chưa nộp
+          </span>
+        )
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -131,26 +151,15 @@ export default function NopTienDoSVPage() {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            THEO DÕI TIẾN ĐỘ • THỰC TẬP TỐT NGHIỆP ĐỢT 1 NĂM 2026
+            THEO DÕI TIẾN ĐỘ • {selectedDot?.tenDot || 'ĐỢT THỰC TẬP'}
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Theo dõi Tiến độ & Nộp Báo cáo Tuần
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Cập nhật kết quả làm việc định kỳ hàng tuần, nhận đánh giá phản hồi từ Giảng viên hướng dẫn và Mentor doanh nghiệp.
+            Cập nhật kết quả làm việc định kỳ hàng tuần, nhận đánh giá phản hồi từ Giảng viên hướng dẫn.
           </p>
         </div>
-
-        <button
-          onClick={() => {
-            const nextWeek = WEEKS_TEMPLATE[reports.length] || WEEKS_TEMPLATE[0]
-            handleOpenSubmitModal(nextWeek, null)
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold shadow-xs transition-all shrink-0"
-        >
-          <span className="material-symbols-outlined text-[18px]">add_task</span>
-          Nộp báo cáo tuần mới
-        </button>
       </div>
 
       {/* Bento Stats */}
@@ -158,17 +167,18 @@ export default function NopTienDoSVPage() {
         {/* Progress Card */}
         <div className="p-5 bg-white rounded-xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-bold uppercase tracking-wider">Tiến độ kỳ thực tập</span>
+            <span className="text-xs font-bold uppercase tracking-wider">Tiến độ nộp</span>
             <span className="material-symbols-outlined text-blue-700 text-[22px]">trending_up</span>
           </div>
           <div className="mt-3">
             <div className="text-3xl font-extrabold text-slate-900">
-              {totalCompleted}<span className="text-lg text-slate-400 font-normal">/10 tuần</span>
+              {submittedCount}
+              <span className="text-lg text-slate-400 font-normal">/{totalSlots} tuần</span>
             </div>
             <div className="w-full h-2 rounded-full bg-slate-100 mt-3 overflow-hidden">
               <div
                 className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min(100, (totalCompleted / 10) * 100)}%` }}
+                style={{ width: `${totalSlots > 0 ? Math.min(100, (submittedCount / totalSlots) * 100) : 0}%` }}
               ></div>
             </div>
           </div>
@@ -182,9 +192,7 @@ export default function NopTienDoSVPage() {
           </div>
           <div className="mt-3">
             <div className="text-3xl font-extrabold text-emerald-800">{approvedCount}</div>
-            <div className="text-xs text-emerald-600 font-semibold mt-1">
-              Điểm trung bình GVHD: 9.0/10
-            </div>
+            <div className="text-xs text-slate-500 mt-1">Đạt yêu cầu GVHD</div>
           </div>
         </div>
 
@@ -196,19 +204,19 @@ export default function NopTienDoSVPage() {
           </div>
           <div className="mt-3">
             <div className="text-3xl font-extrabold text-amber-700">{pendingCount}</div>
-            <div className="text-xs text-slate-500 mt-1">Phản hồi dự kiến: trong 48h</div>
+            <div className="text-xs text-slate-500 mt-1">Đang chờ giảng viên kiểm tra</div>
           </div>
         </div>
 
-        {/* Compliance */}
-        <div className="p-5 bg-emerald-50/60 rounded-xl border border-emerald-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between text-emerald-800">
-            <span className="text-xs font-bold uppercase tracking-wider">Đúng hạn & Kỷ luật</span>
-            <span className="material-symbols-outlined text-emerald-700 text-[22px]">bolt</span>
+        {/* Need Edit */}
+        <div className="p-5 bg-white rounded-xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-bold uppercase tracking-wider">Yêu cầu chỉnh sửa</span>
+            <span className="material-symbols-outlined text-rose-600 text-[22px]">edit_note</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-extrabold text-emerald-900">100%</div>
-            <div className="text-xs text-emerald-700 font-medium mt-1">Không có báo cáo trễ hạn</div>
+            <div className="text-3xl font-extrabold text-rose-700">{needEditCount}</div>
+            <div className="text-xs text-rose-600 font-medium mt-1">Cần bổ sung/sửa lại nội dung</div>
           </div>
         </div>
       </div>
@@ -218,14 +226,19 @@ export default function NopTienDoSVPage() {
         <div className="flex items-center justify-between bg-white px-5 py-3.5 rounded-xl border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-blue-700 text-[22px]">view_timeline</span>
-            <h2 className="text-base font-bold text-slate-900">Lộ trình Báo cáo Chi tiết 10 Tuần</h2>
+            <h2 className="text-base font-bold text-slate-900">
+              Lộ trình Báo cáo ({totalSlots} Mốc báo cáo)
+            </h2>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
             <span className="flex items-center gap-1.5 font-medium">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Đã duyệt
             </span>
             <span className="flex items-center gap-1.5 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Đã nộp chờ duyệt
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Chờ duyệt
+            </span>
+            <span className="flex items-center gap-1.5 font-medium">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Cần sửa
             </span>
             <span className="flex items-center gap-1.5 font-medium">
               <span className="w-2.5 h-2.5 rounded-full bg-slate-300"></span> Chưa nộp
@@ -238,48 +251,45 @@ export default function NopTienDoSVPage() {
             <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="mt-3 text-sm text-slate-500 font-medium">Đang tải tiến độ thực tập...</p>
           </div>
+        ) : reports.length === 0 ? (
+          <div className="p-12 text-center bg-white rounded-xl border border-slate-200">
+            <span className="material-symbols-outlined text-4xl text-slate-300">event_busy</span>
+            <p className="mt-2 text-sm font-semibold text-slate-700">
+              Khoa chưa tạo mốc báo cáo cho đợt này.
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              Vui lòng theo dõi thông báo từ Khoa hoặc liên hệ Văn phòng Khoa để được hỗ trợ.
+            </p>
+          </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {WEEKS_TEMPLATE.map((wItem, idx) => {
-              const rep = getReportForWeek(idx)
-              const isOpen = openWeek === wItem.week
+            {reports.map((rep, idx) => {
+              const isOpen = openSlotId === rep.maTienDo
+              const canSubmitOrEdit =
+                !isReadOnly && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
 
-              let badge = (
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600">
-                  Chưa nộp
-                </span>
-              )
               let statusIcon = 'pending'
               let iconColor = 'bg-slate-100 text-slate-500'
 
-              if (rep) {
-                if (rep.trangThaiDuyet === 'DaDuyet') {
-                  badge = (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Đã duyệt ✓ • 9.0/10
-                    </span>
-                  )
-                  statusIcon = 'check_circle'
-                  iconColor = 'bg-emerald-100 text-emerald-700'
-                } else if (rep.trangThaiDuyet === 'DaNop' || rep.trangThaiDuyet === 'ChoDuyet') {
-                  badge = (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                      Đã nộp • Chờ GVHD duyệt
-                    </span>
-                  )
-                  statusIcon = 'schedule'
-                  iconColor = 'bg-amber-100 text-amber-700'
-                }
+              if (rep.trangThaiDuyet === 'DaDuyet') {
+                statusIcon = 'check_circle'
+                iconColor = 'bg-emerald-100 text-emerald-700'
+              } else if (rep.trangThaiDuyet === 'DaNop') {
+                statusIcon = 'schedule'
+                iconColor = 'bg-amber-100 text-amber-700'
+              } else if (rep.trangThaiDuyet === 'YeuCauSua') {
+                statusIcon = 'error'
+                iconColor = 'bg-rose-100 text-rose-700'
               }
 
               return (
                 <div
-                  key={wItem.week}
+                  key={rep.maTienDo}
                   className="bg-white rounded-xl border border-slate-200/90 shadow-xs overflow-hidden transition-all"
                 >
                   {/* Accordion Header */}
                   <div
-                    onClick={() => setOpenWeek(isOpen ? null : wItem.week)}
+                    onClick={() => setOpenSlotId(isOpen ? null : rep.maTienDo)}
                     className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors"
                   >
                     <div className="flex items-center gap-3.5">
@@ -290,12 +300,12 @@ export default function NopTienDoSVPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">{wItem.title}</span>
-                          {badge}
+                          <span className="font-bold text-sm text-slate-900">Tuần {idx + 1}</span>
+                          {getStatusBadge(rep.trangThaiDuyet)}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
-                          Hạn chót: {new Date(wItem.targetDate).toLocaleDateString('vi-VN')}
-                          {rep?.ngayNop && (
+                          Hạn chót: {new Date(rep.mocThoiGian).toLocaleDateString('vi-VN')}
+                          {rep.ngayNop && (
                             <span className="text-slate-600 font-medium">
                               {' '}
                               • Nộp ngày: {new Date(rep.ngayNop).toLocaleDateString('vi-VN')}
@@ -315,7 +325,7 @@ export default function NopTienDoSVPage() {
                   {/* Accordion Content */}
                   {isOpen && (
                     <div className="px-5 pb-5 pt-2 border-t border-slate-100 bg-slate-50/50 flex flex-col gap-4">
-                      {rep ? (
+                      {rep.noiDungBaoCao ? (
                         <div className="flex flex-col gap-3">
                           <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
                             <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center justify-between">
@@ -327,33 +337,33 @@ export default function NopTienDoSVPage() {
                             </p>
                           </div>
 
-                          {/* Mentor review comment */}
-                          <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 flex items-start gap-2.5">
-                            <span className="material-symbols-outlined text-blue-700 text-[20px] shrink-0 mt-0.5">
-                              rate_review
-                            </span>
-                            <div className="text-xs text-slate-700">
-                              <span className="font-bold text-blue-900">
-                                Nhận xét của Giảng viên hướng dẫn & Mentor:
+                          {/* Nhận xét của giảng viên nếu có */}
+                          {rep.nhanXet && (
+                            <div className="p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 flex items-start gap-2.5">
+                              <span className="material-symbols-outlined text-blue-700 text-[20px] shrink-0 mt-0.5">
+                                rate_review
                               </span>
-                              <p className="mt-0.5 italic">
-                                {rep.trangThaiDuyet === 'DaDuyet'
-                                  ? 'Sinh viên nắm vững tiến độ, hoàn thành đúng chỉ tiêu kỹ thuật được giao. Đạt yêu cầu.'
-                                  : 'Đã tiếp nhận báo cáo. Giảng viên đang tiến hành kiểm tra mã nguồn và sản phẩm.'}
-                              </p>
+                              <div className="text-xs text-slate-700">
+                                <span className="font-bold text-blue-900">
+                                  Nhận xét của Giảng viên hướng dẫn:
+                                </span>
+                                <p className="mt-0.5 italic text-slate-800">{rep.nhanXet}</p>
+                              </div>
                             </div>
-                          </div>
+                          )}
 
-                          {/* Edit button */}
-                          <div className="flex justify-end pt-1">
-                            <button
-                              onClick={() => handleOpenSubmitModal(wItem, rep)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">edit_note</span>
-                              Cập nhật lại báo cáo
-                            </button>
-                          </div>
+                          {/* Action button if editable */}
+                          {canSubmitOrEdit && (
+                            <div className="flex justify-end pt-1">
+                              <button
+                                onClick={() => handleOpenSubmitModal(rep)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                                Chỉnh sửa nội dung báo cáo
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <div className="p-6 text-center bg-white rounded-xl border border-dashed border-slate-300">
@@ -363,13 +373,15 @@ export default function NopTienDoSVPage() {
                           <p className="text-xs text-slate-500 mt-1">
                             Chưa có dữ liệu nộp cho tuần này. Vui lòng gửi báo cáo công việc đúng hạn.
                           </p>
-                          <button
-                            onClick={() => handleOpenSubmitModal(wItem, null)}
-                            className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">post_add</span>
-                            Nộp báo cáo tuần {wItem.week}
-                          </button>
+                          {canSubmitOrEdit && (
+                            <button
+                              onClick={() => handleOpenSubmitModal(rep)}
+                              className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">post_add</span>
+                              Nộp báo cáo tuần {idx + 1}
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -381,76 +393,64 @@ export default function NopTienDoSVPage() {
         )}
       </div>
 
-      {/* Modal: Nộp Báo Cáo */}
-      {modalOpen && selectedWeekData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[20px]">assignment</span>
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-900 text-base">Nộp Báo cáo Tiến độ Tuần</h3>
-                  <p className="text-xs text-slate-500">{selectedWeekData.title}</p>
-                </div>
+      {/* Modal Nộp Báo Cáo */}
+      {modalOpen && selectedSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-700 text-[24px]">post_add</span>
+                <h3 className="text-base font-bold text-slate-900">
+                  Nộp Báo Cáo Tiến Độ (Mã: {selectedSlot.maTienDo})
+                </h3>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
+                className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
 
             <form onSubmit={handleSubmitReport} className="flex flex-col gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Nội dung báo cáo chi tiết <span className="text-rose-500">*</span>
-                </label>
-                <textarea
-                  rows="5"
-                  required
-                  placeholder="Mô tả công việc đã hoàn thành, công nghệ sử dụng, kết quả demo hoặc khó khăn cần GVHD hỗ trợ..."
-                  value={reportContent}
-                  onChange={(e) => setReportContent(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none"
-                ></textarea>
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2">
-                <span className="material-symbols-outlined text-blue-700 text-[18px] shrink-0 mt-0.5">
-                  info
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex justify-between">
+                <span>
+                  Hạn chót: <strong>{new Date(selectedSlot.mocThoiGian).toLocaleDateString('vi-VN')}</strong>
                 </span>
                 <span>
-                  Báo cáo sau khi nộp sẽ được chuyển trực tiếp đến Giảng viên hướng dẫn và Mentor tại doanh nghiệp để chấm điểm và nghiệm thu.
+                  Trạng thái hiện tại: <strong>{selectedSlot.trangThaiDuyet}</strong>
                 </span>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                  Nội dung công việc & Kết quả đạt được trong tuần:
+                </label>
+                <textarea
+                  rows={6}
+                  value={reportContent}
+                  onChange={(e) => setReportContent(e.target.value)}
+                  placeholder="Mô tả chi tiết: Nhiệm vụ được giao, công nghệ sử dụng, tiến độ hoàn thành, khó khăn gặp phải..."
+                  className="w-full p-3.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all shadow-2xs resize-none"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
                 >
                   Hủy bỏ
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Đang gửi...
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-[18px]">send</span>
-                      Gửi báo cáo
-                    </>
-                  )}
+                  {isSubmitting && <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>}
+                  <span>Gửi báo cáo</span>
                 </button>
               </div>
             </form>

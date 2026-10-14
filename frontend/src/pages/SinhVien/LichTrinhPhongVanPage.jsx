@@ -1,16 +1,23 @@
 import { useState, useEffect } from 'react'
 import { phongVanService } from '../../services/phongVanService'
-import { useAuth } from '../../contexts/AuthContext'
+import { useIdentity } from '../../hooks/useIdentity'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
+import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 
 export default function LichTrinhPhongVanPage() {
-  const { user } = useAuth()
-  const currentMaSV = user?.maSV || 'SV001'
+  const { user, maSV: currentMaSV } = useIdentity()
+  const { selectedDot } = useDotThucTap()
 
   const [interviews, setInterviews] = useState([])
   const [placement, setPlacement] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!currentMaSV) {
+      setLoading(false)
+      return
+    }
+
     const fetchData = async () => {
       setLoading(true)
       try {
@@ -29,6 +36,10 @@ export default function LichTrinhPhongVanPage() {
     fetchData()
   }, [currentMaSV])
 
+  if (!currentMaSV) {
+    return <NoLinkedAccount type="sinh viên" />
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header Banner */}
@@ -36,7 +47,7 @@ export default function LichTrinhPhongVanPage() {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            HỌC VỤ & TUYỂN DỤNG • ĐỢT 1 NĂM 2026
+            HỌC VỤ & TUYỂN DỤNG • {selectedDot?.tenDot || 'LỊCH PHỎNG VẤN'}
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Lịch Phỏng Vấn & Phân Bổ Tiếp Nhận
@@ -153,9 +164,9 @@ export default function LichTrinhPhongVanPage() {
                       Cố vấn doanh nghiệp (Mentor)
                     </span>
                     <div className="text-sm font-bold text-slate-900 mt-0.5">
-                      {placement.mentorDoanhNghiep || 'Đại diện kỹ thuật'}
+                      {placement.mentorDoanhNghiep || '—'}
                     </div>
-                    <div className="text-xs text-slate-500">{placement.chucVuMentor || 'Team Leader / Senior Dev'}</div>
+                    <div className="text-xs text-slate-500">{placement.chucVuMentor || '—'}</div>
                     {placement.danhGiaMentor && (
                       <div className="mt-2 text-xs italic text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200/60">
                         "{placement.danhGiaMentor}"
@@ -174,10 +185,10 @@ export default function LichTrinhPhongVanPage() {
                       Giảng viên hướng dẫn Khoa CNTT
                     </span>
                     <div className="text-sm font-bold text-slate-900 mt-0.5">
-                      {placement.giangVienHD ? `TS. ${placement.giangVienHD}` : 'Khoa CNTT'}
+                      {placement.giangVienHD ? `TS. ${placement.giangVienHD}` : '—'}
                     </div>
                     <div className="text-xs text-slate-500">
-                      Chuyên môn: {placement.chuyenMonGV || 'Công nghệ phần mềm'}
+                      Chuyên môn: {placement.chuyenMonGV || '—'}
                     </div>
                     <div className="mt-2 text-xs text-slate-600 bg-white p-2.5 rounded-lg border border-slate-200/60">
                       Theo dõi tiến độ báo cáo tuần, định hướng đồ án và chấm điểm nghiệm thu cuối kỳ.

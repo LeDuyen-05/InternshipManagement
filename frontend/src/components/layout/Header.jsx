@@ -6,17 +6,20 @@ import apiClient from '../../services/api'
 
 export default function Header({ currentRole }) {
   const navigate = useNavigate()
-  const { user: authUser, logout } = useAuth()
+  const { user: authUser, logout, updateUser } = useAuth()
 
-  // State tìm kiếm, thông báo & menu người dùng
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  // State thông báo & menu người dùng
   const [isNotifOpen, setIsNotifOpen] = useState(false)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
-  const [unreadCount, setUnreadCount] = useState(3)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
 
   // State Modal Hồ sơ & Đổi mật khẩu
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [profileEditing, setProfileEditing] = useState(false)
+  const [profileForm, setProfileForm] = useState({ email: '', soDienThoai: '' })
+  const [profileStatus, setProfileStatus] = useState(null)
+  const [savingProfile, setSavingProfile] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [passwordForm, setPasswordForm] = useState({ oldPass: '', newPass: '', confirmPass: '' })
@@ -24,16 +27,12 @@ export default function Header({ currentRole }) {
   const [submittingPassword, setSubmittingPassword] = useState(false)
   const [logoutSuccess, setLogoutSuccess] = useState(false)
 
-  const searchRef = useRef(null)
   const notifRef = useRef(null)
   const userMenuRef = useRef(null)
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
     function handleClickOutside(event) {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setIsSearchOpen(false)
-      }
       if (notifRef.current && !notifRef.current.contains(event.target)) {
         setIsNotifOpen(false)
       }
@@ -45,24 +44,46 @@ export default function Header({ currentRole }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Thông tin người dùng chi tiết theo Role & Tài khoản thực tế đã đăng nhập
+  const loadNotifications = async () => {
+    try {
+      const res = await apiClient.get('/thong-bao')
+      const data = Array.isArray(res.data) ? res.data : []
+      setNotifications(data)
+      const lastSeen = localStorage.getItem('lastSeenNotifAt') || '1970-01-01'
+      const unread = data.filter((n) => new Date(n.ngayTao) > new Date(lastSeen)).length
+      setUnreadCount(unread)
+    } catch {
+      // Bỏ qua lỗi nếu mất mạng
+    }
+  }
+
+  useEffect(() => {
+    loadNotifications()
+  }, [])
+
+  const handleMarkAllRead = () => {
+    localStorage.setItem('lastSeenNotifAt', new Date().toISOString())
+    setUnreadCount(0)
+  }
+
+  // Thông tin người dùng theo tài khoản thực tế đã đăng nhập
   const getUserInfo = () => {
     const rawRole = authUser?.maVaiTro
     const isSV = currentRole === 'SinhVien' || rawRole === 'VT04'
     const isKhoa = currentRole === 'Khoa' || rawRole === 'VT02' || rawRole === 'VT01'
 
+    const code = authUser?.maSV || authUser?.maGV || authUser?.tenDangNhap || '—'
+    const name = authUser?.hoTen || authUser?.tenDangNhap || 'Người dùng'
+
     if (isSV) {
-      const code = authUser?.maSV || authUser?.tenDangNhap || '2001210123'
-      const name = authUser?.hoTen || authUser?.tenDangNhap || 'Sinh viên'
       return {
         code,
         name,
-        degree: 'Sinh viên Khóa 12 (K2022)',
         role: `Sinh viên • MSSV: ${code}`,
         department: 'Khoa Công nghệ Thông tin',
-        faculty: 'Khoa Công nghệ Thông tin - HUIT',
-        email: authUser?.email || `${authUser?.tenDangNhap?.toLowerCase() || code.toLowerCase()}@fit.huit.edu.vn`,
-        phone: authUser?.phone || '0912.345.678',
+        faculty: 'Khoa Công nghệ Thông tin',
+        email: authUser?.email || '—',
+        phone: authUser?.phone || '—',
         office: 'Sinh viên thực tập',
         avatar: (name.charAt(0) || code.charAt(0) || 'SV').toUpperCase(),
         avatarColor: 'bg-emerald-700 text-white',
@@ -71,37 +92,30 @@ export default function Header({ currentRole }) {
     }
 
     if (isKhoa) {
-      const code = authUser?.tenDangNhap || 'CB002'
-      const name = authUser?.hoTen || authUser?.tenDangNhap || 'ThS. Trần Thị Giáo Vụ'
       return {
         code,
         name,
-        degree: 'Cán bộ Khoa / Quản trị',
-        role: 'Văn phòng Khoa CNTT',
-        department: 'Văn phòng Giáo vụ & Học vụ',
-        faculty: 'Khoa Công nghệ Thông tin - HUIT',
-        email: authUser?.email || 'giaovu.fit@huit.edu.vn',
-        phone: authUser?.phone || '(028) 3816 1673 - Ext: 104',
-        office: 'Văn phòng Khoa CNTT - Tòa nhà F',
+        role: rawRole === 'VT01' ? 'Quản trị viên hệ thống' : 'Văn phòng Khoa CNTT',
+        department: 'Văn phòng Khoa CNTT',
+        faculty: 'Khoa Công nghệ Thông tin',
+        email: authUser?.email || '—',
+        phone: authUser?.phone || '—',
+        office: 'Văn phòng Khoa CNTT',
         avatar: (name.charAt(0) || 'K').toUpperCase(),
         avatarColor: 'bg-indigo-700 text-white',
         badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
       }
     }
 
-    // Default GiangVien
-    const code = authUser?.maGV || authUser?.tenDangNhap || 'GV001'
-    const name = authUser?.hoTen || authUser?.tenDangNhap || 'ThS. Nguyễn Văn An'
     return {
       code,
       name,
-      degree: 'Thạc sĩ Khoa học Máy tính',
       role: `Giảng viên Hướng dẫn • ${code}`,
-      department: 'Bộ môn Công nghệ Phần mềm',
-      faculty: 'Khoa Công nghệ Thông tin - HUIT',
-      email: authUser?.email || `${code.toLowerCase()}@huit.edu.vn`,
-      phone: authUser?.phone || '0903.123.456',
-      office: 'Phòng B.304 - Cơ sở chính',
+      department: 'Khoa Công nghệ Thông tin',
+      faculty: 'Khoa Công nghệ Thông tin',
+      email: authUser?.email || '—',
+      phone: authUser?.phone || '—',
+      office: 'Văn phòng Bộ môn',
       avatar: (name.charAt(0) || 'GV').toUpperCase(),
       avatarColor: 'bg-blue-700 text-white',
       badgeColor: 'bg-blue-100 text-blue-700 border-blue-200',
@@ -109,301 +123,43 @@ export default function Header({ currentRole }) {
   }
   const user = getUserInfo()
 
-  // 1. DỮ LIỆU TÌM KIẾM PHÂN THEO ROLE
-  const getSearchDatabase = () => {
-    switch (currentRole) {
-      case 'GiangVien':
-        return [
-          {
-            id: 'SV001',
-            title: 'Nguyễn Văn An',
-            subtitle: 'MSSV: SV001 • Lớp CNTT01 (Đang hướng dẫn)',
-            badge: 'Sinh viên của bạn',
-            icon: 'person',
-            link: '/giang-vien/sinh-vien',
-          },
-          {
-            id: 'SV002',
-            title: 'Nguyễn Thu Hà',
-            subtitle: 'MSSV: SV002 • Đã hoàn thành 12 tuần báo cáo',
-            badge: 'Sinh viên của bạn',
-            icon: 'person',
-            link: '/giang-vien/sinh-vien',
-          },
-          {
-            id: 'CLO',
-            title: 'Đánh giá & Chấm điểm CLO',
-            subtitle: 'Trang nhập điểm và xếp loại sinh viên hướng dẫn',
-            badge: 'Chức năng',
-            icon: 'fact_check',
-            link: '/giang-vien/cham-diem',
-          },
-        ]
-      case 'Khoa':
-        return [
-          {
-            id: 'SV002',
-            title: 'Nguyễn Thu Hà',
-            subtitle: 'MSSV: SV002 • Lớp CNTT01 (Chờ phân công GVHD)',
-            badge: 'Sinh viên Khoa',
-            icon: 'person',
-            link: '/khoa/phan-cong',
-          },
-          {
-            id: 'SV003',
-            title: 'Võ Thanh Huy',
-            subtitle: 'MSSV: SV003 • Lớp CNTT02 (Chưa có GVHD)',
-            badge: 'Sinh viên Khoa',
-            icon: 'person',
-            link: '/khoa/phan-cong',
-          },
-          {
-            id: 'GV001',
-            title: 'ThS. Nguyễn Văn An',
-            subtitle: 'Mã GV: GV001 • Bộ môn CNPM (Tải 1/4 SV)',
-            badge: 'Giảng viên Khoa',
-            icon: 'badge',
-            link: '/giang-vien/sinh-vien?gv=GV001',
-          },
-          {
-            id: 'GV002',
-            title: 'TS. Trần Thị Bình',
-            subtitle: 'Mã GV: GV002 • Bộ môn HTTT (Tải 0/10 SV)',
-            badge: 'Giảng viên Khoa',
-            icon: 'badge',
-            link: '/giang-vien/sinh-vien?gv=GV002',
-          },
-          {
-            id: 'CT01',
-            title: 'FPT Software',
-            subtitle: 'Doanh nghiệp do GV giới thiệu • Chờ phê duyệt',
-            badge: 'Duyệt DN',
-            icon: 'verified',
-            link: '/khoa/duyet-gioi-thieu',
-          },
-        ]
-      case 'SinhVien':
-        return [
-          {
-            id: 'CT01',
-            title: 'FPT Software - Chi nhánh 1',
-            subtitle: 'Tuyển dụng: .NET / ReactJS Intern (Chỉ tiêu: 10)',
-            badge: 'Doanh nghiệp',
-            icon: 'apartment',
-            link: '/sinh-vien',
-          },
-          {
-            id: 'BM01',
-            title: 'Biểu mẫu Báo cáo tuần & Đánh giá CLO',
-            subtitle: 'Tài liệu hướng dẫn thực tập doanh nghiệp chuẩn Khoa',
-            badge: 'Biểu mẫu',
-            icon: 'description',
-            link: '/sinh-vien',
-          },
-        ]
-      default:
-        return []
+  const openProfile = async () => {
+    setIsUserMenuOpen(false)
+    setProfileEditing(false)
+    setProfileStatus(null)
+    setProfileForm({ email: authUser?.email || '', soDienThoai: authUser?.soDienThoai || '' })
+    setShowProfileModal(true)
+    try {
+      const { data } = await apiClient.get('/auth/profile')
+      setProfileForm({ email: data.email || '', soDienThoai: data.soDienThoai || '' })
+    } catch (err) {
+      setProfileStatus(err.response?.data?.message || 'Không thể tải thông tin liên hệ mới nhất.')
     }
   }
 
-  // Lọc kết quả tìm kiếm theo từ khóa gõ
-  const searchResults = getSearchDatabase().filter((item) => {
-    if (!searchQuery.trim()) return false
-    const q = searchQuery.toLowerCase()
-    return item.title.toLowerCase().includes(q) || item.subtitle.toLowerCase().includes(q) || item.id.toLowerCase().includes(q)
-  })
-
-  // Placeholder theo Role
-  const getSearchPlaceholder = () => {
-    switch (currentRole) {
-      case 'GiangVien':
-        return 'Tìm sinh viên của bạn (Tên, MSSV), đề tài...'
-      case 'Khoa':
-        return 'Tìm sinh viên, giảng viên, doanh nghiệp trong Khoa...'
-      case 'SinhVien':
-        return 'Tìm doanh nghiệp thực tập, biểu mẫu học vụ...'
-      default:
-        return 'Tìm kiếm...'
+  const saveProfile = async () => {
+    try {
+      setSavingProfile(true)
+      setProfileStatus(null)
+      const { data } = await apiClient.put('/auth/profile', {
+        email: profileForm.email,
+        soDienThoai: profileForm.soDienThoai,
+      })
+      updateUser({ email: data.email, soDienThoai: data.soDienThoai })
+      setProfileForm({ email: data.email || '', soDienThoai: data.soDienThoai || '' })
+      setProfileEditing(false)
+      setProfileStatus('Đã cập nhật thông tin liên hệ.')
+    } catch (err) {
+      setProfileStatus(err.response?.data?.message || 'Không thể cập nhật thông tin hồ sơ.')
+    } finally {
+      setSavingProfile(false)
     }
-  }
-
-  // 2. DỮ LIỆU THÔNG BÁO THEO ROLE
-  const getNotifications = () => {
-    switch (currentRole) {
-      case 'GiangVien':
-        return [
-          {
-            id: 1,
-            title: 'Sinh viên nộp báo cáo tuần',
-            desc: 'Phạm Minh Đức (SV001) vừa nộp báo cáo tuần 9. Vui lòng kiểm tra và duyệt.',
-            time: '10 phút trước',
-            type: 'report',
-            unread: true,
-            link: '/giang-vien/tien-do?sv=SV001',
-          },
-          {
-            id: 2,
-            title: 'Nhắc nhở hạn chót CLO',
-            desc: 'Khoa thông báo: Hạn cuối hoàn tất chấm điểm chuẩn đầu ra CLO là 15/01/2027.',
-            time: '2 giờ trước',
-            type: 'deadline',
-            unread: true,
-            link: '/giang-vien/cham-diem',
-          },
-          {
-            id: 3,
-            title: 'Phân công hướng dẫn mới',
-            desc: 'Cán bộ Khoa vừa điều phối thêm sinh viên vào danh sách hướng dẫn của bạn.',
-            time: 'Hôm qua',
-            type: 'assign',
-            unread: false,
-            link: '/giang-vien/sinh-vien',
-          },
-        ]
-      case 'Khoa':
-        return [
-          {
-            id: 1,
-            title: 'Doanh nghiệp mới chờ phê duyệt',
-            desc: 'ThS. Nguyễn Văn An vừa đề xuất kết nối Doanh nghiệp FPT Software.',
-            time: '5 phút trước',
-            type: 'company',
-            unread: true,
-            link: '/khoa/duyet-gioi-thieu',
-          },
-          {
-            id: 2,
-            title: 'Cảnh báo sinh viên chưa có GVHD',
-            desc: 'Hiện còn 2 sinh viên trong đợt chưa được gán giảng viên hướng dẫn.',
-            time: '1 giờ trước',
-            type: 'alert',
-            unread: true,
-            link: '/khoa/phan-cong',
-          },
-          {
-            id: 3,
-            title: 'Kế hoạch học vụ đợt 1',
-            desc: 'Đợt 1 - HK1 (2026-2027) đã đi được 50% thời lượng kế hoạch thực tập.',
-            time: '2 ngày trước',
-            type: 'info',
-            unread: false,
-            link: '/khoa/phan-cong',
-          },
-        ]
-      case 'SinhVien':
-        return [
-          {
-            id: 1,
-            title: 'Phân công GVHD thành công',
-            desc: 'Khoa đã phân công ThS. Nguyễn Văn An phụ trách hướng dẫn thực tập của bạn.',
-            time: 'Vừa xong',
-            type: 'assign',
-            unread: true,
-            link: '/sinh-vien',
-          },
-          {
-            id: 2,
-            title: 'Báo cáo tuần đã được duyệt',
-            desc: 'Giảng viên hướng dẫn đã đánh giá Đạt báo cáo tuần 9 của bạn.',
-            time: '3 ngày trước',
-            type: 'report',
-            unread: false,
-            link: '/sinh-vien',
-          },
-        ]
-      default:
-        return []
-    }
-  }
-
-  const notifications = getNotifications()
-
-  const handleSelectSearchResult = (link) => {
-    setSearchQuery('')
-    setIsSearchOpen(false)
-    navigate(link)
-  }
-
-  const handleMarkAllRead = () => {
-    setUnreadCount(0)
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-xs">
-      {/* 🔍 1. THANH TÌM KIẾM TOÀN CỤC THEO ROLE */}
-      <div ref={searchRef} className="relative flex items-center gap-3 flex-1 max-w-lg">
-        <div className="relative w-full">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">
-            search
-          </span>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value)
-              setIsSearchOpen(true)
-            }}
-            onFocus={() => {
-              if (searchQuery.trim()) setIsSearchOpen(true)
-            }}
-            placeholder={getSearchPlaceholder()}
-            className="w-full h-9 pl-9 pr-4 rounded-xl bg-slate-100 text-slate-800 placeholder:text-slate-400 text-xs focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-white transition-all border border-transparent focus:border-blue-600"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => {
-                setSearchQuery('')
-                setIsSearchOpen(false)
-              }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <span className="material-symbols-outlined text-sm">close</span>
-            </button>
-          )}
-        </div>
-
-        {/* Dropdown Kết quả tìm kiếm theo Role */}
-        {isSearchOpen && searchQuery.trim() && (
-          <div className="absolute top-11 left-0 right-0 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden animate-in fade-in duration-150 z-50">
-            <div className="p-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] font-semibold text-slate-500">
-              <span>Kết quả theo quyền {user.role.split('•')[0]}</span>
-              <span>{searchResults.length} tìm thấy</span>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-              {searchResults.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs">
-                  <span className="material-symbols-outlined text-3xl mb-1 text-slate-300">search_off</span>
-                  <p>Không tìm thấy dữ liệu nào phù hợp với quyền hạn của bạn.</p>
-                </div>
-              ) : (
-                searchResults.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => handleSelectSearchResult(item.link)}
-                    className="p-3 hover:bg-blue-50/70 transition-colors cursor-pointer flex items-center justify-between gap-3 group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-slate-100 group-hover:bg-blue-100 text-slate-600 group-hover:text-blue-700 flex items-center justify-center transition-colors">
-                        <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
-                          {item.title}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">{item.subtitle}</p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full whitespace-nowrap">
-                      {item.badge}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+    <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
+      {/* Khoảng trống thay cho thanh tìm kiếm giả */}
+      <div className="flex-1" />
 
       {/* 🔔 2. KHU VỰC ĐIỀU KHIỂN & CHUÔNG THÔNG BÁO THEO ROLE */}
       <div className="flex items-center gap-4">
@@ -419,7 +175,7 @@ export default function Header({ currentRole }) {
           >
             <span className="material-symbols-outlined text-[20px]">notifications</span>
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
                 {unreadCount}
               </span>
             )}
@@ -447,31 +203,41 @@ export default function Header({ currentRole }) {
               </div>
 
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
-                {notifications.map((notif) => (
-                  <div
-                    key={notif.id}
-                    onClick={() => {
-                      setIsNotifOpen(false)
-                      navigate(notif.link)
-                    }}
-                    className={`p-3.5 hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-3 ${
-                      notif.unread ? 'bg-blue-50/40' : ''
-                    }`}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="material-symbols-outlined text-[17px]">
-                        {notif.type === 'report' ? 'description' : notif.type === 'deadline' ? 'alarm' : 'campaign'}
-                      </span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <p className="text-xs font-bold text-slate-900">{notif.title}</p>
-                        <span className="text-[10px] text-slate-400 whitespace-nowrap">{notif.time}</span>
-                      </div>
-                      <p className="text-xs text-slate-600 mt-1 leading-relaxed">{notif.desc}</p>
-                    </div>
+                {notifications.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs">
+                    Chưa có thông báo nào từ Khoa.
                   </div>
-                ))}
+                ) : (
+                  notifications.slice(0, 10).map((notif) => (
+                    <div
+                      key={notif.maThongBao}
+                      onClick={() => {
+                        setIsNotifOpen(false)
+                        navigate(
+                          currentRole === 'Khoa'
+                            ? '/khoa/thong-bao'
+                            : currentRole === 'SinhVien'
+                            ? '/sinh-vien/thong-bao'
+                            : '/giang-vien/thong-bao'
+                        )
+                      }}
+                      className="p-3.5 hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-3"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-[17px]">campaign</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-xs font-bold text-slate-900 line-clamp-1">{notif.tieuDe}</p>
+                          <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                            {notif.ngayTao ? new Date(notif.ngayTao).toLocaleDateString('vi-VN') : ''}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">{notif.noiDung}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
 
               <div className="p-2.5 bg-slate-50 border-t border-slate-100 text-center">
@@ -505,7 +271,7 @@ export default function Header({ currentRole }) {
             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
             className={`flex items-center gap-2.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all cursor-pointer border ${
               isUserMenuOpen
-                ? 'bg-blue-50/80 border-blue-200 shadow-xs'
+                ? 'bg-blue-50/80 border-blue-200 shadow-sm'
                 : 'hover:bg-slate-100/80 border-transparent hover:border-slate-200'
             }`}
           >
@@ -514,7 +280,7 @@ export default function Header({ currentRole }) {
               <span className="text-[11px] text-slate-500 leading-tight">{user.role}</span>
             </div>
             <div
-              className={`w-8 h-8 rounded-full ${user.avatarColor} flex items-center justify-center font-bold text-xs shadow-xs shrink-0`}
+              className={`w-8 h-8 rounded-full ${user.avatarColor} flex items-center justify-center font-bold text-xs shadow-sm shrink-0`}
             >
               {user.avatar}
             </div>
@@ -558,10 +324,7 @@ export default function Header({ currentRole }) {
               <div className="p-1.5 space-y-0.5">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsUserMenuOpen(false)
-                    setShowProfileModal(true)
-                  }}
+                  onClick={openProfile}
                   className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-blue-50/70 hover:text-blue-700 transition-colors text-left"
                 >
                   <span className="material-symbols-outlined text-[19px] text-slate-500">person</span>
@@ -627,7 +390,7 @@ export default function Header({ currentRole }) {
       {/* 📋 MODAL 1: XEM HỒ SƠ CHI TIẾT (DÙNG PORTAL ĐỂ CĂN GIỮA TOÀN MÀN HÌNH) */}
       {showProfileModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -653,18 +416,14 @@ export default function Header({ currentRole }) {
               <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-200/70 space-y-3">
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div>
-                    <span className="text-slate-400 block font-medium text-[11px]">Họ và tên:</span>
-                    <span className="font-bold text-slate-900 text-sm">{user.name}</span>
+                    <span className="text-slate-400 block font-medium text-[11px]">Tên đăng nhập:</span>
+                    <span className="font-bold text-slate-900 text-sm">{authUser?.tenDangNhap || user.name}</span>
                   </div>
                   <div>
                     <span className="text-slate-400 block font-medium text-[11px]">Mã định danh:</span>
                     <span className="font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded text-xs">{user.code}</span>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block font-medium text-[11px]">Học vị / Khóa:</span>
-                    <span className="font-semibold text-slate-800">{user.degree}</span>
-                  </div>
-                  <div>
+                  <div className="col-span-2">
                     <span className="text-slate-400 block font-medium text-[11px]">Vai trò hệ thống:</span>
                     <span className="font-semibold text-slate-800">{user.role.split('•')[0]}</span>
                   </div>
@@ -677,28 +436,28 @@ export default function Header({ currentRole }) {
                     <span className="font-semibold text-slate-800">{user.faculty}</span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block font-medium text-[11px]">Email công vụ:</span>
-                    <span className="font-semibold text-slate-800">{user.email}</span>
+                    <span className="text-slate-400 block font-medium text-[11px]">Email:</span>
+                    {profileEditing ? (
+                      <input type="email" value={profileForm.email} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} placeholder="name@example.com" className="mt-1 w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                    ) : <span className="font-semibold text-slate-800">{profileForm.email || '—'}</span>}
                   </div>
                   <div>
                     <span className="text-slate-400 block font-medium text-[11px]">Số điện thoại:</span>
-                    <span className="font-semibold text-slate-800">{user.phone}</span>
-                  </div>
-                  <div className="col-span-2">
-                    <span className="text-slate-400 block font-medium text-[11px]">Vị trí làm việc:</span>
-                    <span className="font-semibold text-slate-800">{user.office}</span>
+                    {profileEditing ? (
+                      <input type="tel" value={profileForm.soDienThoai} onChange={(e) => setProfileForm({ ...profileForm, soDienThoai: e.target.value })} placeholder="VD: 0901234567" className="mt-1 w-full h-9 px-2.5 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-600" />
+                    ) : <span className="font-semibold text-slate-800">{profileForm.soDienThoai || '—'}</span>}
                   </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/60 text-[11px] text-blue-800 flex items-center gap-2">
-                <span className="material-symbols-outlined text-blue-600 text-base">verified_user</span>
-                <span>
-                  Tài khoản đã được liên kết và định danh qua hệ thống <strong>HUIT SSO Identity</strong>.
-                </span>
-              </div>
-
-              <div className="flex justify-end pt-1">
+              {profileStatus && <p className={`text-xs ${profileStatus.startsWith('Đã') ? 'text-emerald-700' : 'text-rose-700'}`}>{profileStatus}</p>}
+              <div className="flex justify-end gap-2 pt-1">
+                {profileEditing ? (
+                  <>
+                    <button type="button" onClick={() => { setProfileEditing(false); setProfileStatus(null) }} className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition">Hủy</button>
+                    <button type="button" disabled={savingProfile} onClick={saveProfile} className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition disabled:opacity-60">{savingProfile ? 'Đang lưu...' : 'Lưu thay đổi'}</button>
+                  </>
+                ) : <button type="button" onClick={() => setProfileEditing(true)} className="px-4 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition">Chỉnh sửa liên hệ</button>}
                 <button
                   type="button"
                   onClick={() => setShowProfileModal(false)}
@@ -715,7 +474,7 @@ export default function Header({ currentRole }) {
       {/* 🔑 MODAL 2: ĐỔI MẬT KHẨU */}
       {showPasswordModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -866,7 +625,7 @@ export default function Header({ currentRole }) {
       {/* 🚪 MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 max-h-[90vh] overflow-y-auto">
               {logoutSuccess ? (
                 <div className="space-y-3 py-2">

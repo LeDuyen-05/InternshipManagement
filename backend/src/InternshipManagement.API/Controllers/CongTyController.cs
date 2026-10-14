@@ -1,5 +1,7 @@
+using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.DTOs.DangKyThucTap;
 using InternshipManagement.BLL.Services.DangKyThucTap;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InternshipManagement.API.Controllers;
@@ -23,20 +25,11 @@ public class CongTyController : ControllerBase
     }
 
     [HttpPost("de-xuat")]
+    [Authorize(Roles = Roles.SinhVien)]
     public async Task<IActionResult> DeXuatCongTy([FromBody] DeXuatCongTyRequest request)
     {
-        try
-        {
-            var result = await _service.DeXuatCongTyMoiAsync(request);
-            return Ok(new { success = true, data = result, message = "Đề xuất doanh nghiệp thành công, đang chờ Khoa thẩm định." });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi khi gửi đề xuất: " + ex.Message });
-        }
+        request.MaSV = User.MaSV() ?? throw new UnauthorizedAccessException();
+        var result = await _service.DeXuatCongTyMoiAsync(request);
+        return Ok(new { success = true, data = result, message = "Đề xuất doanh nghiệp thành công, đang chờ Khoa thẩm định." });
     }
 }

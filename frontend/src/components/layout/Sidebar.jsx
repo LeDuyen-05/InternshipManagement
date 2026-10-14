@@ -22,10 +22,17 @@ export default function Sidebar({ currentRole, onRoleChange }) {
 
   // Danh mục menu phân nhóm theo từng Role
   const roleMenuGroups = {
+    QuanTriVien: {
+      hocVu: [],
+      tienIch: [
+        { path: '/admin', label: 'Quản trị người dùng', icon: 'admin_panel_settings' },
+      ],
+    },
     GiangVien: {
       hocVu: [
         { path: '/giang-vien/dashboard', label: 'Bảng điều khiển', icon: 'dashboard' },
         { path: '/giang-vien/sinh-vien', label: 'Sinh viên hướng dẫn', icon: 'group' },
+        { path: '/giang-vien/gioi-thieu', label: 'Giới thiệu công ty', icon: 'share' },
         { path: '/giang-vien/tien-do', label: 'Theo dõi tiến độ', icon: 'trending_up' },
         { path: '/giang-vien/cham-diem', label: 'Đánh giá & Chấm điểm CLO', icon: 'fact_check' },
       ],
@@ -38,18 +45,20 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         { path: '/khoa', label: 'Tổng quan điều hành', icon: 'analytics' },
         { path: '/khoa/duyet-gioi-thieu', label: 'Duyệt công ty đề xuất', icon: 'verified' },
         { path: '/khoa/phan-cong', label: 'Phân công GVHD', icon: 'assignment_ind' },
+        { path: '/khoa/phan-bo', label: 'Phân bổ nhanh theo công ty', icon: 'swap_horiz' },
         { path: '/khoa/dang-ky', label: 'Duyệt đăng ký thực tập', icon: 'how_to_reg' },
         { path: '/khoa/theo-doi', label: 'Theo dõi tiến độ toàn khoa', icon: 'trending_up' },
         { path: '/khoa/thong-ke', label: 'Báo cáo thống kê CLO', icon: 'bar_chart' },
+        { path: '/khoa/hoi-dong', label: 'Hội đồng & Phản biện', icon: 'groups' },
       ],
       tienIch: [
         { path: '/khoa/dot-thuc-tap', label: 'Cấu hình đợt thực tập', icon: 'date_range' },
+        { path: '/khoa/han-bao-cao', label: 'Hạn nộp báo cáo', icon: 'event_busy' },
         { path: '/khoa/doanh-nghiep', label: 'Doanh nghiệp liên kết', icon: 'domain' },
         { path: '/khoa/tieu-chi', label: 'Tiêu chí đánh giá', icon: 'rule' },
         { path: '/thong-bao', label: 'Quản lý thông báo', icon: 'campaign' },
       ],
     },
-
     SinhVien: {
       hocVu: [
         { path: '/sinh-vien', label: 'Bảng điều khiển SV', icon: 'dashboard' },
@@ -60,23 +69,31 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         { path: '/ai', label: 'Tư vấn chọn cty (AI)', icon: 'psychology' },
       ],
       tienIch: [
-        { path: '/sinh-vien/danh-sach', label: 'Danh sách sinh viên', icon: 'group' },
-        { path: '/sinh-vien/thong-bao', label: 'Thông báo từ Khoa', icon: 'notifications' },
+        { path: '/thong-bao', label: 'Thông báo từ Khoa', icon: 'notifications' },
       ],
     },
-
+    DaiDienDN: {
+      hocVu: [],
+      tienIch: [
+        { path: '/thong-bao', label: 'Thông báo', icon: 'notifications' },
+      ],
+    },
   }
 
   const currentGroups = roleMenuGroups[currentRole] || roleMenuGroups.GiangVien
 
   const getRoleDisplayName = (role) => {
     switch (role) {
+      case 'QuanTriVien':
+        return 'Cổng Quản Trị Viên'
       case 'GiangVien':
         return 'Cổng Giảng Viên'
       case 'Khoa':
         return 'Cổng Cán Bộ Khoa'
       case 'SinhVien':
         return 'Cổng Sinh Viên'
+      case 'DaiDienDN':
+        return 'Cổng Doanh Nghiệp'
       default:
         return 'Cổng Người Dùng'
     }
@@ -118,7 +135,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                     to={item.path}
                     className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
-                        ? 'bg-blue-700 text-white shadow-xs'
+                        ? 'bg-blue-700 text-white shadow-sm'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
@@ -146,7 +163,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                     to={item.path}
                     className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
-                        ? 'bg-blue-700 text-white shadow-xs'
+                        ? 'bg-blue-700 text-white shadow-sm'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
@@ -180,7 +197,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                 className={`w-2 h-2 rounded-full ${
                   selectedDot?.trangThai === 'DangDienRa'
                     ? 'bg-emerald-500 animate-pulse'
-                    : selectedDot?.trangThai === 'SapDienRa'
+                    : (selectedDot?.trangThai === 'ChuaBatDau' || selectedDot?.trangThai === 'SapDienRa')
                     ? 'bg-blue-500'
                     : 'bg-slate-400'
                 }`}
@@ -206,7 +223,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
               className={`text-[10px] font-medium ${
                 selectedDot?.trangThai === 'DangDienRa'
                   ? 'text-emerald-600 font-bold'
-                  : selectedDot?.trangThai === 'SapDienRa'
+                  : (selectedDot?.trangThai === 'ChuaBatDau' || selectedDot?.trangThai === 'SapDienRa')
                   ? 'text-blue-600'
                   : 'text-slate-500'
               }`}
@@ -291,7 +308,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
 
       {/* Modal 2 tầng: Chọn Năm học -> Đợt thực tập */}
       {showDotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -375,7 +392,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                             className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
                               dot.trangThai === 'DangDienRa'
                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : dot.trangThai === 'SapDienRa'
+                                : (dot.trangThai === 'ChuaBatDau' || dot.trangThai === 'SapDienRa')
                                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
                                 : 'bg-slate-100 text-slate-600 border border-slate-200'
                             }`}

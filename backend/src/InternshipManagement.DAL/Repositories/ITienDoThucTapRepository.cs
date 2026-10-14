@@ -11,10 +11,10 @@ public interface ITienDoThucTapRepository : IRepository<TienDoThucTap>
     // Dành cho Giảng viên duyệt báo cáo
     Task<IReadOnlyList<TienDoThucTap>> GetBaoCaoChoDuyetByGiangVienAsync(string maGV);
     Task<TienDoThucTap?> GetChiTietAsync(string maTienDo);
-    Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet);
+    Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXet = null);
+    Task<bool> IsSupervisorAsync(string maGV, string maSV);
 
     // Dành cho Sinh viên nộp / cập nhật báo cáo tuần
-    Task<TienDoThucTap?> GetByIdAsync(string maTienDo);
     Task<TienDoThucTap> CreateAsync(TienDoThucTap entity);
     Task<TienDoThucTap> UpdateAsync(TienDoThucTap entity);
 }

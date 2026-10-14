@@ -26,13 +26,19 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             .FirstOrDefaultAsync(p => p.MaSV == maSV && p.MaDot == maDot);
     }
 
+    public Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV) =>
+        Context.GVHuongDans.AsNoTracking().FirstOrDefaultAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
+
+    public Task<DotThucTap?> GetDotThucTapAsync(string maDot) =>
+        Context.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == maDot);
+
     public async Task<IReadOnlyList<PhieuChamDiem>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot)
     {
         return await DbSet
             .Include(p => p.SinhVien)
             .Include(p => p.ChiTietChamDiems)
                 .ThenInclude(c => c.TieuChi)
-            .Where(p => p.MaDot == maDot && (p.MaGVHuongDan == maGV || p.GVHuongDan!.MaGiangVien == maGV))
+            .Where(p => p.MaDot == maDot && p.GVHuongDan != null && p.GVHuongDan.MaGiangVien == maGV)
             .ToListAsync();
     }
 
@@ -46,19 +52,17 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
         {
             if (string.IsNullOrWhiteSpace(phieu.MaPhieu))
             {
-                var count = await DbSet.CountAsync();
-                phieu.MaPhieu = $"PCD{count + 1:D3}";
+                phieu.MaPhieu = DAL.Common.IdGenerator.New("PCD");
             }
 
             phieu.NgayCham = DateTime.Now;
             await DbSet.AddAsync(phieu);
 
-            int index = 1;
             foreach (var ct in chiTiets)
             {
                 if (string.IsNullOrWhiteSpace(ct.MaSo))
                 {
-                    ct.MaSo = $"{phieu.MaPhieu}_{index++}";
+                    ct.MaSo = DAL.Common.IdGenerator.New("CT");
                 }
                 ct.MaPhieu = phieu.MaPhieu;
                 await Context.ChiTietChamDiems.AddAsync(ct);
@@ -73,10 +77,9 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 
             Context.ChiTietChamDiems.RemoveRange(existing.ChiTietChamDiems);
 
-            int index = 1;
             foreach (var ct in chiTiets)
             {
-                ct.MaSo = $"{existing.MaPhieu}_{index++}";
+                ct.MaSo = DAL.Common.IdGenerator.New("CT");
                 ct.MaPhieu = existing.MaPhieu;
                 await Context.ChiTietChamDiems.AddAsync(ct);
             }

@@ -9,38 +9,60 @@ namespace InternshipManagement.API.Controllers;
 [ApiController, Route("api/auth")]
 public class AuthController : ControllerBase
 {
-    private readonly AuthService _service; private readonly JwtTokenService _jwt;
-    public AuthController(AuthService service, JwtTokenService jwt) { _service=service; _jwt=jwt; }
+    private readonly AuthService _service;
+    private readonly JwtTokenService _jwt;
 
+    public AuthController(AuthService service, JwtTokenService jwt)
+    {
+        _service = service;
+        _jwt = jwt;
+    }
+
+    [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
-        try 
-        {
-            var account = await _service.AuthenticateAsync(request.TenDangNhap, request.MatKhau);
-            if (account is null) return Unauthorized(new { message = "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản bị khóa." });
-            return Ok(new LoginResponse(_jwt.Create(account), account.MaTaiKhoan, account.TenDangNhap, account.MaVaiTro, account.VaiTro?.TenVaiTro ?? "", account.MaSV, account.MaGV, account.MaDaiDien));
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Lỗi hệ thống: " + ex.ToString() });
-        }
+        var account = await _service.AuthenticateAsync(request.TenDangNhap, request.MatKhau);
+        if (account is null)
+            return Unauthorized(new { message = "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản chưa được kích hoạt/bị khóa." });
+
+        return Ok(new LoginResponse(
+            _jwt.Create(account),
+            account.MaTaiKhoan,
+            account.TenDangNhap,
+            account.MaVaiTro,
+            account.VaiTro?.TenVaiTro ?? "",
+            account.MaSV,
+            account.MaGV,
+            account.MaDaiDien,
+            account.Email,
+            account.SoDienThoai));
     }
 
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
-        try { var x = await _service.RegisterAsync(request); return Ok(new { message="Đăng ký thành công.", maTaiKhoan=x.MaTaiKhoan }); }
-        catch (Exception ex) { return BadRequest(new { message=ex.Message }); }
+        var x = await _service.RegisterAsync(request);
+        return Ok(new { message = "Đăng ký thành công.", maTaiKhoan = x.MaTaiKhoan });
     }
 
     [Authorize]
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
     {
-        try { await _service.ChangePasswordAsync(User.FindFirst("sub")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "", request); return Ok(new { message="Đổi mật khẩu thành công." }); }
-        catch (Exception ex) { return BadRequest(new { message=ex.Message }); }
+        await _service.ChangePasswordAsync(User.MaTaiKhoan() ?? "", request);
+        return Ok(new { message = "Đổi mật khẩu thành công." });
     }
+
+    [Authorize]
+    [HttpGet("profile")]
+    public async Task<IActionResult> Profile() => Ok(await _service.GetProfileAsync(User.MaTaiKhoan() ?? ""));
+
+    [Authorize]
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile(UpdateOwnProfileRequest request) =>
+        Ok(await _service.UpdateProfileAsync(User.MaTaiKhoan() ?? "", request));
 
     [Authorize]
     [HttpPost("logout")]

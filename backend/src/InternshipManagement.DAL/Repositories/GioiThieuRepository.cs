@@ -28,6 +28,25 @@ public class GioiThieuRepository : GenericRepository<GioiThieu>, IGioiThieuRepos
             .ToListAsync();
     }
 
+    public async Task<GioiThieu?> GetByIdWithDetailsAsync(string maSo)
+    {
+        return await DbSet
+            .AsNoTracking()
+            .Include(g => g.GiangVien)
+            .Include(g => g.CongTy)
+            .FirstOrDefaultAsync(g => g.MaSo == maSo);
+    }
+
+    public async Task<bool> ExistsAsync(string maGV, string maCongTy)
+    {
+        return await DbSet.AnyAsync(g => g.MaGV == maGV && g.MaCongTy == maCongTy);
+    }
+
+    public async Task<bool> ExistsGiangVienAsync(string maGV)
+    {
+        return await Context.GiangViens.AnyAsync(g => g.MaGV == maGV);
+    }
+
     public async Task<bool> ExistsCongTyByNameAsync(string tenCongTy)
     {
         return await Context.CongTys.AsNoTracking().AnyAsync(c => c.TenCongTy.Trim().ToLower() == tenCongTy.Trim().ToLower());
@@ -39,7 +58,7 @@ public class GioiThieuRepository : GenericRepository<GioiThieu>, IGioiThieuRepos
 
         var gioiThieu = new GioiThieu
         {
-            MaSo = "GT" + DateTime.UtcNow.ToString("yyMMddHHmmss"),
+            MaSo = DAL.Common.IdGenerator.New("GT"),
             MaGV = maGV,
             MaCongTy = congTy.MaCongTy,
             NgayGioiThieu = DateTime.Now,
@@ -53,5 +72,15 @@ public class GioiThieuRepository : GenericRepository<GioiThieu>, IGioiThieuRepos
         await Context.Entry(gioiThieu).Reference(g => g.GiangVien).LoadAsync();
 
         return gioiThieu;
+    }
+
+    public async Task<CongTy?> GetCongTyByIdAsync(string maCongTy)
+    {
+        return await Context.CongTys.FirstOrDefaultAsync(c => c.MaCongTy == maCongTy);
+    }
+
+    public void UpdateCongTy(CongTy congTy)
+    {
+        Context.CongTys.Update(congTy);
     }
 }

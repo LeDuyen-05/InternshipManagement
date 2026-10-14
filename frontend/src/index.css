@@ -1048,7 +1048,6 @@ a { text-decoration: none; }
 .alert{padding:11px 13px;border-radius:9px;margin:12px 0;font-size:14px}
 .error{background:#fff0f0;color:#a63232;border:1px solid #f4cccc}
 .success{background:#eefbf3;color:#267044;border:1px solid #c9ead4}
-.app-shell{display:flex;min-height:100vh}
 .sidebar{width:245px;background:#0b4f88;color:white;padding:22px 16px;display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0}
 .side-brand{font-weight:800;font-size:16px;padding:0 8px}.side-brand span{background:#2d8ad1;width:40px;height:40px}
 .side-brand small{font-size:11px;opacity:.75;font-weight:500}
@@ -1058,7 +1057,6 @@ a { text-decoration: none; }
 .sidebar nav a,.logout{color:#d8ebfb;text-decoration:none;border:0;background:transparent;text-align:left;padding:11px 12px;border-radius:9px}
 .sidebar nav a.selected,.sidebar nav a:hover,.logout:hover{background:rgba(255,255,255,.13);color:white}
 .logout{margin-top:auto;border-top:1px solid rgba(255,255,255,.15);padding-top:14px}
-.main-content{margin-left:245px;width:calc(100% - 245px);padding:34px 42px}
 .page-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px}
 .eyebrow{font-size:11px;letter-spacing:1.4px;font-weight:800;color:#2580c9}
 .page-head h2{margin:5px 0 4px;font-size:29px;color:#123f64}
@@ -1096,13 +1094,10 @@ td strong{display:block}td small{display:block;color:#8aa0b2;margin-top:2px}
 /* Khoa operations portal */
 :root { color: #15233d; background: #f8f7ff; }
 body { background: #f8f7ff; }
-.app-shell { background: #f8f7ff; }
 .sidebar { background: #fff; color: #17233f; border-right: 1px solid #e7e8f2; padding: 20px 12px; }
 .side-brand { color: #15233d; font-size: 13px; padding: 0 10px; min-height: 48px; }
 .side-brand span { width: 38px; height: 38px; border-radius: 10px; background: #123bb4; font-size: 12px; }
 .side-brand small { display: block; color: #78839a; font-size: 10px; margin-top: 3px; }
-.sidebar-groups { overflow-y: auto; margin-top: 25px; }
-.sidebar-groups section { margin-bottom: 18px; }
 .sidebar-label { color: #858ba0; font-size: 10px; font-weight: 800; letter-spacing: .9px; padding: 0 10px 8px; }
 .sidebar nav { gap: 3px; }
 .sidebar nav a { color: #303b53; display: flex; gap: 10px; align-items: center; font-size: 12px; font-weight: 650; padding: 10px 11px; }
@@ -1115,12 +1110,6 @@ body { background: #f8f7ff; }
 .account-link { color: #58647d; display: block; font-size: 12px; }
 .logout { color: #58647d; width: 100%; font-size: 12px; border: 0; margin-top: 0; }
 .logout:hover { background: #f0f2fb; color: #173fb6; }
-.main-content { margin-left: 265px; width: calc(100% - 265px); padding: 0 28px 34px; }
-.portal-topbar { min-height: 64px; margin: 0 -28px 24px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,.88); border-bottom: 1px solid #ededf5; color: #68738b; font-size: 13px; }
-.portal-topbar > div:first-child span { color: #b3b8c8; padding: 0 8px; }
-.portal-topbar strong { color: #25314b; }
-.portal-profile { display: flex; align-items: center; gap: 10px; color: #1c2842; }
-.portal-profile small { display: block; color: #78839a; font-size: 11px; }
 .portal-avatar { background: #123bb4; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: white; font-weight: 800; }
 .khoa-page-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin: 0 0 20px; }
 .khoa-page-heading h1 { font-size: 28px; line-height: 1.25; margin: 5px 0; color:#111b30; }
@@ -1178,8 +1167,8 @@ body { background: #f8f7ff; }
 .khoa-panel .table-wrap table { min-width:620px; }
 .khoa-panel th { background:#f3f4fc; color:#69748c; font-size:10px; letter-spacing:.3px; }
 .khoa-panel td { color:#35415b; }
-@media(max-width:1000px){.sidebar{width:220px}.main-content{margin-left:220px;width:calc(100% - 220px);padding:0 18px 24px}.portal-topbar{margin:0 -18px 20px;padding:0 18px}.khoa-stat-grid{grid-template-columns:repeat(2,1fr)}.quick-link-grid{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:700px){.sidebar{position:static;width:100%;min-height:auto}.app-shell{display:block}.sidebar-groups{display:none}.sidebar-bottom{display:none}.main-content{margin:0;width:100%;padding:0 12px 20px}.portal-topbar{margin:0 -12px 18px}.portal-profile>div{display:none}.khoa-page-heading{flex-direction:column}.khoa-two-col{grid-template-columns:1fr}.quick-link-grid{grid-template-columns:1fr 1fr}.khoa-form-grid{grid-template-columns:1fr}.khoa-form-grid .khoa-actions{grid-column:auto}}
+@media(max-width:1000px){.sidebar{width:220px}.khoa-stat-grid{grid-template-columns:repeat(2,1fr)}.quick-link-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.sidebar{position:static;width:100%;min-height:auto}.sidebar-bottom{display:none}.khoa-page-heading{flex-direction:column}.khoa-two-col{grid-template-columns:1fr}.quick-link-grid{grid-template-columns:1fr 1fr}.khoa-form-grid{grid-template-columns:1fr}.khoa-form-grid .khoa-actions{grid-column:auto}}
 .score-edit-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
 .score-edit-form label { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px; border-radius:8px; background:#f6f7fd; color:#384560; font-size:12px; }
 .score-edit-form label small { display:block; color:#8992a6; font-size:10px; }

@@ -16,12 +16,6 @@ public class PhanBoThucTapConfiguration : IEntityTypeConfiguration<PhanBoThucTap
         builder.Property(x => x.MaCongTy).HasColumnName("maCongTy").HasMaxLength(20);
         builder.Property(x => x.MaDot).HasColumnName("maDot").HasMaxLength(20);
         builder.Property(x => x.NgayPhanBo).HasColumnName("ngayPhanBo");
-        builder.Property(x => x.TrangThai).HasColumnName("trangThai").HasMaxLength(50);
-        builder.Property(x => x.MaPhanBo).HasColumnName("maPB").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.MaSinhVien).HasColumnName("maSV").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.MaCongTy).HasColumnName("maCongTy").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.MaDot).HasColumnName("maDot").HasMaxLength(20).IsRequired();
-        builder.Property(x => x.NgayPhanBo).HasColumnName("ngayPhanBo").IsRequired();
         builder.Property(x => x.TrangThai).HasColumnName("trangThai").HasMaxLength(50).IsRequired();
 
         builder.HasOne(x => x.SinhVien).WithMany(s => s.PhanBoThucTaps).HasForeignKey(x => x.MaSinhVien);

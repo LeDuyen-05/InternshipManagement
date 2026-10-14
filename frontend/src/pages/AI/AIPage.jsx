@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import apiClient from '../../services/api'
-import { useAuth } from '../../contexts/AuthContext'
+import { useIdentity } from '../../hooks/useIdentity'
+import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 
 export default function AIPage() {
-  const { user } = useAuth()
-  const isStudent = user?.maVaiTro === 'VT04'
-  const defaultMaSV = user?.maSV || 'SV001'
+  const { role, maSV: currentMaSV } = useIdentity()
+  const isStudent = role === 'VT04'
 
-  const [maSV, setMaSV] = useState(defaultMaSV)
+  const [maSV, setMaSV] = useState(currentMaSV || '')
   const [k, setK] = useState(5)
   const [result, setResult] = useState(null)
   const [evalResult, setEvalResult] = useState(null)
@@ -16,11 +16,11 @@ export default function AIPage() {
 
   // Tự động chạy gợi ý khi vào trang nếu là sinh viên
   useEffect(() => {
-    if (defaultMaSV) {
-      setMaSV(defaultMaSV)
-      runRecommendation(defaultMaSV, 5)
+    if (currentMaSV) {
+      setMaSV(currentMaSV)
+      runRecommendation(currentMaSV, 5)
     }
-  }, [defaultMaSV])
+  }, [currentMaSV])
 
   const runRecommendation = async (studentId, topK) => {
     const svId = studentId || maSV
@@ -54,6 +54,10 @@ export default function AIPage() {
     runRecommendation(maSV, k)
   }
 
+  if (isStudent && !currentMaSV) {
+    return <NoLinkedAccount />
+  }
+
   return (
     <div className="space-y-6">
       {/* 1. Header Banner */}
@@ -72,12 +76,14 @@ export default function AIPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">
-            <span className="material-symbols-outlined text-sm">model_training</span>
-            NDCG@{evalResult?.k || k}: {evalResult?.ndcg != null ? evalResult.ndcg : '1.0'}
-          </span>
-        </div>
+        {evalResult?.ndcg != null && (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 border border-blue-200 text-xs font-bold">
+              <span className="material-symbols-outlined text-sm">model_training</span>
+              NDCG@{evalResult.k || k}: {evalResult.ndcg}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 2. Control Bar / Bộ lọc tìm kiếm */}
@@ -161,7 +167,7 @@ export default function AIPage() {
                   Xếp hạng theo điểm độ tương đồng Cosine Similarity trên không gian vector kỹ năng và dự án.
                 </p>
               </div>
-              <span className="text-xs text-slate-400 font-mono">Mã hồ sơ: {result.maHoSo || 'HS001'}</span>
+              <span className="text-xs text-slate-400 font-mono">Mã hồ sơ: {result.maHoSo || '—'}</span>
             </div>
 
             <div className="overflow-x-auto">
@@ -217,10 +223,10 @@ export default function AIPage() {
                             <div
                               className={`h-full rounded-full ${
                                 item.tiLeTuongThich >= 60
-                                  ? 'bg-emerald-500'
-                                  : item.tiLeTuongThich >= 30
-                                  ? 'bg-blue-500'
-                                  : 'bg-slate-300'
+                                ? 'bg-emerald-500'
+                                : item.tiLeTuongThich >= 30
+                                ? 'bg-blue-500'
+                                : 'bg-slate-300'
                               }`}
                               style={{ width: `${Math.min(100, item.tiLeTuongThich)}%` }}
                             ></div>
@@ -228,7 +234,7 @@ export default function AIPage() {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600 leading-relaxed">
-                        {item.yeuCau || 'Yêu cầu kiến thức nền tảng CNTT, khả năng học hỏi tốt.'}
+                        {item.yeuCau || '—'}
                       </td>
                     </tr>
                   ))}
@@ -246,7 +252,7 @@ export default function AIPage() {
               </div>
               <div className="text-xl font-bold text-slate-900">TF-IDF Vector Space</div>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Biểu diễn đặc trưng kỹ năng (React, Node, SQL, Python...) dưới dạng vector trọng số tần suất nghịch đảo.
+                Biểu diễn đặc trưng kỹ năng dưới dạng vector trọng số tần suất nghịch đảo.
               </p>
             </div>
 
@@ -267,10 +273,10 @@ export default function AIPage() {
                 Chỉ Số Xếp Hạng Ranking
               </div>
               <div className="text-xl font-bold text-emerald-600">
-                NDCG@{evalResult?.k || k}: {evalResult?.ndcg != null ? evalResult.ndcg : '1.0'}
+                {evalResult?.ndcg != null ? `NDCG@${evalResult?.k || k}: ${evalResult.ndcg}` : 'Chưa có dữ liệu đánh giá'}
               </div>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                DCG: {evalResult?.dcg ?? 7} • IDCG (Lý tưởng): {evalResult?.idealDcg ?? 7}. Đánh giá chất lượng vị trí xếp hạng.
+                {evalResult ? `DCG: ${evalResult.dcg} • IDCG (Lý tưởng): ${evalResult.idealDcg}. Đánh giá chất lượng vị trí xếp hạng.` : 'Chỉ số sẽ hiển thị khi có dữ liệu đánh giá mô hình.'}
               </p>
             </div>
           </div>

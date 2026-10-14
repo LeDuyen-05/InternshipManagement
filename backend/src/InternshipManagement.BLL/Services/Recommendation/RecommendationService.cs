@@ -12,7 +12,7 @@ public class RecommendationService
     private readonly AppDbContext _db;
     public RecommendationService(AppDbContext db) => _db = db;
 
-    public async Task<RecommendationResponse> RecommendAsync(string maSV, int k = 5)
+    public async Task<RecommendationResponse> RecommendAsync(string maSV, int k = 5, bool persist = false)
     {
         k = Math.Clamp(k, 1, 20);
         var sv = await _db.SinhViens.AsNoTracking().FirstOrDefaultAsync(x => x.MaSV == maSV)
@@ -25,22 +25,33 @@ public class RecommendationService
         var companies = await _db.CongTys.AsNoTracking().Where(x => x.TrangThai == "DaDuyet").ToListAsync();
         var ranked = Rank(profileText!, companies).Take(k).ToList();
 
-        if (profile is not null && ranked.Count > 0)
+        if (persist && profile is not null && ranked.Count > 0)
         {
             var old = await _db.GoiYCongTys.Where(x => x.MaHoSo == profile.MaHoSo).ToListAsync();
             _db.GoiYCongTys.RemoveRange(old);
             foreach (var x in ranked)
             {
-                _db.GoiYCongTys.Add(new GoiYCongTy
+                _db.GoiYCongTys.Add(new DAL.Entities.GoiYCongTy
                 {
-                    MaSo = $"GY{Guid.NewGuid():N}"[..20], MaHoSo = profile.MaHoSo, MaCongTy = x.company.MaCongTy,
-                    TiLeTuongThich = Math.Round((decimal)x.score * 100m, 2), NgayGoiY = DateTime.Today
+                    MaSo = DAL.Common.IdGenerator.New("GY"),
+                    MaHoSo = profile.MaHoSo,
+                    MaCongTy = x.company.MaCongTy,
+                    TyLeTuongThich = Math.Round((decimal)x.score * 100m, 2),
+                    NgayGoiY = DateTime.Today
                 });
             }
             await _db.SaveChangesAsync();
         }
 
-        var items = ranked.Select((x, i) => new RecommendationItem(x.company.MaCongTy, x.company.TenCongTy, Math.Round(x.score, 6), Math.Round(x.score * 100, 2), i + 1, x.company.YeuCau ?? string.Empty)).ToList();
+        var items = ranked.Select((x, i) => new RecommendationItem(
+            x.company.MaCongTy,
+            x.company.TenCongTy,
+            Math.Round(x.score, 6),
+            Math.Round(x.score * 100, 2),
+            i + 1,
+            x.company.YeuCau ?? string.Empty
+        )).ToList();
+
         return new RecommendationResponse(maSV, sv.HoTen, profile?.MaHoSo ?? "CHUA_CO_HO_SO", k, items);
     }
 
@@ -71,19 +82,27 @@ public class RecommendationService
         var q = Tokenize(query);
         var model = new RankingModel();
         model.Train(docs);
-        var vocabulary = model.Vocabulary.ToList();
         var result = new List<(CongTy, double)>();
         for (var i = 0; i < companies.Count; i++)
         {
-            result.Add((companies[i], model.Score(q, docs[i])));
+            var score = model.Score(q, docs[i]);
+            if (score > 0)
+            {
+                result.Add((companies[i], score));
+            }
         }
         return result.OrderByDescending(x => x.Item2).ThenBy(x => x.Item1.MaCongTy).ToList();
     }
 
+    private static readonly Regex TokenRx = new(@"[\p{L}\p{N}][\p{L}\p{N}#+]*", RegexOptions.Compiled);
+    private static readonly HashSet<string> ShortAllow = new(StringComparer.OrdinalIgnoreCase) { "c", "r", "c#", "c++", "go" };
+
     private static Dictionary<string, double> Tokenize(string text)
     {
-        var words = Regex.Matches(text.ToLower(new CultureInfo("vi-VN")), @"[\p{L}\p{N}]+")
-            .Select(x => x.Value).Where(x => x.Length > 1).ToList();
+        var words = TokenRx.Matches(text.ToLower(new CultureInfo("vi-VN")))
+            .Select(x => x.Value)
+            .Where(x => x.Length > 1 || ShortAllow.Contains(x))
+            .ToList();
         return words.GroupBy(x => x).ToDictionary(x => x.Key, x => (double)x.Count());
     }
 

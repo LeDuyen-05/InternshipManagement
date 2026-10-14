@@ -1,88 +1,143 @@
 import { createContext, useContext, useState, useEffect } from 'react'
-
-// Danh sách các năm học và đợt thực tập khớp chính xác với CSDL SQL Server (DOTTHUCTAP)
-export const DANH_SACH_DOT_THUC_TAP = [
-  {
-    namHoc: '2026 - 2027',
-    isCurrentYear: true,
-    dots: [
-      {
-        maDot: 'DOT02',
-        tenDot: 'Thực tập tốt nghiệp đợt 2 năm 2026',
-        hocKy: 'Học kỳ 1',
-        thoiGian: '14/09/2026 - 25/12/2026',
-        trangThai: 'DangDienRa', // DangDienRa | DaKetThuc | SapDienRa
-        labelTrangThai: 'Đang diễn ra',
-        isDefault: true,
-      },
-    ],
-  },
-  {
-    namHoc: '2025 - 2026',
-    isCurrentYear: false,
-    dots: [
-      {
-        maDot: 'DOT01',
-        tenDot: 'Thực tập tốt nghiệp đợt 1 năm 2026',
-        hocKy: 'Học kỳ 2',
-        thoiGian: '02/02/2026 - 15/05/2026',
-        trangThai: 'DaKetThuc',
-        labelTrangThai: 'Đã kết thúc',
-        isDefault: false,
-      },
-    ],
-  },
-]
-
-// Tìm đợt mặc định đang mở
-const defaultDot = DANH_SACH_DOT_THUC_TAP[0].dots[0]
+import apiClient from '../services/api'
+import { useAuth } from './AuthContext'
 
 const DotThucTapContext = createContext(null)
 
-export function DotThucTapProvider({ children }) {
-  const [selectedDot, setSelectedDot] = useState(() => {
-    try {
-      const savedMaDot = localStorage.getItem('selected_dot_thuc_tap')
-      if (savedMaDot) {
-        for (const year of DANH_SACH_DOT_THUC_TAP) {
-          const found = year.dots?.find((d) => d.maDot === savedMaDot)
-          if (found) return found
-        }
-      }
-    } catch {
-      // Fallback nếu localStorage bị chặn hoặc lỗi
-    }
-    return defaultDot
-  })
+const mapTrangThai = (trangThai) => {
+  switch (trangThai) {
+    case 'ChuaBatDau':
+    case 'SapDienRa':
+      return 'Sắp diễn ra'
+    case 'DangDienRa':
+      return 'Đang diễn ra'
+    case 'DaKetThuc':
+      return 'Đã kết thúc'
+    default:
+      return trangThai || 'Đang diễn ra'
+  }
+}
 
-  // Đổi đợt thực tập và lưu vào localStorage
+const formatDateRange = (bd, kt) => {
+  if (!bd || !kt) return ''
+  try {
+    const d1 = new Date(bd)
+    const d2 = new Date(kt)
+    return `${d1.toLocaleDateString('vi-VN')} - ${d2.toLocaleDateString('vi-VN')}`
+  } catch {
+    return ''
+  }
+}
+
+export function DotThucTapProvider({ children }) {
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
+  const [danhSachNamHoc, setDanhSachNamHoc] = useState([])
+  const [selectedDot, setSelectedDot] = useState(null)
+
+  useEffect(() => {
+    if (!user) {
+      setSelectedDot(null)
+      setDanhSachNamHoc([])
+      setLoading(false)
+      return
+    }
+
+    let isMounted = true
+    const fetchRounds = async () => {
+      setLoading(true)
+      try {
+        const { data } = await apiClient.get('/DotThucTap')
+        if (!isMounted) return
+
+        const rounds = Array.isArray(data) ? data : []
+        const grouped = {}
+        const mappedList = []
+
+        rounds.forEach((r) => {
+          const item = {
+            maDot: r.maSo,
+            tenDot: r.tenDot,
+            namHoc: r.namHoc,
+            thoiGian: formatDateRange(r.thoiGianBD, r.thoiGianKT),
+            trangThai: r.trangThai,
+            labelTrangThai: mapTrangThai(r.trangThai),
+            isDefault: r.trangThai === 'DangDienRa',
+          }
+          mappedList.push(item)
+
+          const yr = r.namHoc || 'Khác'
+          if (!grouped[yr]) {
+            grouped[yr] = []
+          }
+          grouped[yr].push(item)
+        })
+
+        const years = Object.keys(grouped).map((yr, idx) => ({
+          namHoc: yr,
+          isCurrentYear: idx === 0,
+          dots: grouped[yr],
+        }))
+
+        setDanhSachNamHoc(years)
+
+        let defaultDot = mappedList.find((d) => d.trangThai === 'DangDienRa') || mappedList[0] || null
+
+        const savedMaDot = localStorage.getItem('selected_dot_thuc_tap')
+        if (savedMaDot) {
+          const found = mappedList.find((d) => d.maDot === savedMaDot)
+          if (found) defaultDot = found
+        }
+
+        setSelectedDot(defaultDot)
+      } catch (err) {
+        console.error('Không tải được danh sách đợt thực tập:', err)
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+
+    fetchRounds()
+
+    return () => {
+      isMounted = false
+    }
+  }, [user])
+
   const changeDot = (dot) => {
     if (!dot) return
     setSelectedDot(dot)
     try {
       localStorage.setItem('selected_dot_thuc_tap', dot.maDot)
-    } catch {}
+    } catch (_e) {
+      // ignore storage error
+    }
   }
 
-  // Đưa về đợt đang diễn ra mặc định
   const resetToCurrentDot = () => {
-    setSelectedDot(defaultDot)
-    try {
-      localStorage.setItem('selected_dot_thuc_tap', defaultDot.maDot)
-    } catch {}
+    const allDots = danhSachNamHoc.flatMap((y) => y.dots || [])
+    const defaultDot = allDots.find((d) => d.trangThai === 'DangDienRa') || allDots[0] || null
+    if (defaultDot) {
+      setSelectedDot(defaultDot)
+      try {
+        localStorage.setItem('selected_dot_thuc_tap', defaultDot.maDot)
+      } catch (_e) {
+        // ignore storage error
+      }
+    }
   }
 
-  // Đợt đang chọn có phải đợt đang mở tác vụ không?
-  const isReadOnly = (selectedDot || defaultDot)?.trangThai === 'DaKetThuc'
+  const isReadOnly = selectedDot?.trangThai === 'DaKetThuc'
 
   return (
     <DotThucTapContext.Provider
       value={{
+        loading,
         selectedDot,
         changeDot,
         resetToCurrentDot,
         isReadOnly,
-        danhSachNamHoc: DANH_SACH_DOT_THUC_TAP,
+        danhSachNamHoc,
       }}
     >
       {children}

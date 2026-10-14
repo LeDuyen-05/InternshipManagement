@@ -1,6 +1,7 @@
+using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.DTOs.GioiThieu;
-using InternshipManagement.BLL.Exceptions;
 using InternshipManagement.BLL.Services.GioiThieu;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InternshipManagement.API.Controllers;
@@ -10,13 +11,16 @@ namespace InternshipManagement.API.Controllers;
 public class GioiThieuController : ControllerBase
 {
     private readonly IGioiThieuService _service;
+    private readonly IResourceAccess _access;
 
-    public GioiThieuController(IGioiThieuService service)
+    public GioiThieuController(IGioiThieuService service, IResourceAccess access)
     {
         _service = service;
+        _access = access;
     }
 
     [HttpGet]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
     public async Task<IActionResult> GetAll()
     {
         var list = await _service.GetAllAsync();
@@ -24,13 +28,16 @@ public class GioiThieuController : ControllerBase
     }
 
     [HttpGet("giang-vien/{maGV}")]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
     public async Task<IActionResult> GetByGiangVien(string maGV)
     {
+        if (!_access.IsLecturer(User, maGV)) return Forbid();
         var list = await _service.GetByGiangVienAsync(maGV);
         return Ok(new { success = true, data = list, message = "Lấy danh sách theo giảng viên thành công" });
     }
 
     [HttpGet("{id}")]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
     public async Task<IActionResult> GetById(string id)
     {
         var item = await _service.GetByIdAsync(id);
@@ -41,64 +48,52 @@ public class GioiThieuController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = Roles.GiangVien)]
     public async Task<IActionResult> Create([FromBody] CreateGioiThieuDto dto)
     {
-        try
-        {
-            var created = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = created.MaSo },
-                new { success = true, data = created, message = "Tạo giới thiệu công ty thành công" });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, data = (object?)null, message = ex.Message });
-        }
+        dto.MaGV = User.MaGV() ?? throw new UnauthorizedAccessException();
+        var created = await _service.CreateAsync(dto);
+        return CreatedAtAction(nameof(GetById), new { id = created.MaSo },
+            new { success = true, data = created, message = "Tạo giới thiệu công ty thành công" });
     }
 
     [HttpPost("de-xuat")]
+    [Authorize(Roles = Roles.GiangVien)]
     public async Task<IActionResult> DeXuatMoi([FromBody] CreateDeXuatCongTyDto dto)
     {
-        try
-        {
-            var created = await _service.DeXuatMoiAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = created.MaSo },
-                new { success = true, data = created, message = "Đề xuất công ty mới thành công! Đang chờ Khoa xét duyệt." });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, data = (object?)null, message = ex.Message });
-        }
+        dto.MaGV = User.MaGV() ?? throw new UnauthorizedAccessException();
+        var created = await _service.DeXuatMoiAsync(dto);
+        return CreatedAtAction(nameof(GetById), new { id = created.MaSo },
+            new { success = true, data = created, message = "Đề xuất công ty mới thành công! Đang chờ Khoa xét duyệt." });
     }
 
     [HttpPut("{id}/trang-thai")]
+    [Authorize(Roles = Roles.Khoa)]
     public async Task<IActionResult> UpdateTrangThai(string id, [FromBody] UpdateTrangThaiGioiThieuDto dto)
     {
-        try
-        {
-            await _service.UpdateTrangThaiAsync(id, dto);
-            return Ok(new { success = true, message = "Cập nhật trạng thái kết nối thành công" });
-        }
-        catch (NotFoundException ex)
-        {
-            return NotFound(new { success = false, message = ex.Message });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
+        await _service.UpdateTrangThaiAsync(id, dto);
+        return Ok(new { success = true, message = "Cập nhật trạng thái kết nối thành công" });
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
     public async Task<IActionResult> Delete(string id)
     {
-        try
+        var item = await _service.GetByIdAsync(id);
+        if (item is null)
+            return NotFound(new { success = false, data = (object?)null, message = $"Không tìm thấy mã giới thiệu {id}" });
+
+        // Giảng viên chỉ được hủy đề xuất của chính mình khi Khoa chưa xét duyệt.
+        if (User.IsInRole(Roles.GiangVien))
         {
-            await _service.DeleteAsync(id);
-            return Ok(new { success = true, message = "Xóa thông tin giới thiệu thành công" });
+            if (!_access.IsLecturer(User, item.MaGV))
+                return Forbid();
+
+            if (item.TrangThaiKetNoi != "DangXem")
+                return BadRequest(new { success = false, message = "Chỉ có thể hủy đề xuất đang chờ duyệt." });
         }
-        catch (NotFoundException ex)
-        {
-            return NotFound(new { success = false, message = ex.Message });
-        }
+
+        await _service.DeleteAsync(id);
+        return Ok(new { success = true, message = "Xóa thông tin giới thiệu thành công" });
     }
 }

@@ -1,5 +1,7 @@
+using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.DTOs.PhieuChamDiem;
 using InternshipManagement.BLL.Services.PhieuChamDiem;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InternshipManagement.API.Controllers;
@@ -9,10 +11,12 @@ namespace InternshipManagement.API.Controllers;
 public class PhieuChamDiemController : ControllerBase
 {
     private readonly IPhieuChamDiemService _service;
+    private readonly IResourceAccess _access;
 
-    public PhieuChamDiemController(IPhieuChamDiemService service)
+    public PhieuChamDiemController(IPhieuChamDiemService service, IResourceAccess access)
     {
         _service = service;
+        _access = access;
     }
 
     [HttpGet("tieu-chi")]
@@ -25,6 +29,7 @@ public class PhieuChamDiemController : ControllerBase
     [HttpGet("sinh-vien/{maSV}/dot/{maDot}")]
     public async Task<IActionResult> GetPhieuChamBySinhVien(string maSV, string maDot)
     {
+        if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
         var result = await _service.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
         if (result == null)
         {
@@ -34,30 +39,19 @@ public class PhieuChamDiemController : ControllerBase
     }
 
     [HttpGet("giang-vien/{maGV}/dot/{maDot}")]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
     public async Task<IActionResult> GetDanhSachByGiangVien(string maGV, string maDot)
     {
+        if (!_access.IsLecturer(User, maGV)) return Forbid();
         var result = await _service.GetDanhSachPhieuChamByGiangVienAsync(maGV, maDot);
         return Ok(new { success = true, data = result });
     }
 
     [HttpPost("cham-diem")]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
     public async Task<IActionResult> ChamDiem([FromBody] LuuPhieuChamRequest request)
     {
-        if (!ModelState.IsValid)
-            return BadRequest(new { success = false, message = "Dữ liệu chấm điểm không hợp lệ", errors = ModelState });
-
-        try
-        {
-            var result = await _service.LuuPhieuChamDiemAsync(request);
-            return Ok(new { success = true, data = result, message = "Lưu và chốt điểm CLO thành công!" });
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Lỗi khi lưu phiếu chấm điểm: " + ex.Message });
-        }
+        var result = await _service.LuuPhieuChamDiemAsync(request, User.MaGV(), User.IsStaff());
+        return Ok(new { success = true, data = result, message = "Lưu và chốt điểm CLO thành công!" });
     }
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../../components/Layout'
 import apiClient from '../../services/api'
+import { downloadCsv } from '../../utils/csv'
 
 export default function KhoaCommitteePage() {
   const [rounds, setRounds] = useState([])
@@ -16,7 +17,13 @@ export default function KhoaCommitteePage() {
   useEffect(() => { apiClient.get('/khoa/dot-thuc-tap').then(r => setRounds(r.data || [])).catch(() => {}) }, [])
   useEffect(() => { load() }, [round])
   const rows = useMemo(() => (data?.assessments || []).filter(x => !search || `${x.maSinhVien} ${x.sinhVien} ${x.lop} ${x.dot}`.toLowerCase().includes(search.toLowerCase())), [data, search])
-  const exportCsv = () => { const values = [['MSSV','Sinh viên','Lớp','Đợt','Điểm tổng','Ngày chấm'], ...rows.map(x => [x.maSinhVien,x.sinhVien,x.lop,x.dot,x.tongDiem ?? '',x.ngayCham ? String(x.ngayCham).slice(0,10) : ''])]; const csv = '\uFEFF' + values.map(r => r.map(v => `"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = 'thong-ke-cham-diem-clo.csv'; a.click(); URL.revokeObjectURL(a.href) }
+  const exportCsv = () => {
+    const values = [
+      ['MSSV', 'Sinh viên', 'Lớp', 'Đợt', 'Điểm tổng', 'Ngày chấm'],
+      ...rows.map(x => [x.maSinhVien, x.sinhVien, x.lop, x.dot, x.tongDiem ?? '', x.ngayCham ? String(x.ngayCham).slice(0, 10) : ''])
+    ]
+    downloadCsv('thong-ke-cham-diem-clo.csv', values)
+  }
   const beginEdit = item => { setSelected(item); setScores(Object.fromEntries((data?.criteria||[]).map(c=>[c.maTieuChi,item.chiTiet?.find(x=>x.maTieuChi===c.maTieuChi)?.diemCham??0]))) }
   const saveAssessment = async e => { e.preventDefault(); setSaving(true); setError(''); try { await apiClient.put(`/khoa/clo/${encodeURIComponent(selected.maPhieu)}`,{chiTiet:(data?.criteria||[]).map(c=>({maTieuChi:c.maTieuChi,diemCham:Number(scores[c.maTieuChi]||0)}))}); setSelected(null); await load() } catch(e) { setError(e.response?.data?.message||'Không lưu được phiếu chấm.') } finally { setSaving(false) } }
   return <Layout><div className="khoa-page-heading"><div><span className="eyebrow">HỘI ĐỒNG & ĐẢM BẢO CHẤT LƯỢNG</span><h1>Thống kê chuẩn đầu ra CLO / ABET</h1><p>Tổng hợp phiếu chấm thực tập và kết quả theo từng tiêu chí từ cơ sở dữ liệu.</p></div><div className="khoa-actions"><button className="primary" onClick={exportCsv} disabled={!rows.length}>Xuất CSV</button><button className="small" onClick={() => window.print()}>In / Lưu PDF</button></div></div>

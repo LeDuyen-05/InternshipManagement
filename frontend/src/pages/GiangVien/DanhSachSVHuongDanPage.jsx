@@ -1,47 +1,63 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
-import { useAuth } from '../../contexts/AuthContext.jsx'
+import { useIdentity } from '../../hooks/useIdentity'
+import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 
 export default function DanhSachSVHuongDanPage() {
   const [searchParams] = useSearchParams()
   const { selectedDot, isReadOnly } = useDotThucTap()
-  const { user } = useAuth()
+  const { user, role, maGV } = useIdentity()
 
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [keyword, setKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedSV, setSelectedSV] = useState(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [lecturerInfo, setLecturerInfo] = useState(null)
 
-  // Nếu Cán bộ Khoa bấm nút "Xem DS" từ trang Phân công sang thì có param ?gv=...
-  // Mặc định tài khoản Giảng viên đang đăng nhập lấy từ useAuth()
   const urlMaGV = searchParams.get('gv')
-  const currentMaGV = urlMaGV || user?.maGV || 'GV001'
+  const isStaff = role === 'VT01' || role === 'VT02'
+  const targetMaGV = isStaff && urlMaGV ? urlMaGV : maGV
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(keyword)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [keyword])
+
+  useEffect(() => {
+    if (!targetMaGV) return
+    let active = true
+    gvHuongDanService.getGiangVienTai()
+      .then((resGvTai) => {
+        if (!active) return
+        const rawGvTai = resGvTai?.data?.data ?? resGvTai?.data ?? []
+        if (Array.isArray(rawGvTai)) {
+          const found = rawGvTai.find(
+            (g) => g?.maGV?.toUpperCase() === targetMaGV?.toString().toUpperCase()
+          )
+          if (found) setLecturerInfo(found)
+        }
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [targetMaGV])
 
   const loadData = async () => {
+    if (!targetMaGV) return
     try {
       setLoading(true)
       setError(null)
-      const [resSv, resGvTai] = await Promise.all([
-        gvHuongDanService.getSVTheoGiangVien(currentMaGV, keyword),
-        gvHuongDanService.getGiangVienTai(),
-      ])
-
+      const resSv = await gvHuongDanService.getSVTheoGiangVien(targetMaGV, debouncedKeyword)
       const rawSvList = resSv?.data?.data ?? resSv?.data ?? []
       setList(Array.isArray(rawSvList) ? rawSvList : [])
-
-      const rawGvTai = resGvTai?.data?.data ?? resGvTai?.data ?? []
-      if (Array.isArray(rawGvTai)) {
-        const found = rawGvTai.find(
-          (g) => g?.maGV?.toUpperCase() === currentMaGV?.toString().toUpperCase()
-        )
-        if (found) setLecturerInfo(found)
-      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Không thể tải danh sách sinh viên')
       setList([])
@@ -52,7 +68,11 @@ export default function DanhSachSVHuongDanPage() {
 
   useEffect(() => {
     loadData()
-  }, [currentMaGV, keyword, selectedDot])
+  }, [targetMaGV, debouncedKeyword, selectedDot])
+
+  if (!targetMaGV) {
+    return <NoLinkedAccount />
+  }
 
   // Lọc dữ liệu hiển thị theo tab trạng thái an toàn tuyệt đối
   const safeList = Array.isArray(list) ? list : []
@@ -69,6 +89,42 @@ export default function DanhSachSVHuongDanPage() {
   const avgGpa = totalSV > 0
     ? (safeList.reduce((acc, cur) => acc + (Number(cur?.gpa) || 0), 0) / totalSV).toFixed(2)
     : '0.00'
+  // Xuất danh sách sinh viên ra file Excel
+  const handleExportExcel = () => {
+    if (!list || list.length === 0) {
+      alert('Không có dữ liệu sinh viên để xuất!')
+      return
+    }
+    const rows = list.map((item, idx) => ({
+      STT: idx + 1,
+      'Mã sinh viên': item.sinhVien?.maSV || item.maSV,
+      'Họ và tên': item.sinhVien?.hoTen || item.hoTen,
+      Lớp: item.sinhVien?.lop || item.lop || '-',
+      'Doanh nghiệp tiếp nhận': item.congTy?.tenCongTy || item.tenCongTy || 'Chưa có',
+      'Vị trí': item.congTy?.viTriTuyen || item.viTriTuyen || '-',
+      GPA: item.sinhVien?.gpa || item.gpa || '-',
+      'Trạng thái':
+        item.trangThai === 'DangHuongDan'
+          ? 'Đang hướng dẫn'
+          : item.trangThai === 'HoanThanh'
+          ? 'Đã hoàn thành'
+          : item.trangThai,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 8 },
+      { wch: 18 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'SinhVienHuongDan')
+    XLSX.writeFile(wb, `DS_SinhVien_GV_${targetMaGV}_${selectedDot?.maDot || 'FIT'}.xlsx`)
+  }
 
   return (
     <div className="space-y-6">
@@ -93,14 +149,23 @@ export default function DanhSachSVHuongDanPage() {
           {urlMaGV ? (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
               <span className="material-symbols-outlined text-base text-amber-600">visibility</span>
-              <span>Đang xem danh sách: {lecturerInfo?.hoTen || currentMaGV}</span>
+              <span>Đang xem danh sách: {lecturerInfo?.hoTen || targetMaGV}</span>
             </div>
           ) : (
             <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>GV: {lecturerInfo?.hoTen || 'ThS. Nguyễn Văn An'} ({currentMaGV})</span>
+              <span>GV: {lecturerInfo?.hoTen || user?.tenDangNhap || targetMaGV} ({targetMaGV})</span>
             </div>
           )}
+
+          <button
+            onClick={handleExportExcel}
+            title="Xuất file Excel danh sách sinh viên"
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <span className="material-symbols-outlined text-base">table_chart</span>
+            <span>Xuất Excel</span>
+          </button>
 
           <button
             onClick={loadData}
@@ -121,7 +186,7 @@ export default function DanhSachSVHuongDanPage() {
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-bold text-slate-900">{totalSV}</span>
               <span className="text-xs font-medium text-slate-400">
-                / {lecturerInfo?.soLuongSVHD ?? 10} chỉ tiêu
+                / {lecturerInfo?.chiTieu ?? lecturerInfo?.soLuongSVHD ?? '—'} chỉ tiêu
               </span>
             </div>
           </div>
@@ -161,12 +226,12 @@ export default function DanhSachSVHuongDanPage() {
         {/* KPI 4 */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Điểm Đánh Giá CLO TB</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">GPA Tích Lũy TB Lớp</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-amber-600">8.90</span>
-              <span className="text-xs font-medium text-slate-400">/ 10.0 (Thang điểm 10)</span>
+              <span className="text-2xl font-bold text-amber-600">{avgGpa}</span>
+              <span className="text-xs font-medium text-slate-400">/ 4.00</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">GPA tích lũy lớp: {avgGpa}/4.0</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu từ bảng SINHVIEN (SQL Server)</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <span className="material-symbols-outlined">stars</span>
@@ -392,7 +457,7 @@ export default function DanhSachSVHuongDanPage() {
                           ) : (
                             <Link
                               to={`/giang-vien/cham-diem?sv=${sv.maSV}`}
-                              className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                              className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                               title="Đánh giá và chấm điểm CLO cho sinh viên này"
                             >
                               <span className="material-symbols-outlined text-sm">fact_check</span>

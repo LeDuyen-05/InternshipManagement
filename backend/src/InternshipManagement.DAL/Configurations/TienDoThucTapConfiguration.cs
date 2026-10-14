@@ -11,18 +11,13 @@ public class TienDoThucTapConfiguration : IEntityTypeConfiguration<TienDoThucTap
         builder.ToTable("TIENDOTHUCTAP");
         builder.HasKey(x => x.MaTienDo);
 
-        builder.Property(x => x.MaTienDo).HasColumnName("maTienDo").HasMaxLength(20);
-        builder.Property(x => x.MocThoiGian).HasColumnName("mocThoiGian");
-        builder.Property(x => x.NoiDungBaoCao).HasColumnName("noiDungBaoCao");
-        builder.Property(x => x.NgayNop).HasColumnName("ngayNop");
-        builder.Property(x => x.TrangThaiDuyet).HasColumnName("trangThaiDuyet").HasMaxLength(50);
-        builder.Property(x => x.MaDot).HasColumnName("maDot").HasMaxLength(20);
-        builder.Property(x => x.MaSV).HasColumnName("maSV").HasMaxLength(20);
         builder.Property(x => x.MaTienDo).HasColumnName("maTienDo").HasMaxLength(20).IsRequired();
         builder.Property(x => x.MocThoiGian).HasColumnName("mocThoiGian").IsRequired();
         builder.Property(x => x.NoiDungBaoCao).HasColumnName("noiDungBaoCao");
         builder.Property(x => x.NgayNop).HasColumnName("ngayNop");
         builder.Property(x => x.TrangThaiDuyet).HasColumnName("trangThaiDuyet").HasMaxLength(50).IsRequired();
+        builder.Property(x => x.NhanXetGV).HasColumnName("nhanXetGV").HasMaxLength(500);
+        builder.Property(x => x.NhanXet).HasColumnName("nhanXet").HasMaxLength(1000);
         builder.Property(x => x.MaDot).HasColumnName("maDot").HasMaxLength(20).IsRequired();
         builder.Property(x => x.MaSV).HasColumnName("maSV").HasMaxLength(20).IsRequired();
 
@@ -33,9 +28,5 @@ public class TienDoThucTapConfiguration : IEntityTypeConfiguration<TienDoThucTap
         builder.HasOne(x => x.DotThucTap)
             .WithMany(d => d.TienDoThucTaps)
             .HasForeignKey(x => x.MaDot);
-
-        builder.HasOne(x => x.SinhVien)
-            .WithMany(s => s.TienDoThucTaps)
-            .HasForeignKey(x => x.MaSV);
     }
 }

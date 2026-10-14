@@ -14,8 +14,6 @@ public class ChiTietChamDiemConfiguration : IEntityTypeConfiguration<ChiTietCham
         builder.Property(x => x.DiemCham).HasColumnName("diemCham").HasColumnType("decimal(5,2)");
         builder.Property(x => x.MaPhieu).HasColumnName("maPhieu").HasMaxLength(20);
         builder.Property(x => x.MaTieuChi).HasColumnName("maTieuChi").HasMaxLength(20);
-        builder.Ignore(x => x.MaPhieuCham);
-        builder.Ignore(x => x.NhanXet);
 
 
         builder.HasOne(x => x.PhieuChamDiem)

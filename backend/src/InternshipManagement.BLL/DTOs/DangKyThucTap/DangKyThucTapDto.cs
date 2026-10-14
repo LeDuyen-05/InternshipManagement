@@ -18,6 +18,6 @@ public class CreateDangKyThucTapRequest
 {
     public string MaSV { get; set; } = default!;
     public string MaCongTy { get; set; } = default!;
-    public string MaDot { get; set; } = "DOT02";
+    public string MaDot { get; set; } = default!;
     public int ThuTuUuTien { get; set; } = 1;
 }

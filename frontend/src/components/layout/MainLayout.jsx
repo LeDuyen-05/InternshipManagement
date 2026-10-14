@@ -7,11 +7,14 @@ import Header from './Header'
 export default function MainLayout() {
   const { user } = useAuth()
   
-  // Ánh xạ mã vai trò (VT01, VT02, VT03, VT04) sang Role hiển thị của Sidebar
+  // Ánh xạ mã vai trò (VT01..VT05) sang Role hiển thị của Sidebar
   const mapRole = (maVaiTro) => {
+    if (maVaiTro === 'VT01') return 'QuanTriVien'
+    if (maVaiTro === 'VT02') return 'Khoa'
+    if (maVaiTro === 'VT03') return 'GiangVien'
     if (maVaiTro === 'VT04') return 'SinhVien'
-    if (maVaiTro === 'VT02' || maVaiTro === 'VT01') return 'Khoa'
-    return 'GiangVien' // VT03 hoặc mặc định
+    if (maVaiTro === 'VT05') return 'DaiDienDN'
+    return 'GiangVien'
   }
 
   const [currentRole, setCurrentRole] = useState(() => mapRole(user?.maVaiTro))

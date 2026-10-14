@@ -84,7 +84,7 @@ export default function DuyetGioiThieuPage() {
   return (
     <div className="space-y-6">
       {/* Page Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mb-1">
             <span>FIT Portal</span>
@@ -113,7 +113,7 @@ export default function DuyetGioiThieuPage() {
 
       {/* Thẻ thống kê nhanh */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
             <span className="material-symbols-outlined text-[22px]">corporate_fare</span>
           </div>
@@ -123,7 +123,7 @@ export default function DuyetGioiThieuPage() {
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-amber-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-4 rounded-xl border border-amber-200/80 shadow-sm flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
             <span className="material-symbols-outlined text-[22px]">pending_actions</span>
           </div>
@@ -133,7 +133,7 @@ export default function DuyetGioiThieuPage() {
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-emerald-200/80 shadow-xs flex items-center gap-4">
+        <div className="bg-white p-4 rounded-xl border border-emerald-200/80 shadow-sm flex items-center gap-4">
           <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
             <span className="material-symbols-outlined text-[22px]">check_circle</span>
           </div>
@@ -146,20 +146,20 @@ export default function DuyetGioiThieuPage() {
 
       {/* Alerts */}
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-rose-600">error</span>
           <span>{error}</span>
         </div>
       )}
       {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-emerald-600">check_circle</span>
           <span>{successMsg}</span>
         </div>
       )}
 
       {/* Bảng danh sách & Bộ lọc */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
         {/* Thanh lọc trạng thái */}
         <div className="flex items-center gap-2 border-b border-slate-100 pb-4 overflow-x-auto">
           <span className="text-xs font-semibold text-slate-500 mr-2">Bộ lọc:</span>
@@ -175,7 +175,7 @@ export default function DuyetGioiThieuPage() {
               onClick={() => setFilterStatus(tab.key)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                 filterStatus === tab.key
-                  ? 'bg-blue-700 text-white shadow-xs'
+                  ? 'bg-blue-700 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -237,7 +237,7 @@ export default function DuyetGioiThieuPage() {
                           <button
                             type="button"
                             onClick={() => handleUpdateStatus(item.maSo, 'DaDuyet')}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition shadow-xs"
+                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition shadow-sm"
                           >
                             <span className="material-symbols-outlined text-[16px]">check</span>
                             <span>Phê duyệt</span>

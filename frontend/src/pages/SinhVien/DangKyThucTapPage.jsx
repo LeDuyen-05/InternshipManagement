@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useAuth } from '../../contexts/AuthContext'
+import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
+import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import { dangKyThucTapService } from '../../services/dangKyThucTapService'
 
 export default function DangKyThucTapPage() {
-  const { user } = useAuth()
+  const { user, maSV: currentMaSV } = useIdentity()
   const { selectedDot } = useDotThucTap()
-  const currentMaSV = user?.maSV || (user?.tenDangNhap?.toLowerCase().startsWith('sv') ? user.tenDangNhap.toUpperCase() : 'SV001')
-  const currentMaDot = selectedDot?.maDot || 'DOT02'
+  const currentMaDot = selectedDot?.maDot || ''
 
   const [activeTab, setActiveTab] = useState('companies') // 'companies' | 'my-applications'
   const [companies, setCompanies] = useState([])
@@ -61,11 +61,14 @@ export default function DangKyThucTapPage() {
 
   // Mở modal đăng ký cho 1 công ty
   const handleOpenApply = (company) => {
+    if (myApplications.length >= 3) {
+      showToast('Bạn đã đăng ký đủ tối đa 3 nguyện vọng trong đợt này. Vui lòng hủy bớt nếu muốn đổi công ty khác.', 'warning')
+      return
+    }
     setSelectedCompany(company)
-    // Tự động tính số thứ tự ưu tiên tiếp theo
-    const nextPriority = myApplications.length > 0
-      ? Math.max(...myApplications.map((a) => a.thuTuUuTien || 1)) + 1
-      : 1
+    // Tự động tìm thứ tự ưu tiên còn trống nhỏ nhất trong khoảng [1, 2, 3]
+    const usedPriorities = myApplications.map((a) => a.thuTuUuTien)
+    const nextPriority = [1, 2, 3].find((p) => !usedPriorities.includes(p)) || 1
     setApplyPriority(nextPriority)
     setApplyModalOpen(true)
   }
@@ -75,13 +78,19 @@ export default function DangKyThucTapPage() {
     e.preventDefault()
     if (!selectedCompany) return
 
+    const priorityNum = parseInt(applyPriority, 10)
+    if (isNaN(priorityNum) || priorityNum < 1 || priorityNum > 3) {
+      showToast('Thứ tự ưu tiên nguyện vọng phải từ 1 đến 3!', 'error')
+      return
+    }
+
     setIsSubmittingApply(true)
     try {
       await dangKyThucTapService.dangKyThucTap({
         maSV: currentMaSV,
         maCongTy: selectedCompany.maCongTy,
         maDot: currentMaDot,
-        thuTuUuTien: parseInt(applyPriority, 10),
+        thuTuUuTien: priorityNum,
       })
       showToast(`Đã nộp nguyện vọng vào "${selectedCompany.tenCongTy}" thành công!`)
       setApplyModalOpen(false)
@@ -157,6 +166,10 @@ export default function DangKyThucTapPage() {
     return myApplications.some((a) => a.maCongTy === maCongTy)
   }
 
+  if (!currentMaSV) {
+    return <NoLinkedAccount type="sinh viên" />
+  }
+
   return (
     <div className="flex flex-col gap-6">
       {/* Toast Notification */}
@@ -180,7 +193,7 @@ export default function DangKyThucTapPage() {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            HỌC VỤ & ĐĂNG KÝ THỰC TẬP • ĐỢT 1 NĂM 2026
+            HỌC VỤ & ĐĂNG KÝ THỰC TẬP • {selectedDot?.tenDot || 'ĐANG MỞ ĐĂNG KÝ'}
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Đăng ký Nguyện vọng Thực tập & Khám phá Doanh nghiệp
@@ -358,13 +371,13 @@ export default function DangKyThucTapPage() {
                     </h3>
                     <div className="text-xs font-semibold text-blue-800 mt-1 flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-[16px]">work</span>
-                      {c.viTriTuyen || 'Thực tập sinh Công nghệ'}
+                      {c.viTriTuyen || 'Thực tập sinh'}
                     </div>
 
                     {/* Timeline */}
                     <div className="text-xs text-slate-500 mt-2 flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-[16px] text-slate-400">calendar_month</span>
-                      Thời gian: {c.thoiGian || 'Học kỳ 1 năm 2026'}
+                      Thời gian: {c.thoiGian || '—'}
                     </div>
 
                     {/* Requirements box */}
@@ -373,7 +386,7 @@ export default function DangKyThucTapPage() {
                         Yêu cầu & Tiêu chí:
                       </div>
                       <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed">
-                        {c.yeuCau || 'Chăm chỉ, ham học hỏi, có kiến thức cơ bản về lập trình.'}
+                        {c.yeuCau || '—'}
                       </p>
                     </div>
                   </div>
@@ -389,10 +402,16 @@ export default function DangKyThucTapPage() {
                     ) : (
                       <button
                         onClick={() => handleOpenApply(c)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors"
+                        disabled={myApplications.length >= 3}
+                        className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
+                          myApplications.length >= 3
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            : 'bg-blue-700 hover:bg-blue-800 text-white'
+                        }`}
+                        title={myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng'}
                       >
                         <span className="material-symbols-outlined text-[16px]">send</span>
-                        Nộp nguyện vọng
+                        {myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
                       </button>
                     )}
                   </div>
@@ -476,7 +495,7 @@ export default function DangKyThucTapPage() {
                           <div className="text-xs text-slate-500 mt-0.5">{app.viTriTuyen}</div>
                         </td>
                         <td className="px-5 py-4 text-xs font-medium text-slate-600">
-                          {app.tenDot || 'Đợt 1 năm 2026'}
+                          {app.tenDot || selectedDot?.tenDot || '—'}
                         </td>
                         <td className="px-5 py-4 text-xs text-slate-500">
                           {app.ngayDangKy ? new Date(app.ngayDangKy).toLocaleDateString('vi-VN') : '—'}
@@ -541,13 +560,18 @@ export default function DangKyThucTapPage() {
                 </label>
                 <select
                   value={applyPriority}
-                  onChange={(e) => setApplyPriority(e.target.value)}
+                  onChange={(e) => setApplyPriority(parseInt(e.target.value, 10))}
                   className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:border-blue-600 focus:ring-1 focus:ring-blue-600 focus:outline-none bg-white"
                 >
-                  <option value={1}>Nguyện vọng 1 (Ưu tiên cao nhất)</option>
-                  <option value={2}>Nguyện vọng 2</option>
-                  <option value={3}>Nguyện vọng 3</option>
-                  <option value={4}>Nguyện vọng 4</option>
+                  <option value={1} disabled={myApplications.some((a) => a.thuTuUuTien === 1)}>
+                    Nguyện vọng 1 (Ưu tiên cao nhất) {myApplications.some((a) => a.thuTuUuTien === 1) ? '— Đã dùng' : ''}
+                  </option>
+                  <option value={2} disabled={myApplications.some((a) => a.thuTuUuTien === 2)}>
+                    Nguyện vọng 2 {myApplications.some((a) => a.thuTuUuTien === 2) ? '— Đã dùng' : ''}
+                  </option>
+                  <option value={3} disabled={myApplications.some((a) => a.thuTuUuTien === 3)}>
+                    Nguyện vọng 3 {myApplications.some((a) => a.thuTuUuTien === 3) ? '— Đã dùng' : ''}
+                  </option>
                 </select>
                 <p className="text-xs text-slate-500 mt-1">
                   Hệ thống sẽ ưu tiên xét tuyển theo thứ tự từ Nguyện vọng 1 trở đi.

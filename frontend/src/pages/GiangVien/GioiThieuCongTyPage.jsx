@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { gioiThieuService } from '../../services/gioiThieuService'
+import { useIdentity } from '../../hooks/useIdentity'
 
 export default function GioiThieuCongTyPage() {
+  const { maGV } = useIdentity()
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
 
-  // Giả lập tài khoản giảng viên hiện tại
-  const currentMaGV = 'GV001'
+  const currentMaGV = maGV
 
   // Form đề xuất công ty
   const [tenCongTy, setTenCongTy] = useState('')
@@ -27,7 +28,13 @@ export default function GioiThieuCongTyPage() {
     try {
       setLoading(true)
       setError(null)
-      const res = await gioiThieuService.getAll()
+      if (!currentMaGV) {
+        setList([])
+        setError('Không xác định được mã giảng viên của tài khoản đang đăng nhập.')
+        return
+      }
+
+      const res = await gioiThieuService.getByGiangVien(currentMaGV)
       if (res.data?.success) {
         setList(res.data.data || [])
       } else {
@@ -42,7 +49,7 @@ export default function GioiThieuCongTyPage() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [currentMaGV])
 
   // Hàm bóc tách thông minh từ văn bản JD
   const parseJdText = (text) => {
@@ -51,14 +58,14 @@ export default function GioiThieuCongTyPage() {
     setParsingJd(true)
     try {
       // 1. Tìm tên công ty (tìm các dòng có từ "Công ty", "Company", "Tập đoàn")
-      const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,\.]+)/i)
+      const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,.]+)/i)
       if (companyMatch) {
         setTenCongTy(companyMatch[0].trim())
       }
 
       // 2. Tìm vị trí tuyển dụng (tìm các từ Intern, Developer, Kỹ sư, Lập trình viên)
       const positionMatch = text.match(/(?:Vị trí|Position|Tuyển dụng|Tuyển)\s*:\s*([^\n\r]+)/i) ||
-                            text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,\.]+)/i)
+                            text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,.]+)/i)
       if (positionMatch) {
         setViTriTuyen(positionMatch[1]?.trim() || positionMatch[0]?.trim())
       }
@@ -119,7 +126,6 @@ export default function GioiThieuCongTyPage() {
       setSuccessMsg('')
 
       const res = await gioiThieuService.deXuatMoi({
-        maGV: currentMaGV,
         tenCongTy: tenCongTy.trim(),
         viTriTuyen: viTriTuyen.trim(),
         soLuongNhan: Number(soLuongNhan) || 1,
@@ -192,7 +198,7 @@ export default function GioiThieuCongTyPage() {
   return (
     <div className="space-y-6">
       {/* Page Title & Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mb-1">
             <span>FIT Portal</span>
@@ -222,13 +228,13 @@ export default function GioiThieuCongTyPage() {
 
       {/* Alerts */}
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-rose-600">error</span>
           <span>{error}</span>
         </div>
       )}
       {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-emerald-600">check_circle</span>
           <span>{successMsg}</span>
         </div>
@@ -237,7 +243,7 @@ export default function GioiThieuCongTyPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* CỘT TRÁI (5 phần): FORM NHẬP THÔNG TIN CÔNG TY MỚI */}
         <div className="lg:col-span-5">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 sticky top-24">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 sticky top-24">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-blue-700">add_business</span>
@@ -341,7 +347,7 @@ export default function GioiThieuCongTyPage() {
 
         {/* CỘT PHẢI (7 phần): BẢNG DANH SÁCH DOANH NGHIỆP ĐÃ ĐỀ XUẤT */}
         <div className="lg:col-span-7">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -409,7 +415,7 @@ export default function GioiThieuCongTyPage() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           {/* Giảng viên chỉ được hủy đề xuất của mình khi chưa duyệt */}
-                          {item.trangThaiKetNoi !== 'DaDuyet' ? (
+                          {item.maGV?.toUpperCase() === currentMaGV?.toUpperCase() && item.trangThaiKetNoi === 'DangXem' ? (
                             <button
                               type="button"
                               onClick={() => handleDelete(item.maSo)}
@@ -435,7 +441,7 @@ export default function GioiThieuCongTyPage() {
 
       {/* POPUP (MODAL) BÓC TÁCH FILE JD HOẶC PASTE VĂN BẢN */}
       {showJdModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">

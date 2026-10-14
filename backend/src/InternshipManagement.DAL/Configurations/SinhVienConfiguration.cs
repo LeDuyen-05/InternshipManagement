@@ -13,9 +13,10 @@ public class SinhVienConfiguration : IEntityTypeConfiguration<SinhVien>
 
         builder.Property(x => x.MaSV).HasMaxLength(20);
         builder.Property(x => x.HoTen).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Lop).HasMaxLength(20);
+        builder.Property(x => x.Lop).HasMaxLength(50);
+        builder.Property(x => x.KhoaHoc).HasMaxLength(20);
         builder.Property(x => x.ChuyenNganh).HasMaxLength(100);
-        builder.Property(x => x.CongNghe).HasMaxLength(255);
+        builder.Property(x => x.CongNghe).HasMaxLength(500);
         builder.Property(x => x.KyNang).HasMaxLength(500);
         builder.Property(x => x.DuAnDaThucHien).HasMaxLength(1000);
         builder.Property(x => x.Gpa)

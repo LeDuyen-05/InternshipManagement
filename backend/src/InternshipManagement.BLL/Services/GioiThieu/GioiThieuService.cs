@@ -41,7 +41,17 @@ public class GioiThieuService : IGioiThieuService
         if (errors.Count > 0)
             throw new ArgumentException(string.Join(" ", errors));
 
-        var maSo = "GT" + DateTime.UtcNow.ToString("yyMMddHHmmss");
+        if (!await _repository.ExistsGiangVienAsync(dto.MaGV))
+            throw new ArgumentException($"Giảng viên {dto.MaGV} không tồn tại.");
+
+        var congTy = await _repository.GetCongTyByIdAsync(dto.MaCongTy);
+        if (congTy == null)
+            throw new ArgumentException($"Công ty {dto.MaCongTy} không tồn tại.");
+
+        if (await _repository.ExistsAsync(dto.MaGV, dto.MaCongTy))
+            throw new InvalidOperationException($"Giảng viên đã giới thiệu công ty '{congTy.TenCongTy}' trước đó.");
+
+        var maSo = DAL.Common.IdGenerator.New("GT");
 
         var entity = new InternshipManagement.DAL.Entities.GioiThieu
         {
@@ -53,7 +63,10 @@ public class GioiThieuService : IGioiThieuService
         };
 
         await _repository.AddAsync(entity);
-        return ToDto(entity);
+        await _repository.SaveChangesAsync();
+
+        var reloaded = await _repository.GetByIdWithDetailsAsync(maSo);
+        return ToDto(reloaded ?? entity);
     }
 
     public async Task<GioiThieuDto> DeXuatMoiAsync(CreateDeXuatCongTyDto dto)
@@ -68,7 +81,7 @@ public class GioiThieuService : IGioiThieuService
         if (isDuplicate)
             throw new ArgumentException($"Doanh nghiệp \"{dto.TenCongTy.Trim()}\" đã tồn tại trong hệ thống. Vui lòng kiểm tra lại.");
 
-        var maCongTy = "CT" + DateTime.UtcNow.ToString("yyMMddHHmmss");
+        var maCongTy = DAL.Common.IdGenerator.New("CT");
 
         var congTyMoi = new CongTy
         {
@@ -97,6 +110,25 @@ public class GioiThieuService : IGioiThieuService
 
         entity.TrangThaiKetNoi = dto.TrangThaiKetNoi;
         _repository.Update(entity);
+
+        // Đồng bộ trạng thái vào bảng CONGTY để thuật toán AI Top-K nhận diện được doanh nghiệp đã được phê duyệt
+        if (!string.IsNullOrEmpty(entity.MaCongTy))
+        {
+            var congTy = await _repository.GetCongTyByIdAsync(entity.MaCongTy);
+            if (congTy != null)
+            {
+                if (dto.TrangThaiKetNoi == "DaDuyet")
+                {
+                    congTy.TrangThai = "DaDuyet";
+                }
+                else if (dto.TrangThaiKetNoi == "TuChoi")
+                {
+                    congTy.TrangThai = "TuChoi";
+                }
+                _repository.UpdateCongTy(congTy);
+            }
+        }
+
         await _repository.SaveChangesAsync();
     }
 

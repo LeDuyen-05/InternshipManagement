@@ -14,17 +14,10 @@ public class ThongBaoController(AdminService service) : ControllerBase
         return Ok(await service.NotificationsAsync());
     }
 
-    [HttpPost, Authorize(Roles = "Khoa,QuanTriVien")]
+    [HttpPost, Authorize(Roles = "Khoa")]
     public async Task<IActionResult> SendNotification([FromBody] SendNotificationRequest r)
     {
-        try
-        {
-            await service.SendNotificationAsync(r, User.FindFirst("sub")?.Value);
-            return Ok(new { success = true, message = "Gửi thông báo thành công." });
-        }
-        catch (Exception e)
-        {
-            return BadRequest(new { success = false, message = e.Message });
-        }
+        await service.SendNotificationAsync(r, User.FindFirst("sub")?.Value);
+        return Ok(new { success = true, message = "Gửi thông báo thành công." });
     }
 }

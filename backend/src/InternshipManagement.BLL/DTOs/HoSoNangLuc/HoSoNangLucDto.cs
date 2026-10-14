@@ -5,8 +5,8 @@ public class HoSoNangLucDto
     public string MaHoSo { get; set; } = default!;
     public string MaSinhVien { get; set; } = default!;
     public string HoTen { get; set; } = default!;
-    public string Lop { get; set; } = default!;
-    public string KhoaHoc { get; set; } = default!;
+    public string? Lop { get; set; }
+    public string? KhoaHoc { get; set; }
     public double? Gpa { get; set; }
     public string? KyNang { get; set; }
     public string? ChuyenNganh { get; set; }

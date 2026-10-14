@@ -1,4 +1,5 @@
 using InternshipManagement.BLL.DTOs.GVHuongDan;
+using InternshipManagement.BLL.DTOs.GiangVien;
 using InternshipManagement.DAL.Repositories;
 
 namespace InternshipManagement.BLL.Services.GVHuongDan;
@@ -23,7 +24,7 @@ public class GVHuongDanService : IGVHuongDanService
             Lop = g.SinhVien.Lop,
             ChuyenNganh = g.SinhVien.ChuyenNganh,
             Gpa = g.SinhVien.Gpa,
-            TenCongTy = g.SinhVien.PhanBoThucTaps.FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
+            TenCongTy = g.SinhVien.PhanBoThucTaps.Where(p => p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
             NgayPC = g.NgayPC,
             TrangThai = g.TrangThai
         }).ToList();
@@ -39,7 +40,7 @@ public class GVHuongDanService : IGVHuongDanService
             Lop = s.Lop,
             ChuyenNganh = s.ChuyenNganh,
             Gpa = s.Gpa,
-            TenCongTy = s.PhanBoThucTaps.FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa có công ty"
+            TenCongTy = s.PhanBoThucTaps.Where(p => p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa có công ty"
         }).ToList();
     }
 
@@ -52,7 +53,7 @@ public class GVHuongDanService : IGVHuongDanService
             HoTen = gv.HoTen,
             ChuyenMon = gv.ChuyenMon,
             SoLuongHienTai = gv.GVHuongDans.Count,
-            SoLuongSVHD = gv.SoLuongSVHD
+            ChiTieu = gv.ChiTieuHD
         }).ToList();
     }
 
@@ -71,7 +72,7 @@ public class GVHuongDanService : IGVHuongDanService
             throw new KeyNotFoundException($"Không tìm thấy sinh viên có mã {request.MaSV}.");
 
         var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGV);
-        var quota = gv.SoLuongSVHD;
+        var quota = gv.ChiTieuHD;
         if (count >= quota)
             throw new InvalidOperationException($"Giảng viên {gv.HoTen} đã đạt hạn ngạch tối đa ({count}/{quota} SV).");
 
@@ -97,7 +98,7 @@ public class GVHuongDanService : IGVHuongDanService
             throw new KeyNotFoundException($"Không tìm thấy giảng viên có mã {request.MaGV}.");
 
         var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGV);
-        var quota = gv.SoLuongSVHD;
+        var quota = gv.ChiTieuHD;
         var slotsLeft = quota - count;
 
         if (slotsLeft <= 0)
@@ -151,7 +152,7 @@ public class GVHuongDanService : IGVHuongDanService
             throw new KeyNotFoundException($"Không tìm thấy giảng viên mới {request.MaGVMoi}.");
 
         var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGVMoi);
-        var quota = gvMoi.SoLuongSVHD;
+        var quota = gvMoi.ChiTieuHD;
         if (count >= quota)
             throw new InvalidOperationException($"Giảng viên mới {gvMoi.HoTen} đã đạt quota tối đa.");
 
@@ -176,6 +177,153 @@ public class GVHuongDanService : IGVHuongDanService
         return await _repository.CapNhatChiTieuAsync(maGV, soLuongMoi);
     }
 
+    public async Task<GiangVienProfileDto?> GetProfileAsync(string maGV)
+    {
+        var gv = await _repository.GetGiangVienByIdAsync(maGV);
+        if (gv == null) return null;
+
+        var count = await _repository.CountSVHienTaiByGiangVienAsync(maGV);
+
+        return new GiangVienProfileDto
+        {
+            MaGV = gv.MaGV,
+            HoTen = gv.HoTen,
+            ChuyenMon = gv.ChuyenMon,
+            SoLuongSVHD = gv.SoLuongSVHD,
+            SoLuongDangHuongDan = count,
+            BoMon = "Công nghệ phần mềm",
+            HocVi = "Thạc sĩ"
+        };
+    }
+
+    public async Task<bool> UpdateProfileAsync(string maGV, UpdateGiangVienProfileRequest request)
+    {
+        var gv = await _repository.GetGiangVienByIdAsync(maGV);
+        if (gv == null) return false;
+
+        return await _repository.UpdateGiangVienChuyenMonAsync(maGV, request.ChuyenMon);
+    }
+
+    public async Task<TuDongPhanCongResult> DeXuatPhanCongTuDongAsync()
+    {
+        var svChuaPhanCong = await _repository.GetDanhSachSVChuaPhanCongAsync();
+        var dsGiangVien = await _repository.GetDanhSachGiangVienKemTaiAsync();
+
+        // Tính số slot còn trống của từng GV
+        var gvSlots = dsGiangVien.Select(gv => new
+        {
+            GiangVien = gv,
+            AvailableSlots = gv.ChiTieuHD - gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan"),
+            CurrentLoad = gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan")
+        })
+        .Where(x => x.AvailableSlots > 0)
+        .ToList();
+
+        var result = new TuDongPhanCongResult
+        {
+            TongSoSVChuaPhanCong = svChuaPhanCong.Count
+        };
+
+        if (svChuaPhanCong.Count == 0 || gvSlots.Count == 0)
+        {
+            result.SoLuongKhongTheGhep = svChuaPhanCong.Count;
+            result.SinhVienChuaTheGhep = svChuaPhanCong.Select(s => $"{s.MaSV} - {s.HoTen}").ToList();
+            return result;
+        }
+
+        // Tạo bản đồ theo dõi số slot còn lại trong quá trình ghép
+        var remainingCapacity = gvSlots.ToDictionary(x => x.GiangVien.MaGV, x => x.AvailableSlots);
+
+        foreach (var sv in svChuaPhanCong)
+        {
+            var tenCongTy = sv.PhanBoThucTaps.Where(p => p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy;
+            string? matchedMaGV = null;
+            string lyDo = "Cân bằng tải ngẫu nhiên";
+
+            // Bước 1: Ưu tiên trùng khớp Chuyên môn ngành học
+            var svMajor = sv.ChuyenNganh ?? sv.Lop ?? string.Empty;
+            var bestMatchGv = gvSlots
+                .Where(x => remainingCapacity[x.GiangVien.MaGV] > 0)
+                .FirstOrDefault(x => !string.IsNullOrEmpty(x.GiangVien.ChuyenMon) &&
+                                     !string.IsNullOrEmpty(svMajor) &&
+                                     (x.GiangVien.ChuyenMon.Contains(svMajor, StringComparison.OrdinalIgnoreCase) ||
+                                      svMajor.Contains(x.GiangVien.ChuyenMon, StringComparison.OrdinalIgnoreCase)));
+
+            if (bestMatchGv != null)
+            {
+                matchedMaGV = bestMatchGv.GiangVien.MaGV;
+                lyDo = $"Phù hợp chuyên môn ({bestMatchGv.GiangVien.ChuyenMon})";
+            }
+            else
+            {
+                // Bước 2: Cân bằng tải - Chọn giảng viên có số slot còn trống nhiều nhất
+                var leastLoaded = gvSlots
+                    .Where(x => remainingCapacity[x.GiangVien.MaGV] > 0)
+                    .OrderByDescending(x => remainingCapacity[x.GiangVien.MaGV])
+                    .FirstOrDefault();
+
+                if (leastLoaded != null)
+                {
+                    matchedMaGV = leastLoaded.GiangVien.MaGV;
+                    lyDo = "Cân bằng chỉ tiêu giảng viên";
+                }
+            }
+
+            if (matchedMaGV != null)
+            {
+                var gvEntity = gvSlots.First(x => x.GiangVien.MaGV == matchedMaGV).GiangVien;
+                result.DanhSachDeXuat.Add(new TuDongPhanCongPreviewItem
+                {
+                    MaSV = sv.MaSV,
+                    HoTenSV = sv.HoTen,
+                    Lop = sv.Lop ?? "CNTT",
+                    TenCongTy = tenCongTy ?? "Chưa phân bổ",
+                    MaGV = gvEntity.MaGV,
+                    HoTenGV = gvEntity.HoTen,
+                    ChuyenMonGV = gvEntity.ChuyenMon ?? "Chung",
+                    LyDoGhep = lyDo
+                });
+
+                remainingCapacity[matchedMaGV]--;
+            }
+            else
+            {
+                result.SinhVienChuaTheGhep.Add($"{sv.MaSV} - {sv.HoTen} (Hết chỉ tiêu toàn Khoa)");
+            }
+        }
+
+        result.SoLuongGhepThanhCong = result.DanhSachDeXuat.Count;
+        result.SoLuongKhongTheGhep = result.SinhVienChuaTheGhep.Count;
+
+        return result;
+    }
+
+    public async Task<PhanCongHangLoatResult> XacNhanPhanCongTuDongAsync(TuDongPhanCongConfirmRequest request)
+    {
+        var finalResult = new PhanCongHangLoatResult();
+
+        return await _repository.ExecuteInTransactionAsync(async () =>
+        {
+            foreach (var item in request.DanhSachPhanCong)
+            {
+                try
+                {
+                    var entity = await _repository.PhanCongAsync(item.MaGV, item.MaSV);
+                    finalResult.ThanhCong.Add(ToDto(entity));
+                }
+                catch (Exception ex)
+                {
+                    finalResult.KhongThanhCong.Add(new PhanCongKhongThanhCongDto
+                    {
+                        MaSV = item.MaSV,
+                        LyDo = ex.Message
+                    });
+                }
+            }
+            return finalResult;
+        });
+    }
+
     private static SVHuongDanDto ToDto(DAL.Entities.GVHuongDan record) => new()
     {
         MaSo = record.MaSo,
@@ -184,7 +332,7 @@ public class GVHuongDanService : IGVHuongDanService
         Lop = record.SinhVien?.Lop,
         ChuyenNganh = record.SinhVien?.ChuyenNganh,
         Gpa = record.SinhVien?.Gpa,
-        TenCongTy = record.SinhVien?.PhanBoThucTaps.FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
+        TenCongTy = record.SinhVien?.PhanBoThucTaps.Where(p => p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
         NgayPC = record.NgayPC,
         TrangThai = record.TrangThai
     };

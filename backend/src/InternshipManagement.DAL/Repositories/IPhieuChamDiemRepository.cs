@@ -8,4 +8,6 @@ public interface IPhieuChamDiemRepository : IRepository<PhieuChamDiem>
     Task<PhieuChamDiem?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot);
     Task<IReadOnlyList<PhieuChamDiem>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot);
     Task<PhieuChamDiem> LuuPhieuChamDiemAsync(PhieuChamDiem phieu, IEnumerable<ChiTietChamDiem> chiTiets);
+    Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV);
+    Task<DotThucTap?> GetDotThucTapAsync(string maDot);
 }

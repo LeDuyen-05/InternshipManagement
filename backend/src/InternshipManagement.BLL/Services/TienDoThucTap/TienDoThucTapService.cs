@@ -23,6 +23,8 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
+            NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
             TenDot = e.DotThucTap?.TenDot,
             MaSV = e.MaSV,
@@ -40,6 +42,8 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
+            NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
             TenDot = e.DotThucTap?.TenDot,
             MaSV = e.MaSV,
@@ -57,6 +61,8 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
+            NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
             TenDot = e.DotThucTap?.TenDot,
             MaSV = e.MaSV,
@@ -76,6 +82,8 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
+            NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
             TenDot = e.DotThucTap?.TenDot,
             MaSV = e.MaSV,
@@ -83,66 +91,65 @@ public class TienDoThucTapService : ITienDoThucTapService
         };
     }
 
-    public async Task<bool> DuyetTienDoAsync(string maTienDo, DuyetTienDoRequest request)
+    public async Task<bool> DuyetTienDoAsync(string maTienDo, DuyetTienDoRequest request, string? actorMaGV = null, bool isStaff = false)
     {
-        var validStatuses = new[] { "ChuaNop", "DaNop", "DaDuyet", "YeuCauSua" };
+        var validStatuses = new[] { "DaDuyet", "YeuCauSua" };
         if (!validStatuses.Contains(request.TrangThaiDuyet))
         {
-            throw new ArgumentException("Trạng thái duyệt không hợp lệ.");
+            throw new ArgumentException("Trạng thái duyệt không hợp lệ. Chỉ chấp nhận: DaDuyet, YeuCauSua.");
         }
 
-        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet);
+        var entity = await _tienDoThucTapRepository.GetByIdAsync(maTienDo)
+            ?? throw new KeyNotFoundException("Không tìm thấy báo cáo tiến độ.");
+
+        if (entity.TrangThaiDuyet != "DaNop")
+        {
+            throw new InvalidOperationException("Chỉ có thể duyệt hoặc yêu cầu sửa báo cáo khi ở trạng thái Đã nộp.");
+        }
+
+        if (!isStaff)
+        {
+            if (string.IsNullOrWhiteSpace(actorMaGV) || !await _tienDoThucTapRepository.IsSupervisorAsync(actorMaGV, entity.MaSV))
+            {
+                throw new UnauthorizedAccessException("Giảng viên không phụ trách hướng dẫn sinh viên này.");
+            }
+        }
+
+        var nhanXet = request.NhanXet ?? request.NhanXetGV;
+        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet, nhanXet);
     }
 
-    public async Task<TienDoThucTapDto> NopBaoCaoTienDoAsync(NopBaoCaoRequest request)
+    public async Task<TienDoThucTapDto> NopBaoCaoTienDoAsync(NopBaoCaoRequest request, string? userMaSV = null)
     {
+        if (string.IsNullOrWhiteSpace(request.MaTienDo))
+        {
+            throw new ArgumentException("Mã tiến độ không được để trống.", nameof(request.MaTienDo));
+        }
+
         if (string.IsNullOrWhiteSpace(request.NoiDungBaoCao))
         {
-            throw new ArgumentException("Nội dung báo cáo tiến độ không được để trống.");
+            throw new ArgumentException("Nội dung báo cáo tiến độ không được để trống.", nameof(request.NoiDungBaoCao));
         }
 
-        TienDoEntity entity;
+        var existing = await _tienDoThucTapRepository.GetByIdAsync(request.MaTienDo)
+            ?? throw new KeyNotFoundException($"Không tìm thấy mốc báo cáo tiến độ có mã {request.MaTienDo}.");
 
-        if (!string.IsNullOrWhiteSpace(request.MaTienDo))
+        var currentMaSV = userMaSV ?? request.MaSV;
+        if (!string.Equals(existing.MaSV, currentMaSV, StringComparison.OrdinalIgnoreCase))
         {
-            var existing = await _tienDoThucTapRepository.GetByIdAsync(request.MaTienDo);
-            if (existing != null)
-            {
-                existing.NoiDungBaoCao = request.NoiDungBaoCao;
-                existing.NgayNop = DateTime.Now;
-                existing.TrangThaiDuyet = "DaNop"; // Đã nộp, chờ giảng viên phê duyệt
-                entity = await _tienDoThucTapRepository.UpdateAsync(existing);
-            }
-            else
-            {
-                entity = new TienDoEntity
-                {
-                    MaTienDo = request.MaTienDo,
-                    MaSV = request.MaSV,
-                    MaDot = request.MaDot,
-                    MocThoiGian = request.MocThoiGian != default ? request.MocThoiGian : DateTime.Now,
-                    NoiDungBaoCao = request.NoiDungBaoCao,
-                    NgayNop = DateTime.Now,
-                    TrangThaiDuyet = "DaNop"
-                };
-                entity = await _tienDoThucTapRepository.CreateAsync(entity);
-            }
+            throw new UnauthorizedAccessException("Bạn không có quyền nộp báo cáo cho sinh viên khác.");
         }
-        else
+
+        if (existing.TrangThaiDuyet is not ("ChuaNop" or "YeuCauSua"))
         {
-            var newId = "TD" + DateTime.Now.ToString("yyMMddHHmmss");
-            entity = new TienDoEntity
-            {
-                MaTienDo = newId,
-                MaSV = request.MaSV,
-                MaDot = request.MaDot,
-                MocThoiGian = request.MocThoiGian != default ? request.MocThoiGian : DateTime.Now,
-                NoiDungBaoCao = request.NoiDungBaoCao,
-                NgayNop = DateTime.Now,
-                TrangThaiDuyet = "DaNop"
-            };
-            entity = await _tienDoThucTapRepository.CreateAsync(entity);
+            throw new InvalidOperationException("Báo cáo đã nộp/đã duyệt, không thể sửa.");
         }
+
+        existing.NoiDungBaoCao = request.NoiDungBaoCao.Trim();
+        existing.NgayNop = DateTime.Now;
+        existing.TrangThaiDuyet = "DaNop";
+
+        var entity = await _tienDoThucTapRepository.UpdateAsync(existing);
 
         return new TienDoThucTapDto
         {
@@ -154,6 +161,8 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = entity.NoiDungBaoCao,
             NgayNop = entity.NgayNop,
             TrangThaiDuyet = entity.TrangThaiDuyet,
+            NhanXet = entity.NhanXet ?? entity.NhanXetGV,
+            NhanXetGV = entity.NhanXetGV
         };
     }
 }

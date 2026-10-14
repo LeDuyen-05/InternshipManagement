@@ -9,4 +9,5 @@ public interface IDangKyThucTapService
     Task<IReadOnlyList<DangKyThucTapDto>> GetDanhSachDangKyBySinhVienAsync(string maSV);
     Task<DangKyThucTapDto> DangKyNguyenVongAsync(CreateDangKyThucTapRequest request);
     Task<bool> HuyDangKyAsync(string maDK);
+    Task<bool> HuyDangKyAsync(string maDK, string? requesterMaSV, bool isStaff);
 }

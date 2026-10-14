@@ -50,17 +50,28 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
             .FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
     }
 
-    public async Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet)
+    public async Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXet = null)
     {
         var record = await DbSet.FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
         if (record == null) return false;
 
         record.TrangThaiDuyet = trangThaiDuyet;
+        if (nhanXet != null)
+        {
+            record.NhanXet = nhanXet;
+            record.NhanXetGV = nhanXet;
+        }
         await Context.SaveChangesAsync();
         return true;
     }
 
-    public async Task<TienDoThucTap?> GetByIdAsync(string maTienDo)
+    public async Task<bool> IsSupervisorAsync(string maGV, string maSV)
+    {
+        return await Context.GVHuongDans
+            .AnyAsync(g => g.MaGiangVien == maGV && g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
+    }
+
+    public override async Task<TienDoThucTap?> GetByIdAsync(string maTienDo)
     {
         return await DbSet
             .Include(t => t.DotThucTap)
