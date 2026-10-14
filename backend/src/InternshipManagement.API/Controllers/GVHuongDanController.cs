@@ -152,4 +152,38 @@ public class GVHuongDanController : ControllerBase
             return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau." });
         }
     }
+
+    [HttpGet("giang-vien/{maGV}/profile")]
+    public async Task<IActionResult> GetProfile(string maGV)
+    {
+        var profile = await _service.GetProfileAsync(maGV);
+        if (profile == null)
+            return NotFound(new { success = false, message = "Không tìm thấy giảng viên" });
+
+        return Ok(new { success = true, data = profile, message = "Lấy hồ sơ giảng viên thành công" });
+    }
+
+    [HttpPut("giang-vien/{maGV}/profile")]
+    public async Task<IActionResult> UpdateProfile(string maGV, [FromBody] InternshipManagement.BLL.DTOs.GiangVien.UpdateGiangVienProfileRequest request)
+    {
+        var success = await _service.UpdateProfileAsync(maGV, request);
+        if (!success)
+            return NotFound(new { success = false, message = "Không tìm thấy giảng viên" });
+
+        return Ok(new { success = true, message = "Cập nhật hồ sơ chuyên môn thành công" });
+    }
+
+    [HttpGet("khoa/phan-cong/tu-dong-de-xuat")]
+    public async Task<IActionResult> DeXuatPhanCongTuDong()
+    {
+        var result = await _service.DeXuatPhanCongTuDongAsync();
+        return Ok(new { success = true, data = result, message = "Đề xuất phân công tự động thành công" });
+    }
+
+    [HttpPost("khoa/phan-cong/tu-dong-xac-nhan")]
+    public async Task<IActionResult> XacNhanPhanCongTuDong([FromBody] TuDongPhanCongConfirmRequest request)
+    {
+        var result = await _service.XacNhanPhanCongTuDongAsync(request);
+        return Ok(new { success = true, data = result, message = "Đã lưu kết quả phân công tự động vào cơ sở dữ liệu!" });
+    }
 }

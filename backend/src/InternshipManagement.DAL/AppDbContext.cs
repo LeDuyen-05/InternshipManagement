@@ -33,19 +33,41 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<GiangVien>(e => { e.ToTable("GIANGVIEN"); e.HasKey(x => x.MaGV); });
         modelBuilder.Entity<CongTy>(e => { e.ToTable("CONGTY"); e.HasKey(x => x.MaCongTy); });
         modelBuilder.Entity<DaiDienDoanhNghiep>(e => { e.ToTable("DAIDIENDOANHNGHIEP"); e.HasKey(x => x.MaSo); });
-        modelBuilder.Entity<HoSoNangLuc>(e => { e.ToTable("HOSONANGLUC"); e.HasKey(x => x.MaHoSo); });
-        modelBuilder.Entity<DotThucTap>(e => { e.ToTable("DOTTHUCTAP"); e.HasKey(x => x.MaSo); });
+        modelBuilder.Entity<HoSoNangLuc>(e =>
+        {
+            e.ToTable("HOSONANGLUC");
+            e.HasKey(x => x.MaHoSo);
+            e.Property(x => x.MaSV).HasColumnName("maSV");
+            e.Property(x => x.MaHoSo).HasColumnName("maHoSo");
+            e.Property(x => x.NDHoSo).HasColumnName("NDHoSo");
+            e.Property(x => x.NgayCapNhat).HasColumnName("ngayCapNhat");
+        });
+        modelBuilder.Entity<DotThucTap>(e =>
+        {
+            e.ToTable("DOTTHUCTAP");
+            e.HasKey(x => x.MaSo);
+            e.Property(x => x.NamHoc).HasColumnName("namHoc").HasMaxLength(20);
+            e.Property(x => x.TrangThai).HasColumnName("trangThai").HasMaxLength(50);
+        });
         modelBuilder.Entity<PhongVan>(e => { e.ToTable("PHONGVAN"); e.HasKey(x => x.MaPV); });
         modelBuilder.Entity<HuongDanDoanhNghiep>(e => { e.ToTable("HUONGDANDOANHNGHIEP"); e.HasKey(x => x.MaSo); });
         modelBuilder.Entity<GioiThieu>(e => { e.ToTable("GIOITHIEU"); e.HasKey(x => x.MaSo); });
         modelBuilder.Entity<DeXuatCongTy>(e => { e.ToTable("DEXUATCONGTY"); e.HasKey(x => x.MaDeXuat); });
-
-        modelBuilder.Entity<GoiYCongTy>(e => { e.ToTable("GOIYCONGTY"); e.HasKey(x => new { x.MaHoSo, x.MaCongTy }); });
+        modelBuilder.Entity<GoiYCongTy>(e =>
+        {
+            e.ToTable("GOIYCONGTY");
+            e.HasKey(x => x.MaSo);
+            e.Property(x => x.MaSo).HasColumnName("maSo");
+            e.Property(x => x.MaHoSo).HasColumnName("maHoSo");
+            e.Property(x => x.MaCongTy).HasColumnName("maCongTy");
+            e.Property(x => x.TyLeTuongThich).HasColumnName("tyLeTuongThich").HasColumnType("decimal(5,2)");
+            e.Property(x => x.NgayGoiY).HasColumnName("ngayGoiY");
+        });
 
         modelBuilder.Entity<HoSoNangLuc>()
             .HasOne(h => h.SinhVien)
             .WithOne(s => s.HoSoNangLuc)
-            .HasForeignKey<HoSoNangLuc>(h => h.MaSinhVien);
+            .HasForeignKey<HoSoNangLuc>(h => h.MaSV);
 
         modelBuilder.Entity<PhongVan>()
             .HasOne(p => p.SinhVien).WithMany(s => s.PhongVans).HasForeignKey(p => p.MaSinhVien);

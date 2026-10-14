@@ -97,6 +97,25 @@ public class GioiThieuService : IGioiThieuService
 
         entity.TrangThaiKetNoi = dto.TrangThaiKetNoi;
         _repository.Update(entity);
+
+        // Đồng bộ trạng thái vào bảng CONGTY để thuật toán AI Top-K nhận diện được doanh nghiệp đã được phê duyệt
+        if (!string.IsNullOrEmpty(entity.MaCongTy))
+        {
+            var congTy = await _repository.GetCongTyByIdAsync(entity.MaCongTy);
+            if (congTy != null)
+            {
+                if (dto.TrangThaiKetNoi == "DaDuyet")
+                {
+                    congTy.TrangThai = "DaDuyet";
+                }
+                else if (dto.TrangThaiKetNoi == "TuChoi")
+                {
+                    congTy.TrangThai = "TuChoi";
+                }
+                _repository.UpdateCongTy(congTy);
+            }
+        }
+
         await _repository.SaveChangesAsync();
     }
 

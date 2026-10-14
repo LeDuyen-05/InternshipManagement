@@ -22,6 +22,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
             MaDot = e.MaDot,
             MaSV = e.MaSV,
             HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
@@ -38,6 +39,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
             MaDot = e.MaDot,
             MaSV = e.MaSV,
             HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
@@ -54,6 +56,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
             MaDot = e.MaDot,
             MaSV = e.MaSV,
             HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
@@ -72,6 +75,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            NhanXetGV = e.NhanXetGV,
             MaDot = e.MaDot,
             MaSV = e.MaSV,
             HoTenSinhVien = e.SinhVien?.HoTen ?? string.Empty
@@ -86,6 +90,6 @@ public class TienDoThucTapService : ITienDoThucTapService
             throw new ArgumentException("Trạng thái duyệt không hợp lệ.");
         }
 
-        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet);
+        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet, request.NhanXetGV);
     }
 }

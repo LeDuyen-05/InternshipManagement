@@ -147,6 +147,16 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         return true;
     }
 
+    public async Task<bool> UpdateGiangVienChuyenMonAsync(string maGV, string? chuyenMon)
+    {
+        var gv = await Context.GiangViens.FirstOrDefaultAsync(g => g.MaGV == maGV);
+        if (gv == null) return false;
+
+        gv.ChuyenMon = chuyenMon ?? string.Empty;
+        await Context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation)
     {
         await using var transaction = await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable);

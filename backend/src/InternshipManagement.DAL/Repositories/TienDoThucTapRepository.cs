@@ -50,12 +50,16 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
             .FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
     }
 
-    public async Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet)
+    public async Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXetGV = null)
     {
         var record = await DbSet.FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
         if (record == null) return false;
 
         record.TrangThaiDuyet = trangThaiDuyet;
+        if (nhanXetGV != null)
+        {
+            record.NhanXetGV = nhanXetGV;
+        }
         await Context.SaveChangesAsync();
         return true;
     }

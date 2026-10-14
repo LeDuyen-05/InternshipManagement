@@ -192,7 +192,7 @@ export default function GioiThieuCongTyPage() {
   return (
     <div className="space-y-6">
       {/* Page Title & Breadcrumb */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mb-1">
             <span>FIT Portal</span>
@@ -222,13 +222,13 @@ export default function GioiThieuCongTyPage() {
 
       {/* Alerts */}
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-rose-600">error</span>
           <span>{error}</span>
         </div>
       )}
       {successMsg && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3 shadow-xs">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-emerald-600">check_circle</span>
           <span>{successMsg}</span>
         </div>
@@ -237,7 +237,7 @@ export default function GioiThieuCongTyPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* CỘT TRÁI (5 phần): FORM NHẬP THÔNG TIN CÔNG TY MỚI */}
         <div className="lg:col-span-5">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 sticky top-24">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 sticky top-24">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-blue-700">add_business</span>
@@ -341,7 +341,7 @@ export default function GioiThieuCongTyPage() {
 
         {/* CỘT PHẢI (7 phần): BẢNG DANH SÁCH DOANH NGHIỆP ĐÃ ĐỀ XUẤT */}
         <div className="lg:col-span-7">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -435,7 +435,7 @@ export default function GioiThieuCongTyPage() {
 
       {/* POPUP (MODAL) BÓC TÁCH FILE JD HOẶC PASTE VĂN BẢN */}
       {showJdModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">

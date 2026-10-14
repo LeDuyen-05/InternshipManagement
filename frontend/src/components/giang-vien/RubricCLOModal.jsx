@@ -2,7 +2,7 @@ export default function RubricCLOModal({ isOpen, onClose }) {
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
         {/* Modal Header */}
         <div className="p-6 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
@@ -60,7 +60,7 @@ export default function RubricCLOModal({ isOpen, onClose }) {
             </h4>
 
             {/* CLO 1 Card */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-blue-50/70 p-3 border-b border-slate-200 flex items-center justify-between">
                 <span className="font-bold text-blue-900 text-xs">
                   CLO 1: Kiến thức chuyên môn & Giải quyết vấn đề (Trọng số 30%)
@@ -90,7 +90,7 @@ export default function RubricCLOModal({ isOpen, onClose }) {
             </div>
 
             {/* CLO 2 Card */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-indigo-50/70 p-3 border-b border-slate-200 flex items-center justify-between">
                 <span className="font-bold text-indigo-900 text-xs">
                   CLO 2: Kỹ năng kỹ thuật, công cụ & công nghệ thực tế (Trọng số 35%)
@@ -120,7 +120,7 @@ export default function RubricCLOModal({ isOpen, onClose }) {
             </div>
 
             {/* CLO 3 Card */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-cyan-50/70 p-3 border-b border-slate-200 flex items-center justify-between">
                 <span className="font-bold text-cyan-900 text-xs">
                   CLO 3: Thái độ làm việc, kỷ luật & đạo đức nghề nghiệp (Trọng số 20%)
@@ -150,7 +150,7 @@ export default function RubricCLOModal({ isOpen, onClose }) {
             </div>
 
             {/* CLO 4 Card */}
-            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-emerald-50/70 p-3 border-b border-slate-200 flex items-center justify-between">
                 <span className="font-bold text-emerald-900 text-xs">
                   CLO 4: Báo cáo, thuyết trình & tư duy phản biện (Trọng số 15%)
@@ -189,7 +189,7 @@ export default function RubricCLOModal({ isOpen, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold transition-colors shadow-xs cursor-pointer"
+            className="px-5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold transition-colors shadow-sm cursor-pointer"
           >
             Đã hiểu & Quay lại chấm điểm
           </button>

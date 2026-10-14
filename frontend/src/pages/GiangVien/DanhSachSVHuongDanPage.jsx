@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import * as XLSX from 'xlsx'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 
@@ -64,6 +65,42 @@ export default function DanhSachSVHuongDanPage() {
   const avgGpa = totalSV > 0
     ? (list.reduce((acc, cur) => acc + (cur.gpa || 0), 0) / totalSV).toFixed(2)
     : '0.00'
+  // Xuất danh sách sinh viên ra file Excel
+  const handleExportExcel = () => {
+    if (!list || list.length === 0) {
+      alert('Không có dữ liệu sinh viên để xuất!')
+      return
+    }
+    const rows = list.map((item, idx) => ({
+      STT: idx + 1,
+      'Mã sinh viên': item.sinhVien?.maSV || item.maSV,
+      'Họ và tên': item.sinhVien?.hoTen || item.hoTen,
+      Lớp: item.sinhVien?.lop || item.lop || '-',
+      'Doanh nghiệp tiếp nhận': item.congTy?.tenCongTy || item.tenCongTy || 'Chưa có',
+      'Vị trí': item.congTy?.viTriTuyen || item.viTriTuyen || '-',
+      GPA: item.sinhVien?.gpa || item.gpa || '-',
+      'Trạng thái':
+        item.trangThai === 'DangHuongDan'
+          ? 'Đang hướng dẫn'
+          : item.trangThai === 'HoanThanh'
+          ? 'Đã hoàn thành'
+          : item.trangThai,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 15 },
+      { wch: 25 },
+      { wch: 12 },
+      { wch: 30 },
+      { wch: 20 },
+      { wch: 8 },
+      { wch: 18 },
+    ]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'SinhVienHuongDan')
+    XLSX.writeFile(wb, `DS_SinhVien_GV_${currentMaGV}_${selectedDot?.maDot || 'FIT'}.xlsx`)
+  }
 
   return (
     <div className="space-y-6">
@@ -96,6 +133,15 @@ export default function DanhSachSVHuongDanPage() {
               <span>GV: {lecturerInfo?.hoTen || 'ThS. Nguyễn Văn An'} ({currentMaGV})</span>
             </div>
           )}
+
+          <button
+            onClick={handleExportExcel}
+            title="Xuất file Excel danh sách sinh viên"
+            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
+          >
+            <span className="material-symbols-outlined text-base">table_chart</span>
+            <span>Xuất Excel</span>
+          </button>
 
           <button
             onClick={loadData}
@@ -156,12 +202,12 @@ export default function DanhSachSVHuongDanPage() {
         {/* KPI 4 */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Điểm Đánh Giá CLO TB</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">GPA Tích Lũy TB Lớp</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-bold text-amber-600">8.90</span>
-              <span className="text-xs font-medium text-slate-400">/ 10.0 (Thang điểm 10)</span>
+              <span className="text-2xl font-bold text-amber-600">{avgGpa}</span>
+              <span className="text-xs font-medium text-slate-400">/ 4.00</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">GPA tích lũy lớp: {avgGpa}/4.0</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu từ bảng SINHVIEN (SQL Server)</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <span className="material-symbols-outlined">stars</span>
@@ -387,7 +433,7 @@ export default function DanhSachSVHuongDanPage() {
                           ) : (
                             <Link
                               to={`/giang-vien/cham-diem?sv=${sv.maSV}`}
-                              className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                              className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                               title="Đánh giá và chấm điểm CLO cho sinh viên này"
                             >
                               <span className="material-symbols-outlined text-sm">fact_check</span>

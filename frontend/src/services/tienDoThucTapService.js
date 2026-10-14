@@ -1,9 +1,11 @@
 import apiClient from './api';
 import { API_ROUTES } from '../constants/apiRoutes';
 
-const tienDoThucTapService = {
-  getTienDoBySinhVien: (maSV) => {
-    return apiClient.get(`${API_ROUTES.TIEN_DO}/sinhvien/${maSV}`);
+export const tienDoThucTapService = {
+  getTienDoBySinhVien: (maSV, maDot) => {
+    return apiClient.get(`${API_ROUTES.TIEN_DO}/sinhvien/${maSV}`, {
+      params: { maDot },
+    });
   },
 
   getBaoCaoChoDuyet: (maGV) => {
@@ -14,9 +16,10 @@ const tienDoThucTapService = {
     return apiClient.get(`${API_ROUTES.TIEN_DO}/${maTienDo}`);
   },
 
-  duyetTienDo: (maTienDo, trangThaiDuyet) => {
+  duyetTienDo: (maTienDo, trangThaiDuyet, nhanXetGV = null) => {
     return apiClient.put(`${API_ROUTES.TIEN_DO}/${maTienDo}/duyet`, {
-      trangThaiDuyet: trangThaiDuyet
+      trangThaiDuyet,
+      nhanXetGV,
     });
   }
 };

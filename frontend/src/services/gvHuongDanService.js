@@ -37,4 +37,20 @@ export const gvHuongDanService = {
   // Khoa cập nhật chỉ tiêu số lượng sinh viên hướng dẫn của Giảng viên
   capNhatChiTieu: (maGV, soLuongMoi) =>
     apiClient.put(`${API_ROUTES.GV_HUONG_DAN}/khoa/giang-vien/${maGV}/chi-tieu`, { soLuongMoi }),
+
+  // Giảng viên xem hồ sơ chuyên môn
+  getProfile: (maGV) =>
+    apiClient.get(`${API_ROUTES.GV_HUONG_DAN}/giang-vien/${maGV}/profile`),
+
+  // Giảng viên cập nhật hồ sơ chuyên môn
+  updateProfile: (maGV, data) =>
+    apiClient.put(`${API_ROUTES.GV_HUONG_DAN}/giang-vien/${maGV}/profile`, data),
+
+  // Khoa: Lấy danh sách đề xuất phân công tự động (Smart Match & Cân bằng tải)
+  deXuatPhanCongTuDong: () =>
+    apiClient.get(`${API_ROUTES.GV_HUONG_DAN}/khoa/phan-cong/tu-dong-de-xuat`),
+
+  // Khoa: Xác nhận lưu kết quả phân công tự động vào Database
+  xacNhanPhanCongTuDong: (danhSachPhanCong) =>
+    apiClient.post(`${API_ROUTES.GV_HUONG_DAN}/khoa/phan-cong/tu-dong-xac-nhan`, { danhSachPhanCong }),
 }

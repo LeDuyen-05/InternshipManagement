@@ -5,6 +5,8 @@ using InternshipManagement.BLL.Validators.GioiThieu;
 using InternshipManagement.BLL.Services.GVHuongDan;
 using InternshipManagement.BLL.Services.TienDoThucTap;
 using InternshipManagement.BLL.Services.PhieuChamDiem;
+using InternshipManagement.BLL.Services.ThongKe;
+using InternshipManagement.BLL.Services.GoiYCongTy;
 using InternshipManagement.DAL;
 using InternshipManagement.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,8 @@ builder.Services.AddScoped<IGioiThieuRepository, GioiThieuRepository>();
 builder.Services.AddScoped<IGVHuongDanRepository, GVHuongDanRepository>();
 builder.Services.AddScoped<ITienDoThucTapRepository, TienDoThucTapRepository>();
 builder.Services.AddScoped<IPhieuChamDiemRepository, PhieuChamDiemRepository>();
+builder.Services.AddScoped<IThongKeRepository, ThongKeRepository>();
+builder.Services.AddScoped<IGoiYCongTyRepository, GoiYCongTyRepository>();
 
 builder.Services.AddScoped<ISinhVienService, SinhVienService>();
 builder.Services.AddScoped<CreateSinhVienValidator>();
@@ -29,6 +33,8 @@ builder.Services.AddScoped<CreateGioiThieuValidator>();
 builder.Services.AddScoped<IGVHuongDanService, GVHuongDanService>();
 builder.Services.AddScoped<ITienDoThucTapService, TienDoThucTapService>();
 builder.Services.AddScoped<IPhieuChamDiemService, PhieuChamDiemService>();
+builder.Services.AddScoped<IThongKeService, ThongKeService>();
+builder.Services.AddScoped<IGoiYCongTyService, GoiYCongTyService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

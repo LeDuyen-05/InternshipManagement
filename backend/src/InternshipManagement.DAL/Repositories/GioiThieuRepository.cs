@@ -54,4 +54,14 @@ public class GioiThieuRepository : GenericRepository<GioiThieu>, IGioiThieuRepos
 
         return gioiThieu;
     }
+
+    public async Task<CongTy?> GetCongTyByIdAsync(string maCongTy)
+    {
+        return await Context.CongTys.FirstOrDefaultAsync(c => c.MaCongTy == maCongTy);
+    }
+
+    public void UpdateCongTy(CongTy congTy)
+    {
+        Context.CongTys.Update(congTy);
+    }
 }

@@ -21,6 +21,12 @@ export default function PhanCongGVHDPage() {
   const [editQuotaGV, setEditQuotaGV] = useState(null) // GV đang chỉnh chỉ tiêu
   const [newQuota, setNewQuota] = useState('')
 
+  // State Modal Phân công tự động thông minh
+  const [showAutoModal, setShowAutoModal] = useState(false)
+  const [loadingAutoAssign, setLoadingAutoAssign] = useState(false)
+  const [autoPreviewData, setAutoPreviewData] = useState(null)
+  const [confirmingAuto, setConfirmingAuto] = useState(false)
+
   // Tải dữ liệu ban đầu
   const loadData = async () => {
     try {
@@ -134,6 +140,46 @@ export default function PhanCongGVHDPage() {
     setNewQuota('')
   }
 
+  // 1. Mở Modal & Lấy đề xuất phân công tự động từ Backend
+  const handleOpenAutoAssign = async () => {
+    try {
+      setLoadingAutoAssign(true)
+      setError(null)
+      const res = await gvHuongDanService.deXuatPhanCongTuDong()
+      if (res.data?.success) {
+        setAutoPreviewData(res.data.data)
+        setShowAutoModal(true)
+      }
+    } catch (err) {
+      alert('Không thể tạo đề xuất phân công: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setLoadingAutoAssign(false)
+    }
+  }
+
+  // 2. Chốt lưu phân công tự động vào cơ sở dữ liệu SQL Server
+  const handleConfirmAutoAssign = async () => {
+    if (!autoPreviewData || autoPreviewData.danhSachDeXuat.length === 0) return
+    try {
+      setConfirmingAuto(true)
+      const payload = autoPreviewData.danhSachDeXuat.map((item) => ({
+        maGV: item.maGV,
+        maSV: item.maSV,
+      }))
+
+      const res = await gvHuongDanService.xacNhanPhanCongTuDong(payload)
+      if (res.data?.success) {
+        setShowAutoModal(false)
+        setSuccessMsg(`Đã phân công tự động thành công cho ${payload.length} sinh viên!`)
+        await loadData()
+      }
+    } catch (err) {
+      alert('Lỗi khi lưu phân công tự động: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setConfirmingAuto(false)
+    }
+  }
+
   // Lưu chỉ tiêu mới xuống Backend
   const handleSaveQuota = async () => {
     if (!editQuotaGV) return
@@ -177,6 +223,20 @@ export default function PhanCongGVHDPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={handleOpenAutoAssign}
+            disabled={loadingAutoAssign || sinhViens.length === 0}
+            className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+            title="Tự động ghép cặp sinh viên theo chuyên môn & cân bằng chỉ tiêu giảng viên"
+          >
+            {loadingAutoAssign ? (
+              <span className="material-symbols-outlined text-base animate-spin">sync</span>
+            ) : (
+              <span className="material-symbols-outlined text-base">smart_toy</span>
+            )}
+            <span>Phân công tự động thông minh</span>
+          </button>
+
           <button
             onClick={loadData}
             className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5"
@@ -482,6 +542,116 @@ export default function PhanCongGVHDPage() {
               >
                 {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
                 <span>Lưu thay đổi</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem trước & Xác nhận Phân công tự động thông minh */}
+      {showAutoModal && autoPreviewData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col border border-slate-100">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-lg">smart_toy</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Đề Xuất Phân Công Tự Động (Smart Match & Cân Bằng Tải)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Hệ thống tự động rà soát chuyên môn và hạn ngạch còn trống của từng giảng viên
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setShowAutoModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Thống kê nhanh */}
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <p className="text-[11px] text-slate-400 font-bold uppercase">Tổng SV cần phân công</p>
+                <p className="text-lg font-black text-slate-800">{autoPreviewData.tongSoSVChuaPhanCong}</p>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                <p className="text-[11px] text-emerald-600 font-bold uppercase">Đề xuất ghép thành công</p>
+                <p className="text-lg font-black text-emerald-700">{autoPreviewData.soLuongGhepThanhCong}</p>
+              </div>
+              <div className="p-3 bg-rose-50 rounded-xl border border-rose-100">
+                <p className="text-[11px] text-rose-600 font-bold uppercase">Chưa thể ghép (Hết slot)</p>
+                <p className="text-lg font-black text-rose-700">{autoPreviewData.soLuongKhongTheGhep}</p>
+              </div>
+            </div>
+
+            {/* Bảng danh sách đề xuất */}
+            <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl">
+              {autoPreviewData.danhSachDeXuat.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  Không thể ghép cặp nào. Vui lòng tăng chỉ tiêu của các Giảng viên trước!
+                </div>
+              ) : (
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold sticky top-0">
+                    <tr>
+                      <th className="py-2.5 px-3">Sinh viên</th>
+                      <th className="py-2.5 px-3">Đơn vị thực tập</th>
+                      <th className="py-2.5 px-3">GVHD đề xuất</th>
+                      <th className="py-2.5 px-3">Lý do ghép</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {autoPreviewData.danhSachDeXuat.map((item) => (
+                      <tr key={item.maSV} className="hover:bg-slate-50/70">
+                        <td className="py-2.5 px-3">
+                          <p className="font-bold text-slate-900">{item.hoTenSV}</p>
+                          <p className="text-[11px] text-slate-400 font-mono">{item.maSV} • {item.lop}</p>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600">
+                          {item.tenCongTy}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <p className="font-bold text-indigo-700">{item.hoTenGV}</p>
+                          <p className="text-[11px] text-slate-400">{item.chuyenMonGV}</p>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            {item.lyDoGhep}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Thông báo nếu có sinh viên bị sót */}
+            {autoPreviewData.sinhVienChuaTheGhep.length > 0 && (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs">
+                <span className="font-bold">Lưu ý:</span> Còn {autoPreviewData.sinhVienChuaTheGhep.length} sinh viên chưa được phân công do tổng chỉ tiêu các giảng viên hiện tại đã đầy.
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowAutoModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAutoAssign}
+                disabled={confirmingAuto || autoPreviewData.danhSachDeXuat.length === 0}
+                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl flex items-center gap-1.5 shadow-sm"
+              >
+                {confirmingAuto && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
+                <span>Xác nhận & Lưu vào CSDL ({autoPreviewData.danhSachDeXuat.length} SV)</span>
               </button>
             </div>
           </div>

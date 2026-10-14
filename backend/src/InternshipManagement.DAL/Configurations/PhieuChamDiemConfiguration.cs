@@ -20,7 +20,7 @@ public class PhieuChamDiemConfiguration : IEntityTypeConfiguration<PhieuChamDiem
         builder.Property(x => x.MaGVHuongDan).HasColumnName("maGVHuongDan").HasMaxLength(20);
 
         builder.HasOne(x => x.DotThucTap)
-            .WithMany()
+            .WithMany(d => d.PhieuChamDiems)
             .HasForeignKey(x => x.MaDot)
             .IsRequired();
 

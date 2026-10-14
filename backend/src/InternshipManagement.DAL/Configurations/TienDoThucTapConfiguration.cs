@@ -16,6 +16,7 @@ public class TienDoThucTapConfiguration : IEntityTypeConfiguration<TienDoThucTap
         builder.Property(x => x.NoiDungBaoCao).HasColumnName("noiDungBaoCao");
         builder.Property(x => x.NgayNop).HasColumnName("ngayNop");
         builder.Property(x => x.TrangThaiDuyet).HasColumnName("trangThaiDuyet").HasMaxLength(50);
+        builder.Property(x => x.NhanXetGV).HasColumnName("nhanXetGV").HasMaxLength(500);
         builder.Property(x => x.MaDot).HasColumnName("maDot").HasMaxLength(20);
         builder.Property(x => x.MaSV).HasColumnName("maSV").HasMaxLength(20);
 

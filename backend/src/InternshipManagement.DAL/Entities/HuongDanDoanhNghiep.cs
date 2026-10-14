@@ -11,5 +11,4 @@ public class HuongDanDoanhNghiep
 
     public DaiDienDoanhNghiep DaiDienDoanhNghiep { get; set; } = default!;
     public DangKyThucTap DangKyThucTap { get; set; } = default!;
-    public ICollection<PhieuChamDiem> PhieuChamDiems { get; set; } = new List<PhieuChamDiem>();
 }

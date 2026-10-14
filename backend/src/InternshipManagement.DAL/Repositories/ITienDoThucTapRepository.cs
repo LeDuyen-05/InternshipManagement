@@ -8,5 +8,5 @@ public interface ITienDoThucTapRepository : IRepository<TienDoThucTap>
     Task<IReadOnlyList<TienDoThucTap>> GetBySinhVienAndDotAsync(string maSV, string maDot);
     Task<IReadOnlyList<TienDoThucTap>> GetBaoCaoChoDuyetByGiangVienAsync(string maGV);
     Task<TienDoThucTap?> GetChiTietAsync(string maTienDo);
-    Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet);
+    Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXetGV = null);
 }

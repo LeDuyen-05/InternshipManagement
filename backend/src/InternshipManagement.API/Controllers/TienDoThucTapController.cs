@@ -16,8 +16,14 @@ public class TienDoThucTapController : ControllerBase
     }
 
     [HttpGet("sinhvien/{maSV}")]
-    public async Task<IActionResult> GetTienDoBySinhVien(string maSV)
+    public async Task<IActionResult> GetTienDoBySinhVien(string maSV, [FromQuery] string? maDot)
     {
+        if (!string.IsNullOrWhiteSpace(maDot))
+        {
+            var resultWithDot = await _tienDoThucTapService.GetTienDoBySinhVienAndDotAsync(maSV, maDot);
+            return Ok(resultWithDot);
+        }
+
         var result = await _tienDoThucTapService.GetTienDoBySinhVienAsync(maSV);
         return Ok(result);
     }

@@ -336,7 +336,7 @@ export default function Header({ currentRole }) {
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-xs">
+    <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
       {/* 🔍 1. THANH TÌM KIẾM TOÀN CỤC THEO ROLE */}
       <div ref={searchRef} className="relative flex items-center gap-3 flex-1 max-w-lg">
         <div className="relative w-full">
@@ -426,7 +426,7 @@ export default function Header({ currentRole }) {
           >
             <span className="material-symbols-outlined text-[20px]">notifications</span>
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-rose-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-sm">
                 {unreadCount}
               </span>
             )}
@@ -512,7 +512,7 @@ export default function Header({ currentRole }) {
             onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
             className={`flex items-center gap-2.5 p-1.5 sm:px-2.5 sm:py-1.5 rounded-2xl transition-all cursor-pointer border ${
               isUserMenuOpen
-                ? 'bg-blue-50/80 border-blue-200 shadow-xs'
+                ? 'bg-blue-50/80 border-blue-200 shadow-sm'
                 : 'hover:bg-slate-100/80 border-transparent hover:border-slate-200'
             }`}
           >
@@ -521,7 +521,7 @@ export default function Header({ currentRole }) {
               <span className="text-[11px] text-slate-500 leading-tight">{user.role}</span>
             </div>
             <div
-              className={`w-8 h-8 rounded-full ${user.avatarColor} flex items-center justify-center font-bold text-xs shadow-xs shrink-0`}
+              className={`w-8 h-8 rounded-full ${user.avatarColor} flex items-center justify-center font-bold text-xs shadow-sm shrink-0`}
             >
               {user.avatar}
             </div>
@@ -634,7 +634,7 @@ export default function Header({ currentRole }) {
       {/* 📋 MODAL 1: XEM HỒ SƠ CHI TIẾT (DÙNG PORTAL ĐỂ CĂN GIỮA TOÀN MÀN HÌNH) */}
       {showProfileModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -722,7 +722,7 @@ export default function Header({ currentRole }) {
       {/* 🔑 MODAL 2: ĐỔI MẬT KHẨU */}
       {showPasswordModal &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -830,7 +830,7 @@ export default function Header({ currentRole }) {
                     </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-xs transition"
+                      className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-sm transition"
                     >
                       Lưu mật khẩu mới
                     </button>
@@ -845,7 +845,7 @@ export default function Header({ currentRole }) {
       {/* 🚪 MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm &&
         createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
             <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 max-h-[90vh] overflow-y-auto">
               {logoutSuccess ? (
                 <div className="space-y-3 py-2">
@@ -883,7 +883,7 @@ export default function Header({ currentRole }) {
                           setLogoutSuccess(false)
                         }, 1800)
                       }}
-                      className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-xs transition"
+                      className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-sm transition"
                     >
                       Xác nhận Đăng xuất
                     </button>

@@ -314,7 +314,7 @@ export default function ThongBaoPage() {
         <button
           type="button"
           onClick={handleMarkAllRead}
-          className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer border border-slate-200 shadow-xs"
+          className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer border border-slate-200 shadow-sm"
         >
           <span className="material-symbols-outlined text-base text-blue-600">done_all</span>
           <span>Đánh dấu đã đọc tất cả</span>
@@ -323,7 +323,7 @@ export default function ThongBaoPage() {
 
       {/* Thông báo thành công nếu có */}
       {toastMessage && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-center justify-between shadow-sm animate-fadeIn">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-600">check_circle</span>
             <span className="font-semibold">{toastMessage}</span>
@@ -345,7 +345,7 @@ export default function ThongBaoPage() {
               onClick={() => setActiveCategory(tab.key)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
                 activeCategory === tab.key
-                  ? 'bg-blue-700 text-white shadow-xs'
+                  ? 'bg-blue-700 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -372,7 +372,7 @@ export default function ThongBaoPage() {
       {/* 3. Danh sách thông báo */}
       <div className="space-y-3">
         {filtered.length === 0 ? (
-          <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400 shadow-xs">
+          <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400 shadow-sm">
             <span className="material-symbols-outlined text-4xl text-slate-300">notifications_off</span>
             <p className="mt-2 text-sm font-medium">Không tìm thấy thông báo nào phù hợp bộ lọc.</p>
           </div>
@@ -385,7 +385,7 @@ export default function ThongBaoPage() {
               <div
                 key={item.id}
                 onClick={() => handleMarkSingleRead(item.id)}
-                className={`bg-white p-5 rounded-2xl border transition-all shadow-xs hover:shadow-md cursor-pointer ${
+                className={`bg-white p-5 rounded-2xl border transition-all shadow-sm hover:shadow-md cursor-pointer ${
                   isUnread
                     ? 'border-blue-300 bg-blue-50/15 ring-1 ring-blue-100'
                     : 'border-slate-200 hover:border-slate-300'
@@ -439,7 +439,7 @@ export default function ThongBaoPage() {
                           e.stopPropagation()
                           navigate(item.actionLink)
                         }}
-                        className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer shadow-xs"
+                        className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer shadow-sm"
                       >
                         <span>{item.actionText}</span>
                         <span className="material-symbols-outlined text-sm">arrow_forward</span>

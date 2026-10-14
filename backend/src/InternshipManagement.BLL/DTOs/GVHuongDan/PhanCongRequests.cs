@@ -29,3 +29,29 @@ public class PhanCongKhongThanhCongDto
     public string MaSV { get; set; } = default!;
     public string LyDo { get; set; } = default!;
 }
+
+public class TuDongPhanCongPreviewItem
+{
+    public string MaSV { get; set; } = default!;
+    public string HoTenSV { get; set; } = default!;
+    public string Lop { get; set; } = default!;
+    public string? TenCongTy { get; set; }
+    public string MaGV { get; set; } = default!;
+    public string HoTenGV { get; set; } = default!;
+    public string ChuyenMonGV { get; set; } = default!;
+    public string LyDoGhep { get; set; } = default!; // "Trùng chuyên môn", "GV giới thiệu DN", "Cân bằng tải"
+}
+
+public class TuDongPhanCongConfirmRequest
+{
+    public List<PhanCongDonLeRequest> DanhSachPhanCong { get; set; } = new();
+}
+
+public class TuDongPhanCongResult
+{
+    public int TongSoSVChuaPhanCong { get; set; }
+    public int SoLuongGhepThanhCong { get; set; }
+    public int SoLuongKhongTheGhep { get; set; }
+    public List<TuDongPhanCongPreviewItem> DanhSachDeXuat { get; set; } = new();
+    public List<string> SinhVienChuaTheGhep { get; set; } = new();
+}

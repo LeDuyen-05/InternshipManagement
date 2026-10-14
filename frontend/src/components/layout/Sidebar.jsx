@@ -102,7 +102,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                     to={item.path}
                     className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
-                        ? 'bg-blue-700 text-white shadow-xs'
+                        ? 'bg-blue-700 text-white shadow-sm'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
@@ -130,7 +130,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                     to={item.path}
                     className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive
-                        ? 'bg-blue-700 text-white shadow-xs'
+                        ? 'bg-blue-700 text-white shadow-sm'
                         : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
@@ -149,7 +149,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         {/* Thẻ Học vụ Hiện hành (Bấm vào để đổi Đợt / Năm học) */}
         <div
           onClick={() => setShowDotModal(true)}
-          className="p-2.5 rounded-xl bg-white border border-slate-200/80 mb-2 shadow-xs cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all group"
+          className="p-2.5 rounded-xl bg-white border border-slate-200/80 mb-2 shadow-sm cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all group"
           title="Bấm để chuyển đổi Năm học / Đợt thực tập"
         >
           <div className="flex items-center justify-between mb-1">
@@ -214,7 +214,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
 
       {/* Modal 2 tầng: Chọn Năm học -> Đợt thực tập */}
       {showDotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
