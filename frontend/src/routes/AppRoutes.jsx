@@ -6,10 +6,13 @@ import DangKyThucTapPage from '../pages/SinhVien/DangKyThucTapPage.jsx'
 import LichTrinhPhongVanPage from '../pages/SinhVien/LichTrinhPhongVanPage.jsx'
 import NopTienDoSVPage from '../pages/SinhVien/NopTienDoSVPage.jsx'
 import SinhVienListPage from '../pages/SinhVien/SinhVienListPage.jsx'
+import EnterpriseLayout from '../components/layout/EnterpriseLayout.jsx'
+import EnterpriseDashboardPage from '../pages/DoanhNghiep/EnterpriseDashboardPage.jsx'
 
 function AppRoutes() {
   return (
     <Routes>
+      {/* Phân hệ Sinh viên */}
       <Route element={<MainLayout />}>
         <Route path="/" element={<Navigate to="/sinh-vien" replace />} />
         <Route path="/sinh-vien" element={<DashboardSinhVienPage />} />
@@ -18,6 +21,11 @@ function AppRoutes() {
         <Route path="/sinh-vien/lich-trinh" element={<LichTrinhPhongVanPage />} />
         <Route path="/sinh-vien/tien-do" element={<NopTienDoSVPage />} />
         <Route path="/sinh-vien/danh-sach" element={<SinhVienListPage />} />
+      </Route>
+
+      {/* Phân hệ Doanh nghiệp độc lập */}
+      <Route path="/doanh-nghiep" element={<EnterpriseLayout />}>
+        <Route index element={<EnterpriseDashboardPage />} />
       </Route>
     </Routes>
   )

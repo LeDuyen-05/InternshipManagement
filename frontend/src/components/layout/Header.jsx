@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 
 export default function Header({ sinhVien = { hoTen: 'Phạm Minh Đức', maSV: 'SV001' } }) {
   const [showNotifications, setShowNotifications] = useState(false)
@@ -27,7 +28,16 @@ export default function Header({ sinhVien = { hoTen: 'Phạm Minh Đức', maSV:
       </div>
 
       {/* Right section: Notification & User Info */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Switch Portal Button */}
+        <Link
+          to="/doanh-nghiep"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold transition-all shadow-2xs"
+        >
+          <span className="material-symbols-outlined text-[16px]">corporate_fare</span>
+          <span>Cổng Doanh nghiệp</span>
+        </Link>
+
         {/* Semester Tag */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-xs font-medium text-blue-700">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
