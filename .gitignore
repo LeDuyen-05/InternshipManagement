@@ -7,12 +7,17 @@ backend/**/obj/
 frontend/node_modules/
 frontend/dist/
 frontend/.env
+frontend/.env.*
 
 # ML Service (Python)
 ml-service/venv/
 ml-service/__pycache__/
 ml-service/**/__pycache__/
 ml-service/.env
+
+# Local review and scratch output
+.tmp-doc-review/
+scratch/
 
 # OS / Editor
 .DS_Store

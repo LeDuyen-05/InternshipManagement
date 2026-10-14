@@ -27,6 +27,20 @@ def ndcg_at_k(ranked_ids: List[str], relevance: Dict[str, float], k: int = 5) ->
     idcg = dcg(ideal)
     return 0.0 if idcg == 0 else dcg(predicted) / idcg
 
+def xep_hang_batch(ho_so: Dict[str, str], jd: List[Tuple[str, str]], top_k: int = 5) -> Dict[str, List[Tuple[str, float]]]:
+    if not jd or not ho_so:
+        return {}
+    ids = [x[0] for x in jd]
+    vec = TfidfVectorizer(lowercase=True, token_pattern=r"(?u)\b\w[\w#+]*\b")
+    vec.fit(list(ho_so.values()) + [x[1] or "" for x in jd])
+    jd_mat = vec.transform([x[1] or "" for x in jd])
+    out = {}
+    for ma, text in ho_so.items():
+        scores = cosine_similarity(vec.transform([text or ""]), jd_mat)[0]
+        ranked = sorted(zip(ids, scores.tolist()), key=lambda t: (-t[1], t[0]))
+        out[ma] = [(i, s) for i, s in ranked if s > 0][:top_k]
+    return out
+
 # Tương thích tên hàm cũ.
 def tinh_do_tuong_dong(noi_dung_ho_so: str, danh_sach_jd: List[Tuple[str, str]], top_k: int = 5):
     return xep_hang_tfidf_cosine(noi_dung_ho_so, danh_sach_jd, top_k)

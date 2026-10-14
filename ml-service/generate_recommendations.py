@@ -7,32 +7,33 @@ mỗi khi có sinh viên/công ty mới. Đây là lựa chọn có chủ đích
 Luồng: đọc HOSONANGLUC + CONGTY từ SQL Server → tính TF-IDF/Cosine Similarity
 → ghi kết quả (upsert) vào bảng GOIYCONGTY.
 """
+import uuid
+from datetime import date
 import pandas as pd
-from datetime import datetime
+from sqlalchemy import text, bindparam
 from db.connection import get_engine
-from services.similarity_service import tinh_do_tuong_dong
+from services.similarity_service import xep_hang_batch
 
 TOP_K = 5
 
 
 def load_du_lieu(engine):
-    ho_so_df = pd.read_sql("SELECT maHoSo, maSinhVien, NDHoSo FROM HOSONANGLUC", engine)
-    cong_ty_df = pd.read_sql("SELECT maCongTy, tenCongTy, yeuCau FROM CONGTY WHERE trangThai = 'DaDuyet'", engine)
+    ho_so_df = pd.read_sql("SELECT maHoSo, NDHoSo FROM HOSONANGLUC", engine).fillna({"NDHoSo": ""})
+    cong_ty_df = pd.read_sql("SELECT maCongTy, tenCongTy, yeuCau FROM CONGTY WHERE trangThai = 'DaDuyet'", engine).fillna({"yeuCau": ""})
     return ho_so_df, cong_ty_df
 
 
 def ghi_ket_qua(engine, ket_qua_rows):
-    """ket_qua_rows: list dict {maHoSo, maCongTy, tiLeTuongThich, ngayGoiY}"""
+    """ket_qua_rows: list dict {maSo, maHoSo, maCongTy, tyLeTuongThich, ngayGoiY}"""
     if not ket_qua_rows:
         print("Không có gợi ý nào để ghi.")
         return
 
     df = pd.DataFrame(ket_qua_rows)
     with engine.begin() as conn:
-        # Xóa gợi ý cũ của các hồ sơ được tính lại, rồi ghi mới — tránh trùng khóa (maHoSo, maCongTy)
         ma_ho_so_list = df["maHoSo"].unique().tolist()
-        placeholders = ",".join(f"'{m}'" for m in ma_ho_so_list)
-        conn.exec_driver_sql(f"DELETE FROM GOIYCONGTY WHERE maHoSo IN ({placeholders})")
+        stmt = text("DELETE FROM GOIYCONGTY WHERE maHoSo IN :ids").bindparams(bindparam("ids", expanding=True))
+        conn.execute(stmt, {"ids": ma_ho_so_list})
         df.to_sql("GOIYCONGTY", conn, if_exists="append", index=False)
 
     print(f"Đã ghi {len(df)} dòng gợi ý vào bảng GOIYCONGTY.")
@@ -46,17 +47,20 @@ def main():
         print("Chưa đủ dữ liệu (hồ sơ SV hoặc công ty) để tính gợi ý.")
         return
 
-    danh_sach_jd = list(zip(cong_ty_df["maCongTy"], cong_ty_df["yeuCau"].fillna("")))
+    ho_so_dict = dict(zip(ho_so_df["maHoSo"], ho_so_df["NDHoSo"]))
+    danh_sach_jd = list(zip(cong_ty_df["maCongTy"], cong_ty_df["yeuCau"]))
+
+    batch_results = xep_hang_batch(ho_so_dict, danh_sach_jd, top_k=TOP_K)
 
     ket_qua_rows = []
-    for _, row in ho_so_df.iterrows():
-        top_k = tinh_do_tuong_dong(row["NDHoSo"] or "", danh_sach_jd, top_k=TOP_K)
-        for ma_cong_ty, diem in top_k:
+    for ma_ho_so, ranked in batch_results.items():
+        for ma_ct, diem in ranked:
             ket_qua_rows.append({
-                "maHoSo": row["maHoSo"],
-                "maCongTy": ma_cong_ty,
-                "tiLeTuongThich": round(float(diem) * 100, 2),
-                "ngayGoiY": datetime.now(),
+                "maSo": "GY" + uuid.uuid4().hex[:18],
+                "maHoSo": ma_ho_so,
+                "maCongTy": ma_ct,
+                "tyLeTuongThich": round(float(diem) * 100, 2),
+                "ngayGoiY": date.today()
             })
 
     ghi_ket_qua(engine, ket_qua_rows)
