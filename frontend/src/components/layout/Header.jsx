@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
@@ -158,11 +159,43 @@ export default function Header({ currentRole }) {
 
   return (
     <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
-      {/* Khoảng trống thay cho thanh tìm kiếm giả */}
+      {/* Left section: Breadcrumb / Title */}
+      <div className="flex items-center text-slate-500 text-sm">
+        <span className="material-symbols-outlined text-[18px] text-blue-700 mr-1.5">school</span>
+        <span className="font-semibold text-blue-900">FIT Portal</span>
+        <span className="mx-2 text-slate-300">/</span>
+        <span className="text-slate-800 font-medium">
+          {currentRole === 'Khoa'
+            ? 'Văn phòng Khoa'
+            : currentRole === 'GiangVien'
+            ? 'Giảng viên Hướng dẫn'
+            : currentRole === 'SinhVien'
+            ? 'Cổng Sinh viên'
+            : 'Hệ thống Quản lý'}
+        </span>
+      </div>
+
       <div className="flex-1" />
 
-      {/* 🔔 2. KHU VỰC ĐIỀU KHIỂN & CHUÔNG THÔNG BÁO THEO ROLE */}
-      <div className="flex items-center gap-4">
+      {/* Right section: Switch Portal + Semester + Notifications + User Menu */}
+      <div className="flex items-center gap-3">
+        {/* Switch Portal Button (only for Admin/Faculty/Enterprise) */}
+        {(authUser?.maVaiTro === 'VT01' || authUser?.maVaiTro === 'VT02' || authUser?.maVaiTro === 'VT05') && (
+          <Link
+            to="/doanh-nghiep"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold transition-all shadow-2xs"
+          >
+            <span className="material-symbols-outlined text-[16px]">corporate_fare</span>
+            <span>Cổng Doanh nghiệp</span>
+          </Link>
+        )}
+
+        {/* Semester Tag */}
+        <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-xs font-medium text-blue-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Đợt 2 - HK2 (2026 - 2027)</span>
+        </div>
+
         {/* Nút Chuông Thông Báo */}
         <div ref={notifRef} className="relative">
           <button

@@ -22,7 +22,7 @@ export default function AuthPage() {
       else if (role === 'VT02') navigate('/khoa')
       else if (role === 'VT03') navigate('/giang-vien/dashboard')
       else if (role === 'VT04') navigate('/sinh-vien')
-      else if (role === 'VT05') navigate('/thong-bao')
+      else if (role === 'VT05') navigate('/doanh-nghiep')
       else navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Tên đăng nhập hoặc mật khẩu không đúng.')

@@ -27,7 +27,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Thiếu ConnectionStrings:DefaultConnection.");
-var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? "InternshipManagement-Development-Key-2026-Super-Secret-At-Least-32-Bytes!";
 if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
     throw new InvalidOperationException("Thiếu Jwt:Key (>= 32 byte). Xem README mục 'Cấu hình bí mật'.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "InternshipManagement";

@@ -19,6 +19,12 @@ import HoSoNangLucPage from '../pages/SinhVien/HoSoNangLucPage.jsx'
 import DangKyThucTapPage from '../pages/SinhVien/DangKyThucTapPage.jsx'
 import LichTrinhPhongVanPage from '../pages/SinhVien/LichTrinhPhongVanPage.jsx'
 import NopTienDoSVPage from '../pages/SinhVien/NopTienDoSVPage.jsx'
+import EnterpriseLayout from '../components/layout/EnterpriseLayout.jsx'
+import EnterpriseDashboardPage from '../pages/DoanhNghiep/EnterpriseDashboardPage.jsx'
+import QuanLyTinTuyenDungPage from '../pages/DoanhNghiep/QuanLyTinTuyenDungPage.jsx'
+import QuanLyUngVienPage from '../pages/DoanhNghiep/QuanLyUngVienPage.jsx'
+import LichPhongVanDNPage from '../pages/DoanhNghiep/LichPhongVanDNPage.jsx'
+import DanhGiaThucTapSinhPage from '../pages/DoanhNghiep/DanhGiaThucTapSinhPage.jsx'
 
 import GioiThieuCongTyPage from '../pages/GiangVien/GioiThieuCongTyPage.jsx'
 import DanhSachSVHuongDanPage from '../pages/GiangVien/DanhSachSVHuongDanPage.jsx'
@@ -39,6 +45,10 @@ function Guard({ children, roles }) {
   if (!user) return <Navigate to="/auth" replace />
   if (roles && !roles.includes(user.maVaiTro)) {
     if (user.maVaiTro === 'VT04') return <Navigate to="/sinh-vien" replace />
+    if (user.maVaiTro === 'VT05') return <Navigate to="/doanh-nghiep" replace />
+    if (user.maVaiTro === 'VT03') return <Navigate to="/giang-vien/dashboard" replace />
+    if (user.maVaiTro === 'VT02') return <Navigate to="/khoa" replace />
+    if (user.maVaiTro === 'VT01') return <Navigate to="/admin" replace />
     return <Navigate to="/dashboard" replace />
   }
   return children
@@ -51,7 +61,7 @@ function RootRedirect() {
   if (user.maVaiTro === 'VT03') return <Navigate to="/giang-vien/dashboard" replace />
   if (user.maVaiTro === 'VT02') return <Navigate to="/khoa" replace />
   if (user.maVaiTro === 'VT01') return <Navigate to="/admin" replace />
-  if (user.maVaiTro === 'VT05') return <Navigate to="/thong-bao" replace />
+  if (user.maVaiTro === 'VT05') return <Navigate to="/doanh-nghiep" replace />
   return <Navigate to="/dashboard" replace />
 }
 
@@ -75,6 +85,14 @@ export default function AppRoutes() {
         <Route path="/sinh-vien/thong-bao" element={<ThongBaoPage />} />
       </Route>
 
+      {/* Phân hệ Doanh nghiệp độc lập */}
+      <Route path="/doanh-nghiep" element={<Guard roles={['VT05', 'VT01', 'VT02']}><EnterpriseLayout /></Guard>}>
+        <Route index element={<EnterpriseDashboardPage />} />
+        <Route path="tuyen-dung" element={<QuanLyTinTuyenDungPage />} />
+        <Route path="ung-vien" element={<QuanLyUngVienPage />} />
+        <Route path="phong-van" element={<LichPhongVanDNPage />} />
+        <Route path="danh-gia" element={<DanhGiaThucTapSinhPage />} />
+      </Route>
       {/* Admin, Faculty & Lecturer Portal Routes (Wrapped with MainLayout & Guard) */}
       <Route element={<Guard><MainLayout /></Guard>}>
         <Route path="/dashboard" element={<DashboardPage />} />
