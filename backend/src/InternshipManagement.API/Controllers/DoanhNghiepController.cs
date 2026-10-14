@@ -263,6 +263,159 @@ namespace InternshipManagement.API.Controllers
                 trangThai = dk.TrangThai
             });
         }
+
+        /// <summary>
+        /// Lấy danh sách lịch phỏng vấn của doanh nghiệp
+        /// </summary>
+        [HttpGet("phong-van/{maCongTy}")]
+        public async Task<IActionResult> GetDanhSachPhongVan(string maCongTy)
+        {
+            var daiDiens = await _context.DaiDienDoanhNghieps
+                .Where(d => d.MaCongTy == maCongTy)
+                .ToDictionaryAsync(d => d.MaSo);
+
+            var daiDienIds = daiDiens.Keys.ToList();
+
+            var phongVans = await _context.PhongVans
+                .Where(p => daiDienIds.Contains(p.MaDaiDien))
+                .OrderByDescending(p => p.NgayPV)
+                .ToListAsync();
+
+            var sinhVienIds = phongVans.Select(p => p.MaSinhVien).Distinct().ToList();
+            var sinhViens = await _context.SinhViens
+                .Where(s => sinhVienIds.Contains(s.MaSV))
+                .ToDictionaryAsync(s => s.MaSV);
+
+            var result = phongVans.Select(p =>
+            {
+                sinhViens.TryGetValue(p.MaSinhVien, out var sv);
+                daiDiens.TryGetValue(p.MaDaiDien, out var dd);
+
+                return new
+                {
+                    p.MaPV,
+                    p.MaSinhVien,
+                    p.MaDaiDien,
+                    p.HinhThuc,
+                    p.NgayPV,
+                    p.KetQua,
+                    HoTenSV = sv?.HoTen ?? p.MaSinhVien,
+                    LopSV = sv?.Lop ?? "CNTT",
+                    GpaSV = sv?.Gpa ?? 3.0,
+                    TenNguoiPV = dd?.HoTen ?? "Người đại diện DN",
+                    ChucVuNguoiPV = dd?.ChucVu ?? "HR / Mentor",
+                    EmailNguoiPV = dd?.Email ?? ""
+                };
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Doanh nghiệp tạo lịch phỏng vấn mới cho ứng viên
+        /// </summary>
+        [HttpPost("phong-van")]
+        public async Task<IActionResult> TaoPhongVan([FromBody] TaoPhongVanRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.MaSinhVien) || string.IsNullOrWhiteSpace(request.MaDaiDien))
+            {
+                return BadRequest(new { message = "Mã sinh viên và Mã người đại diện phỏng vấn không được để trống" });
+            }
+
+            var maPV = "PV" + DateTime.Now.ToString("yyMMddHHmmss");
+            var pv = new PhongVan
+            {
+                MaPV = maPV,
+                MaSinhVien = request.MaSinhVien,
+                MaDaiDien = request.MaDaiDien,
+                HinhThuc = string.IsNullOrWhiteSpace(request.HinhThuc) ? "Trực tuyến qua Google Meet" : request.HinhThuc,
+                NgayPV = request.NgayPV ?? DateTime.Now.AddDays(2),
+                KetQua = "DangXuLy"
+            };
+
+            _context.PhongVans.Add(pv);
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Tạo lịch phỏng vấn thành công",
+                phongVan = pv
+            });
+        }
+
+        /// <summary>
+        /// Cập nhật kết quả phỏng vấn và tự động tạo tiếp nhận phân bổ nếu Đạt
+        /// </summary>
+        [HttpPut("phong-van/{maPV}/ket-qua")]
+        public async Task<IActionResult> CapNhatKetQuaPhongVan(string maPV, [FromBody] CapNhatKetQuaPhongVanRequest request)
+        {
+            var pv = await _context.PhongVans.FirstOrDefaultAsync(p => p.MaPV == maPV);
+            if (pv == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy buổi phỏng vấn {maPV}" });
+            }
+
+            pv.KetQua = request.KetQua;
+
+            // Nếu đạt, kiểm tra tạo phân bổ tiếp nhận thực tập chính thức
+            if (request.KetQua == "Dat")
+            {
+                var daiDien = await _context.DaiDienDoanhNghieps.FirstOrDefaultAsync(d => d.MaSo == pv.MaDaiDien);
+                if (daiDien != null)
+                {
+                    var exists = await _context.PhanBoThucTaps
+                        .AnyAsync(p => p.MaSinhVien == pv.MaSinhVien && p.MaCongTy == daiDien.MaCongTy);
+
+                    if (!exists)
+                    {
+                        var maPB = "PB" + DateTime.Now.ToString("yyMMddHHmmss");
+                        var pb = new PhanBoThucTap
+                        {
+                            MaPhanBo = maPB,
+                            MaSinhVien = pv.MaSinhVien,
+                            MaCongTy = daiDien.MaCongTy,
+                            MaDot = "DOT01",
+                            NgayPhanBo = DateTime.Now,
+                            TrangThai = "HoanThanh"
+                        };
+                        _context.PhanBoThucTaps.Add(pb);
+
+                        var hd = new HuongDanDoanhNghiep
+                        {
+                            MaSo = "HD" + DateTime.Now.ToString("yyMMddHHmmss"),
+                            MaPhanBo = maPB,
+                            MaDaiDien = pv.MaDaiDien,
+                            NgayBD = DateTime.Now,
+                            VaiTro = "Mentor hướng dẫn chuyên môn",
+                            DanhGia = "Đã trúng tuyển phỏng vấn và được doanh nghiệp tiếp nhận thực tập."
+                        };
+                        _context.HuongDanDoanhNghieps.Add(hd);
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Cập nhật kết quả phỏng vấn thành công",
+                maPV = pv.MaPV,
+                ketQua = pv.KetQua
+            });
+        }
+    }
+
+    public class TaoPhongVanRequest
+    {
+        public string MaSinhVien { get; set; } = default!;
+        public string MaDaiDien { get; set; } = default!;
+        public string? HinhThuc { get; set; }
+        public DateTime? NgayPV { get; set; }
+    }
+
+    public class CapNhatKetQuaPhongVanRequest
+    {
+        public string KetQua { get; set; } = "Dat";
     }
 
     public class CapNhatTrangThaiUngVienRequest
