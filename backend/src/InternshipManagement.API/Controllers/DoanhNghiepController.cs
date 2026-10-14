@@ -119,5 +119,85 @@ namespace InternshipManagement.API.Controllers
                 ungVienMoiNhat
             });
         }
+
+        /// <summary>
+        /// Lấy chi tiết tin tuyển dụng thực tập của doanh nghiệp
+        /// </summary>
+        [HttpGet("tin-tuyen-dung/{maCongTy}")]
+        public async Task<IActionResult> GetTinTuyenDung(string maCongTy)
+        {
+            var congTy = await _context.CongTys.FirstOrDefaultAsync(c => c.MaCongTy == maCongTy);
+            if (congTy == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy doanh nghiệp có mã {maCongTy}" });
+            }
+
+            var soUngVienDaNop = await _context.DangKyThucTaps.CountAsync(d => d.MaCongTy == maCongTy);
+            var soDaTiepNhan = await _context.PhanBoThucTaps.CountAsync(p => p.MaCongTy == maCongTy);
+
+            return Ok(new
+            {
+                congTy.MaCongTy,
+                congTy.TenCongTy,
+                congTy.ViTriTuyen,
+                congTy.ThoiGian,
+                congTy.SoLuongNhan,
+                congTy.YeuCau,
+                congTy.TrangThai,
+                soUngVienDaNop,
+                soDaTiepNhan
+            });
+        }
+
+        /// <summary>
+        /// Đăng mới hoặc cập nhật tin tuyển dụng thực tập của doanh nghiệp
+        /// </summary>
+        [HttpPost("tin-tuyen-dung")]
+        public async Task<IActionResult> LuuTinTuyenDung([FromBody] CapNhatTinTuyenDungRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.MaCongTy))
+            {
+                return BadRequest(new { message = "Mã công ty không được để trống" });
+            }
+
+            var congTy = await _context.CongTys.FirstOrDefaultAsync(c => c.MaCongTy == request.MaCongTy);
+            if (congTy == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy doanh nghiệp có mã {request.MaCongTy}" });
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.ViTriTuyen)) congTy.ViTriTuyen = request.ViTriTuyen.Trim();
+            if (!string.IsNullOrWhiteSpace(request.ThoiGian)) congTy.ThoiGian = request.ThoiGian.Trim();
+            if (request.SoLuongNhan.HasValue && request.SoLuongNhan > 0) congTy.SoLuongNhan = request.SoLuongNhan.Value;
+            if (request.YeuCau != null) congTy.YeuCau = request.YeuCau.Trim();
+            if (!string.IsNullOrWhiteSpace(request.TrangThai)) congTy.TrangThai = request.TrangThai.Trim();
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Cập nhật tin tuyển dụng thành công",
+                congTy = new
+                {
+                    congTy.MaCongTy,
+                    congTy.TenCongTy,
+                    congTy.ViTriTuyen,
+                    congTy.ThoiGian,
+                    congTy.SoLuongNhan,
+                    congTy.YeuCau,
+                    congTy.TrangThai
+                }
+            });
+        }
+    }
+
+    public class CapNhatTinTuyenDungRequest
+    {
+        public string MaCongTy { get; set; } = default!;
+        public string? ViTriTuyen { get; set; }
+        public string? ThoiGian { get; set; }
+        public int? SoLuongNhan { get; set; }
+        public string? YeuCau { get; set; }
+        public string? TrangThai { get; set; }
     }
 }

@@ -8,6 +8,7 @@ import NopTienDoSVPage from '../pages/SinhVien/NopTienDoSVPage.jsx'
 import SinhVienListPage from '../pages/SinhVien/SinhVienListPage.jsx'
 import EnterpriseLayout from '../components/layout/EnterpriseLayout.jsx'
 import EnterpriseDashboardPage from '../pages/DoanhNghiep/EnterpriseDashboardPage.jsx'
+import QuanLyTinTuyenDungPage from '../pages/DoanhNghiep/QuanLyTinTuyenDungPage.jsx'
 
 function AppRoutes() {
   return (
@@ -26,6 +27,7 @@ function AppRoutes() {
       {/* Phân hệ Doanh nghiệp độc lập */}
       <Route path="/doanh-nghiep" element={<EnterpriseLayout />}>
         <Route index element={<EnterpriseDashboardPage />} />
+        <Route path="tuyen-dung" element={<QuanLyTinTuyenDungPage />} />
       </Route>
     </Routes>
   )
