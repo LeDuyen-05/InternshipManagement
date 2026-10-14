@@ -9,6 +9,7 @@ import SinhVienListPage from '../pages/SinhVien/SinhVienListPage.jsx'
 import EnterpriseLayout from '../components/layout/EnterpriseLayout.jsx'
 import EnterpriseDashboardPage from '../pages/DoanhNghiep/EnterpriseDashboardPage.jsx'
 import QuanLyTinTuyenDungPage from '../pages/DoanhNghiep/QuanLyTinTuyenDungPage.jsx'
+import QuanLyUngVienPage from '../pages/DoanhNghiep/QuanLyUngVienPage.jsx'
 
 function AppRoutes() {
   return (
@@ -28,6 +29,7 @@ function AppRoutes() {
       <Route path="/doanh-nghiep" element={<EnterpriseLayout />}>
         <Route index element={<EnterpriseDashboardPage />} />
         <Route path="tuyen-dung" element={<QuanLyTinTuyenDungPage />} />
+        <Route path="ung-vien" element={<QuanLyUngVienPage />} />
       </Route>
     </Routes>
   )

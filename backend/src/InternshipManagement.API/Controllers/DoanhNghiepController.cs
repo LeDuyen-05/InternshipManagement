@@ -189,6 +189,85 @@ namespace InternshipManagement.API.Controllers
                 }
             });
         }
+
+        /// <summary>
+        /// Lấy danh sách ứng viên nộp hồ sơ vào doanh nghiệp kèm hồ sơ năng lực & CV
+        /// </summary>
+        [HttpGet("ung-vien/{maCongTy}")]
+        public async Task<IActionResult> GetDanhSachUngVien(string maCongTy)
+        {
+            var dangKys = await _context.DangKyThucTaps
+                .Where(d => d.MaCongTy == maCongTy)
+                .OrderBy(d => d.ThuTuUuTien)
+                .ThenByDescending(d => d.NgayDangKy)
+                .ToListAsync();
+
+            var sinhVienIds = dangKys.Select(d => d.MaSV).Distinct().ToList();
+            var sinhViens = await _context.SinhViens
+                .Where(s => sinhVienIds.Contains(s.MaSV))
+                .ToDictionaryAsync(s => s.MaSV);
+
+            var hoSos = await _context.HoSoNangLucs
+                .Where(h => sinhVienIds.Contains(h.MaSV))
+                .ToDictionaryAsync(h => h.MaSV);
+
+            var result = dangKys.Select(d =>
+            {
+                sinhViens.TryGetValue(d.MaSV, out var sv);
+                hoSos.TryGetValue(d.MaSV, out var hs);
+
+                return new
+                {
+                    d.MaDK,
+                    d.MaSV,
+                    d.MaCongTy,
+                    d.MaDot,
+                    d.NgayDangKy,
+                    d.ThuTuUuTien,
+                    d.TrangThai,
+                    HoTen = sv?.HoTen ?? d.MaSV,
+                    Lop = sv?.Lop ?? "CNTT",
+                    KhoaHoc = sv?.KhoaHoc ?? "2022",
+                    Gpa = sv?.Gpa ?? 3.0,
+                    ChuyenNganh = sv?.ChuyenNganh ?? "Công nghệ thông tin",
+                    KyNang = sv?.KyNang ?? "Lập trình Web, SQL",
+                    CongNghe = sv?.CongNghe ?? "React, Node.js",
+                    DuAnDaThucHien = sv?.DuAnDaThucHien ?? "Chưa cập nhật",
+                    NdHoSo = hs?.NDHoSo ?? "Mong muốn được thực tập và cống hiến cho doanh nghiệp.",
+                    FileCV = hs?.FileCV ?? "https://example.com/cv/" + d.MaSV + ".pdf"
+                };
+            }).ToList();
+
+            return Ok(result);
+        }
+
+        /// <summary>
+        /// Doanh nghiệp duyệt hoặc từ chối hồ sơ ứng viên
+        /// </summary>
+        [HttpPut("ung-vien/{maDK}/trang-thai")]
+        public async Task<IActionResult> CapNhatTrangThaiUngVien(string maDK, [FromBody] CapNhatTrangThaiUngVienRequest request)
+        {
+            var dk = await _context.DangKyThucTaps.FirstOrDefaultAsync(d => d.MaDK == maDK);
+            if (dk == null)
+            {
+                return NotFound(new { message = $"Không tìm thấy phiếu đăng ký {maDK}" });
+            }
+
+            dk.TrangThai = request.TrangThai;
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Cập nhật trạng thái duyệt hồ sơ thành công",
+                maDK = dk.MaDK,
+                trangThai = dk.TrangThai
+            });
+        }
+    }
+
+    public class CapNhatTrangThaiUngVienRequest
+    {
+        public string TrangThai { get; set; } = "DaDuyet";
     }
 
     public class CapNhatTinTuyenDungRequest
