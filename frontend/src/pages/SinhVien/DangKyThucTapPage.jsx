@@ -349,6 +349,8 @@ export default function DangKyThucTapPage() {
           ) : (
             filteredCompanies.map((c) => {
               const applied = isAlreadyApplied(c.maCongTy)
+              const full = !!c.daDuChiTieu
+              const blocked = full || myApplications.length >= 3
               return (
                 <div
                   key={c.maCongTy}
@@ -360,10 +362,17 @@ export default function DangKyThucTapPage() {
                       <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0 font-bold">
                         <span className="material-symbols-outlined text-[22px]">corporate_fare</span>
                       </div>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Tuyển dụng: {c.soLuongNhan || 0} chỉ tiêu
-                      </span>
+                      {full ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                          <span className="material-symbols-outlined text-[14px]">lock</span>
+                          Đã đủ chỉ tiêu ({c.daTiepNhan}/{c.soLuongNhan})
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                          Còn {c.conLai ?? c.soLuongNhan ?? 0}/{c.soLuongNhan || 0} chỉ tiêu
+                        </span>
+                      )}
                     </div>
 
                     <h3 className="font-bold text-slate-900 text-base group-hover:text-blue-700 transition-colors line-clamp-1">
@@ -402,16 +411,16 @@ export default function DangKyThucTapPage() {
                     ) : (
                       <button
                         onClick={() => handleOpenApply(c)}
-                        disabled={myApplications.length >= 3}
+                        disabled={blocked}
                         className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold shadow-xs transition-colors ${
-                          myApplications.length >= 3
+                          blocked
                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                             : 'bg-blue-700 hover:bg-blue-800 text-white'
                         }`}
-                        title={myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng'}
+                        title={full ? 'Doanh nghiệp đã đủ chỉ tiêu, đợt tuyển đã đóng' : myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng'}
                       >
-                        <span className="material-symbols-outlined text-[16px]">send</span>
-                        {myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
+                        <span className="material-symbols-outlined text-[16px]">{full ? 'lock' : 'send'}</span>
+                        {full ? 'Đã đóng tuyển' : myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
                       </button>
                     )}
                   </div>
