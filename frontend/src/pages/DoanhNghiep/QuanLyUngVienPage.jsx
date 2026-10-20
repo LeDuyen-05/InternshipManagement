@@ -11,22 +11,30 @@ export default function QuanLyUngVienPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [toast, setToast] = useState(null)
   const [processingId, setProcessingId] = useState(null)
+  const [chiTieu, setChiTieu] = useState(null)
+
+  const fetchCandidates = async () => {
+    if (!activeCompany?.maCongTy) return
+    try {
+      setLoading(true)
+      const [res, tq] = await Promise.all([
+        doanhNghiepService.getUngVien(activeCompany.maCongTy),
+        doanhNghiepService.getTongQuan(activeCompany.maCongTy),
+      ])
+      setCandidates(res || [])
+      setChiTieu(tq?.chiTieu || null)
+    } catch (err) {
+      console.error('Lỗi lấy danh sách ứng viên:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchCandidates() {
-      if (!activeCompany?.maCongTy) return
-      try {
-        setLoading(true)
-        const res = await doanhNghiepService.getUngVien(activeCompany.maCongTy)
-        setCandidates(res || [])
-      } catch (err) {
-        console.error('Lỗi lấy danh sách ứng viên:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchCandidates()
   }, [activeCompany?.maCongTy])
+
+  const daDongTuyen = !!chiTieu?.daDuChiTieu
 
   const handleUpdateStatus = async (maDK, newStatus) => {
     try {
@@ -47,7 +55,7 @@ export default function QuanLyUngVienPage() {
       })
     } catch (err) {
       console.error('Lỗi duyệt hồ sơ:', err)
-      setToast({ type: 'error', message: 'Không thể cập nhật trạng thái. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể cập nhật trạng thái. Vui lòng thử lại.' })
     } finally {
       setProcessingId(null)
       setTimeout(() => setToast(null), 4000)
@@ -74,6 +82,14 @@ export default function QuanLyUngVienPage() {
 
   return (
     <div className="space-y-6">
+      {chiTieu && (
+        <div className={`p-4 rounded-xl text-xs font-semibold border flex items-center gap-2 ${daDongTuyen ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
+          <span className="material-symbols-outlined text-[18px]">{daDongTuyen ? 'lock' : 'groups'}</span>
+          {daDongTuyen
+            ? `Đã đủ chỉ tiêu tiếp nhận (${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}) — hệ thống đã tự động đóng tuyển và từ chối các hồ sơ đang chờ.`
+            : `Đã tiếp nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} sinh viên — còn ${chiTieu.conLai} chỉ tiêu. Khi đủ chỉ tiêu, đợt tuyển sẽ tự động đóng.`}
+        </div>
+      )}
       {/* Toast Alert */}
       {toast && (
         <div
@@ -291,7 +307,7 @@ export default function QuanLyUngVienPage() {
                             Xem CV
                           </button>
 
-                          {c.trangThai !== 'DaDuyet' && (
+                          {c.trangThai !== 'DaDuyet' && !daDongTuyen && !c.daDuocTiepNhan && (
                             <button
                               type="button"
                               disabled={isProcessing}
@@ -480,7 +496,7 @@ export default function QuanLyUngVienPage() {
                     Từ chối hồ sơ
                   </button>
                 )}
-                {selectedCandidate.trangThai !== 'DaDuyet' && (
+                {selectedCandidate.trangThai !== 'DaDuyet' && !daDongTuyen && !selectedCandidate.daDuocTiepNhan && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedCandidate.maDK, 'DaDuyet')}

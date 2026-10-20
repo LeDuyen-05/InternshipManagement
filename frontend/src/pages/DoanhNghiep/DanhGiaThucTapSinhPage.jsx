@@ -1,116 +1,100 @@
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import phieuChamDiemService from '../../services/phieuChamDiemService.js'
 
+// Phiếu nhận xét của đơn vị thực tập theo file chấm điểm của Khoa:
+// CLO4.1 – ý thức, trách nhiệm, kỷ luật (tối đa 2đ); CLO4.2 – vận dụng kiến thức vào thực tiễn (tối đa 3đ).
 export default function DanhGiaThucTapSinhPage() {
   const { activeCompany } = useEnterprise()
   const [interns, setInterns] = useState([])
+  const [criteria, setCriteria] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedIntern, setSelectedIntern] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
-
-  // Form evaluation
-  const [evalForm, setEvalForm] = useState({
-    diemKyLuat: 9.0,
-    diemChuyenMon: 8.5,
-    diemLamViecNhom: 9.0,
-    nhanXet: '',
-  })
+  const [scores, setScores] = useState({})
+  const [nhanXet, setNhanXet] = useState('')
 
   useEffect(() => {
-    async function fetchInterns() {
-      if (!activeCompany?.maCongTy) return
-      try {
-        setLoading(true)
-        const res = await doanhNghiepService.getThucTapSinh(activeCompany.maCongTy)
-        setInterns(res || [])
-      } catch (err) {
-        console.error('Lỗi lấy danh sách thực tập sinh:', err)
-      } finally {
-        setLoading(false)
-      }
+    phieuChamDiemService
+      .getDanhSachTieuChi('DN')
+      .then((res) => setCriteria(res.data?.data || []))
+      .catch(() => setCriteria([]))
+  }, [])
+
+  const fetchInterns = async (maCongTy) => {
+    if (!maCongTy) return
+    try {
+      setLoading(true)
+      const res = await doanhNghiepService.getThucTapSinh(maCongTy)
+      setInterns(res || [])
+    } catch (err) {
+      console.error('Lỗi lấy danh sách thực tập sinh:', err)
+    } finally {
+      setLoading(false)
     }
-    fetchInterns()
+  }
+
+  useEffect(() => {
+    fetchInterns(activeCompany?.maCongTy)
   }, [activeCompany?.maCongTy])
 
   const handleOpenEvalModal = (intern) => {
     setSelectedIntern(intern)
-    setEvalForm({
-      diemKyLuat: 9.0,
-      diemChuyenMon: 8.5,
-      diemLamViecNhom: 9.0,
-      nhanXet: intern.danhGia?.includes('Nhận xét:')
-        ? intern.danhGia.split('Nhận xét:')[1]?.trim() || ''
-        : intern.danhGia || '',
-    })
+    const loaded = {}
+    for (const c of intern.chiTietDiemDN || []) loaded[c.maTieuChi] = Number(c.diemCham)
+    setScores(loaded)
+    setNhanXet(intern.danhGia || '')
   }
+
+  const handleScoreChange = (c, value) => {
+    if (value === '') {
+      setScores((prev) => ({ ...prev, [c.maTieuChi]: '' }))
+      return
+    }
+    const num = Math.min(Number(c.diemToiDa), Math.max(0, parseFloat(value) || 0))
+    setScores((prev) => ({ ...prev, [c.maTieuChi]: num }))
+  }
+
+  const tongDiemDN = criteria.reduce((sum, c) => sum + (Number(scores[c.maTieuChi]) || 0), 0)
+  const diemToiDaDN = criteria.reduce((sum, c) => sum + Number(c.diemToiDa), 0)
+  const chamDu = criteria.length > 0 && criteria.every((c) => scores[c.maTieuChi] !== undefined && scores[c.maTieuChi] !== '')
 
   const handleSaveEvaluation = async (e) => {
     e.preventDefault()
-    if (!selectedIntern) return
+    if (!selectedIntern || !chamDu) return
 
     try {
       setSubmitting(true)
       const res = await doanhNghiepService.danhGiaThucTapSinh({
         maPhanBo: selectedIntern.maPhanBo,
-        diemKyLuat: parseFloat(evalForm.diemKyLuat),
-        diemChuyenMon: parseFloat(evalForm.diemChuyenMon),
-        diemLamViecNhom: parseFloat(evalForm.diemLamViecNhom),
-        nhanXet: evalForm.nhanXet,
+        chiTiets: criteria.map((c) => ({ maTieuChi: c.maTieuChi, diemCham: Number(scores[c.maTieuChi]) })),
+        nhanXet,
       })
-
-      setInterns((prev) =>
-        prev.map((item) =>
-          item.maPhanBo === selectedIntern.maPhanBo
-            ? {
-                ...item,
-                danhGia: res.danhGia,
-                daDanhGia: true,
-                trangThai: 'HoanThanh',
-              }
-            : item
-        )
-      )
-
       setToast({
         type: 'success',
-        message: `Đã lưu đánh giá thực tập sinh ${selectedIntern.hoTenSV} thành công! (Điểm DN: ${res.diemTongKet}/10)`,
+        message: `Đã lưu Phiếu nhận xét cho ${selectedIntern.hoTenSV} (điểm đơn vị thực tập: ${Number(res.diemDN).toFixed(2)}/${diemToiDaDN.toFixed(1)}).`,
       })
       setSelectedIntern(null)
+      await fetchInterns(activeCompany?.maCongTy)
     } catch (err) {
-      console.error('Lỗi lưu đánh giá:', err)
-      setToast({ type: 'error', message: 'Không thể lưu đánh giá. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể lưu đánh giá. Vui lòng thử lại.' })
     } finally {
       setSubmitting(false)
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setToast(null), 5000)
     }
   }
 
-  const diemTongKetTamTinh = Math.round(
-    (evalForm.diemKyLuat * 0.3 + evalForm.diemChuyenMon * 0.5 + evalForm.diemLamViecNhom * 0.2) * 10
-  ) / 10
-
-  const gradedInterns = interns.filter((i) => i.daDanhGia || (i.danhGia && i.danhGia.includes('Tổng kết DN:')))
-  const calculatedDiemTB = (() => {
-    if (gradedInterns.length === 0) return '—'
-    let totalScore = 0
-    let count = 0
-    gradedInterns.forEach((i) => {
-      const match = i.danhGia?.match(/Tổng kết DN:\s*([\d.]+)/)
-      if (match) {
-        totalScore += parseFloat(match[1])
-        count++
-      }
-    })
-    return count > 0 ? (totalScore / count).toFixed(1) : '—'
-  })()
-
+  const gradedInterns = interns.filter((i) => i.daDanhGia)
   const stats = {
     total: interns.length,
     hoanThanh: gradedInterns.length,
     dangThucTap: interns.length - gradedInterns.length,
-    diemTB: calculatedDiemTB,
+    diemTB:
+      gradedInterns.length > 0
+        ? (gradedInterns.reduce((sum, i) => sum + Number(i.diemDN || 0), 0) / gradedInterns.length).toFixed(2)
+        : '—',
   }
 
   return (
@@ -169,8 +153,8 @@ export default function DanhGiaThucTapSinhPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Điểm đánh giá TB DN</div>
-          <div className="text-2xl font-black text-indigo-700 mt-2">{stats.diemTB} <span className="text-xs font-normal text-slate-500">/ 10</span></div>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Điểm Phiếu nhận xét TB</div>
+          <div className="text-2xl font-black text-indigo-700 mt-2">{stats.diemTB} <span className="text-xs font-normal text-slate-500">/ {diemToiDaDN ? diemToiDaDN.toFixed(1) : '5.0'}</span></div>
           <div className="text-[11px] text-slate-400 mt-1">Chất lượng thực tập sinh</div>
         </div>
       </div>
@@ -181,7 +165,7 @@ export default function DanhGiaThucTapSinhPage() {
           <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
             Danh sách sinh viên đang thực tập chính thức
           </h2>
-          <span className="text-xs text-slate-500">Đợt thực tập HK2 (2026 - 2027)</span>
+          <span className="text-xs text-slate-500">{loading ? 'Đang tải...' : `${interns.length} sinh viên`}</span>
         </div>
 
         <div className="overflow-x-auto">
@@ -229,22 +213,30 @@ export default function DanhGiaThucTapSinhPage() {
 
                     {/* Evaluation review */}
                     <td className="py-3.5 px-3">
-                      <p className="text-[11px] text-slate-600 max-w-xs truncate" title={item.danhGia || 'Chưa có đánh giá'}>
-                        {item.danhGia || 'Chưa có đánh giá'}
+                      {item.daDanhGia && (
+                        <div className="text-[11px] text-slate-700">
+                          {(item.chiTietDiemDN || []).map((c) => (
+                            <span key={c.maTieuChi} className="mr-2 font-semibold">{c.maTieuChi}: {Number(c.diemCham).toFixed(2)}</span>
+                          ))}
+                          <div className="font-bold text-indigo-700">Tổng: {Number(item.diemDN).toFixed(2)} / {diemToiDaDN.toFixed(1)}</div>
+                        </div>
+                      )}
+                      <p className="text-[11px] text-slate-500 max-w-xs truncate" title={item.danhGia || 'Chưa có đánh giá'}>
+                        {item.danhGia || (item.daDanhGia ? '' : 'Chưa có đánh giá')}
                       </p>
                     </td>
 
                     {/* Status */}
                     <td className="py-3.5 px-3">
                       <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                        item.trangThai === 'HoanThanh' || item.daDanhGia
+                        item.daDanhGia
                           ? 'bg-emerald-100 text-emerald-800'
                           : 'bg-blue-100 text-blue-800'
                       }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${
-                          item.trangThai === 'HoanThanh' || item.daDanhGia ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'
+                          item.daDanhGia ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'
                         }`}></span>
-                        {item.trangThai === 'HoanThanh' || item.daDanhGia ? 'Đã đánh giá' : 'Đang thực tập'}
+                        {item.daDanhGia ? 'Đã đánh giá' : 'Đang thực tập'}
                       </span>
                     </td>
 
@@ -256,7 +248,7 @@ export default function DanhGiaThucTapSinhPage() {
                         className="px-3.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-[11px] transition-colors shadow-2xs flex items-center gap-1 ml-auto"
                       >
                         <span className="material-symbols-outlined text-[15px]">rate_review</span>
-                        <span>{item.trangThai === 'HoanThanh' || item.daDanhGia ? 'Sửa đánh giá' : 'Chấm điểm'}</span>
+                        <span>{item.daDanhGia ? 'Sửa đánh giá' : 'Chấm điểm'}</span>
                       </button>
                     </td>
                   </tr>
@@ -280,7 +272,7 @@ export default function DanhGiaThucTapSinhPage() {
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">Phiếu Đánh Giá Thực Tập Sinh</h3>
+                <h3 className="font-bold text-slate-900 text-sm">Phiếu Nhận Xét Của Đơn Vị Thực Tập</h3>
                 <div className="text-[11px] text-slate-500">
                   {selectedIntern.hoTenSV} ({selectedIntern.maSinhVien}) • {selectedIntern.lopSV || '—'}
                 </div>
@@ -296,72 +288,52 @@ export default function DanhGiaThucTapSinhPage() {
 
             {/* Modal Form */}
             <form onSubmit={handleSaveEvaluation} className="p-6 space-y-4 text-xs">
-              {/* Score Criterion 1 */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-slate-700">1. Ý thức kỷ luật, chuyên cần & tác phong (30%)</label>
-                  <span className="font-bold text-indigo-700 text-sm">{evalForm.diemKyLuat} / 10</span>
+              <p className="text-[11px] text-slate-500">
+                Phiếu nhận xét của đơn vị thực tập chiếm {diemToiDaDN.toFixed(1)}/10 điểm học phần; phần còn lại do giảng viên hướng dẫn chấm.
+              </p>
+              {criteria.length === 0 && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800">
+                  Chưa tải được tiêu chí Phiếu nhận xét từ hệ thống.
                 </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="10"
-                  step="0.5"
-                  value={evalForm.diemKyLuat}
-                  onChange={(e) => setEvalForm({ ...evalForm, diemKyLuat: parseFloat(e.target.value) })}
-                  className="w-full accent-indigo-600 cursor-pointer"
-                />
-              </div>
-
-              {/* Score Criterion 2 */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-slate-700">2. Năng lực chuyên môn & Khả năng giải quyết vấn đề (50%)</label>
-                  <span className="font-bold text-indigo-700 text-sm">{evalForm.diemChuyenMon} / 10</span>
+              )}
+              {criteria.map((c) => (
+                <div key={c.maTieuChi} className="flex items-start justify-between gap-3">
+                  <label className="font-semibold text-slate-700" htmlFor={`dn-${c.maTieuChi}`}>
+                    <span className="text-indigo-700 font-mono mr-1">{c.maTieuChi}</span>
+                    {c.tenTieuChi}
+                  </label>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <input
+                      id={`dn-${c.maTieuChi}`}
+                      type="number"
+                      min="0"
+                      max={c.diemToiDa}
+                      step="0.1"
+                      required
+                      value={scores[c.maTieuChi] ?? ''}
+                      onChange={(e) => handleScoreChange(c, e.target.value)}
+                      className="w-20 px-2 py-1.5 rounded-lg border border-slate-300 text-center font-bold focus:outline-none focus:border-indigo-600"
+                    />
+                    <span className="text-slate-400">/ {Number(c.diemToiDa).toFixed(1)}</span>
+                  </div>
                 </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="10"
-                  step="0.5"
-                  value={evalForm.diemChuyenMon}
-                  onChange={(e) => setEvalForm({ ...evalForm, diemChuyenMon: parseFloat(e.target.value) })}
-                  className="w-full accent-indigo-600 cursor-pointer"
-                />
-              </div>
-
-              {/* Score Criterion 3 */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-semibold text-slate-700">3. Kỹ năng làm việc nhóm & Tinh thần trách nhiệm (20%)</label>
-                  <span className="font-bold text-indigo-700 text-sm">{evalForm.diemLamViecNhom} / 10</span>
-                </div>
-                <input
-                  type="range"
-                  min="5"
-                  max="10"
-                  step="0.5"
-                  value={evalForm.diemLamViecNhom}
-                  onChange={(e) => setEvalForm({ ...evalForm, diemLamViecNhom: parseFloat(e.target.value) })}
-                  className="w-full accent-indigo-600 cursor-pointer"
-                />
-              </div>
+              ))}
 
               {/* Summary Score Callout */}
               <div className="p-3 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-between">
-                <span className="font-bold text-indigo-900">Điểm tổng kết doanh nghiệp:</span>
-                <span className="text-base font-black text-indigo-700">{diemTongKetTamTinh} / 10.0</span>
+                <span className="font-bold text-indigo-900">Điểm đơn vị thực tập:</span>
+                <span className="text-base font-black text-indigo-700">{tongDiemDN.toFixed(2)} / {diemToiDaDN.toFixed(1)}</span>
               </div>
 
               {/* Detailed Feedback */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Nhận xét chi tiết của Mentor / Doanh nghiệp *</label>
+                <label className="block font-semibold text-slate-700 mb-1">Nhận xét của Mentor / Đơn vị thực tập *</label>
                 <textarea
                   rows={3}
                   required
-                  value={evalForm.nhanXet}
-                  onChange={(e) => setEvalForm({ ...evalForm, nhanXet: e.target.value })}
-                  placeholder="Nhận xét ưu điểm, mặt cần cải thiện và thái độ làm việc của sinh viên..."
+                  value={nhanXet}
+                  onChange={(e) => setNhanXet(e.target.value)}
+                  placeholder="Nhận xét về ý thức, trách nhiệm, kỷ luật và khả năng vận dụng kiến thức của sinh viên..."
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600 text-xs"
                 />
               </div>
@@ -376,8 +348,8 @@ export default function DanhGiaThucTapSinhPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold transition-all flex items-center gap-1.5"
+                  disabled={submitting || !chamDu}
+                  className="px-5 py-2 rounded-xl disabled:opacity-50 bg-indigo-700 hover:bg-indigo-800 text-white font-bold transition-all flex items-center gap-1.5"
                 >
                   {submitting ? 'Đang lưu...' : 'Ghi nhận đánh giá'}
                 </button>

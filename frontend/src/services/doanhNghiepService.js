@@ -67,7 +67,7 @@ export const doanhNghiepService = {
     return res.data
   },
 
-  // Đánh giá / Chấm điểm thực tập sinh
+  // Phiếu nhận xét của đơn vị thực tập: { maPhanBo, chiTiets: [{ maTieuChi, diemCham }], nhanXet }
   danhGiaThucTapSinh: async (data) => {
     const res = await apiClient.post('/DoanhNghiep/danh-gia', data)
     return res.data

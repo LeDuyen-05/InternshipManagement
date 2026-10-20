@@ -11,6 +11,7 @@ export default function LichPhongVanDNPage() {
   const [selectedInterview, setSelectedInterview] = useState(null)
   const [toast, setToast] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [chiTieu, setChiTieu] = useState(null)
 
   // Form tạo lịch mới
   const [formSchedule, setFormSchedule] = useState({
@@ -24,17 +25,21 @@ export default function LichPhongVanDNPage() {
   // Form cập nhật kết quả
   const [resultChoice, setResultChoice] = useState('Dat')
 
-  useEffect(() => {
-    async function fetchData() {
+  const fetchData = async () => {
       if (!activeCompany?.maCongTy) return
       try {
         setLoading(true)
-        const [pvRes, uvRes] = await Promise.all([
+        let [pvRes, uvRes, tqRes] = await Promise.all([
           doanhNghiepService.getPhongVan(activeCompany.maCongTy),
           doanhNghiepService.getUngVien(activeCompany.maCongTy),
+          doanhNghiepService.getTongQuan(activeCompany.maCongTy),
         ])
         setInterviews(pvRes || [])
-        setCandidates(uvRes || [])
+        // Chỉ hồ sơ còn hiệu lực và SV chưa được nơi nào tiếp nhận mới được xếp lịch phỏng vấn
+        const eligible = (uvRes || []).filter((c) => c.trangThai !== 'TuChoi' && !c.daDuocTiepNhan)
+        setCandidates(eligible)
+        setChiTieu(tqRes?.chiTieu || null)
+        uvRes = eligible
 
         if (uvRes?.length > 0 && !formSchedule.maSinhVien) {
           setFormSchedule((prev) => ({
@@ -48,7 +53,9 @@ export default function LichPhongVanDNPage() {
       } finally {
         setLoading(false)
       }
-    }
+  }
+
+  useEffect(() => {
     fetchData()
   }, [activeCompany?.maCongTy])
 
@@ -87,7 +94,7 @@ export default function LichPhongVanDNPage() {
         emailNguoiPV: dd?.email || '',
         hinhThuc: formSchedule.hinhThuc,
         ngayPV: dateTimeStr,
-        ketQua: 'DangXuLy',
+        ketQua: res.phongVan?.ketQua || 'ChuaCoKetQua',
       }
 
       setInterviews((prev) => [newInterview, ...prev])
@@ -95,7 +102,7 @@ export default function LichPhongVanDNPage() {
       setShowScheduleModal(false)
     } catch (err) {
       console.error('Lỗi tạo lịch phỏng vấn:', err)
-      setToast({ type: 'error', message: 'Không thể tạo lịch phỏng vấn. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể tạo lịch phỏng vấn. Vui lòng thử lại.' })
     } finally {
       setSubmitting(false)
       setTimeout(() => setToast(null), 4000)
@@ -108,27 +115,15 @@ export default function LichPhongVanDNPage() {
 
     try {
       setSubmitting(true)
-      await doanhNghiepService.capNhatKetQuaPhongVan(selectedInterview.maPV, {
+      const res = await doanhNghiepService.capNhatKetQuaPhongVan(selectedInterview.maPV, {
         ketQua: resultChoice,
       })
-
-      setInterviews((prev) =>
-        prev.map((item) =>
-          item.maPV === selectedInterview.maPV ? { ...item, ketQua: resultChoice } : item
-        )
-      )
-
-      setToast({
-        type: 'success',
-        message:
-          resultChoice === 'Dat'
-            ? 'Đã ghi nhận kết quả ĐẠT và tự động xác nhận tiếp nhận thực tập chính thức!'
-            : 'Đã ghi nhận kết quả không đạt.',
-      })
+      setToast({ type: 'success', message: res?.message || 'Đã ghi nhận kết quả phỏng vấn.' })
       setSelectedInterview(null)
+      await fetchData()
     } catch (err) {
       console.error('Lỗi cập nhật kết quả PV:', err)
-      setToast({ type: 'error', message: 'Lỗi cập nhật kết quả. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Lỗi cập nhật kết quả. Vui lòng thử lại.' })
     } finally {
       setSubmitting(false)
       setTimeout(() => setToast(null), 4000)
@@ -138,12 +133,22 @@ export default function LichPhongVanDNPage() {
   const stats = {
     total: interviews.length,
     dat: interviews.filter((i) => i.ketQua === 'Dat').length,
-    dangXuLy: interviews.filter((i) => i.ketQua === 'DangXuLy' || !i.ketQua).length,
+    dangXuLy: interviews.filter((i) => i.ketQua === 'ChuaCoKetQua' || !i.ketQua).length,
     khongDat: interviews.filter((i) => i.ketQua === 'KhongDat').length,
   }
 
+  const daDongTuyen = chiTieu?.daDuChiTieu
+
   return (
     <div className="space-y-6">
+      {chiTieu && (
+        <div className={`p-4 rounded-xl text-xs font-semibold border flex items-center gap-2 ${daDongTuyen ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
+          <span className="material-symbols-outlined text-[18px]">{daDongTuyen ? 'lock' : 'groups'}</span>
+          {daDongTuyen
+            ? `Đã đủ chỉ tiêu tiếp nhận (${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}) — đợt tuyển đã tự động đóng, không thể xếp thêm lịch phỏng vấn.`
+            : `Chỉ tiêu tiếp nhận ${chiTieu.tenDot || ''}: đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}, còn ${chiTieu.conLai} chỗ.`}
+        </div>
+      )}
       {/* Toast Alert */}
       {toast && (
         <div
@@ -176,7 +181,9 @@ export default function LichPhongVanDNPage() {
         <button
           type="button"
           onClick={() => setShowScheduleModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow-sm transition-all"
+          disabled={daDongTuyen}
+          title={daDongTuyen ? 'Đã đủ chỉ tiêu – đợt tuyển đã đóng' : undefined}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow-sm transition-all"
         >
           <span className="material-symbols-outlined text-[18px]">add_circle</span>
           <span>Lên lịch phỏng vấn mới</span>

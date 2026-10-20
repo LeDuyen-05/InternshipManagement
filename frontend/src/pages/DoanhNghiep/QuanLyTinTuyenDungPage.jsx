@@ -16,31 +16,41 @@ export default function QuanLyTinTuyenDungPage() {
     thoiGian: '',
     soLuongNhan: 0,
     yeuCau: '',
-    trangThai: 'DaDuyet',
   })
 
-  useEffect(() => {
-    async function fetchJobPosting() {
-      if (!activeCompany?.maCongTy) return
-      try {
-        setLoading(true)
-        const res = await doanhNghiepService.getTinTuyenDung(activeCompany.maCongTy)
-        setData(res)
-        setForm({
-          viTriTuyen: res.viTriTuyen || '',
-          thoiGian: res.thoiGian || '',
-          soLuongNhan: res.soLuongNhan || 0,
-          yeuCau: res.yeuCau || '',
-          trangThai: res.trangThai || 'DaDuyet',
-        })
-      } catch (err) {
-        console.error('Lỗi lấy tin tuyển dụng:', err)
-      } finally {
-        setLoading(false)
-      }
+  const fetchJobPosting = async () => {
+    if (!activeCompany?.maCongTy) return
+    try {
+      setLoading(true)
+      const res = await doanhNghiepService.getTinTuyenDung(activeCompany.maCongTy)
+      setData(res)
+      setForm({
+        viTriTuyen: res.viTriTuyen || '',
+        thoiGian: res.thoiGian || '',
+        soLuongNhan: res.soLuongNhan || 0,
+        yeuCau: res.yeuCau || '',
+      })
+    } catch (err) {
+      console.error('Lỗi lấy tin tuyển dụng:', err)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchJobPosting()
   }, [activeCompany?.maCongTy])
+
+  // Trạng thái tuyển dụng do hệ thống tự xác định: Khoa duyệt công ty + còn/hết chỉ tiêu trong đợt
+  const chiTieu = data?.chiTieu
+  const trangThaiTuyen = chiTieu?.trangThaiTuyen
+  const dangMo = trangThaiTuyen === 'DangTuyen'
+  const nhanTrangThai = {
+    DangTuyen: 'Đang mở nhận hồ sơ',
+    DaDuChiTieu: 'Đã đủ chỉ tiêu – tự động đóng',
+    ChuaDuocDuyet: 'Chờ Khoa phê duyệt',
+    KhongCoDot: 'Chưa có đợt thực tập đang diễn ra',
+  }[trangThaiTuyen] || '—'
 
   const handleSave = async (e) => {
     e.preventDefault()
@@ -52,39 +62,15 @@ export default function QuanLyTinTuyenDungPage() {
         thoiGian: form.thoiGian,
         soLuongNhan: parseInt(form.soLuongNhan, 10),
         yeuCau: form.yeuCau,
-        trangThai: form.trangThai,
       })
-      setData((prev) => ({
-        ...prev,
-        ...form,
-        soLuongNhan: parseInt(form.soLuongNhan, 10),
-      }))
+      await fetchJobPosting()
       setToast({ type: 'success', message: 'Cập nhật tin tuyển dụng thành công!' })
       setShowModal(false)
     } catch (err) {
       console.error('Lỗi lưu tin tuyển dụng:', err)
-      setToast({ type: 'error', message: 'Không thể cập nhật tin tuyển dụng. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể cập nhật tin tuyển dụng. Vui lòng thử lại.' })
     } finally {
       setSubmitting(false)
-      setTimeout(() => setToast(null), 4000)
-    }
-  }
-
-  const handleToggleStatus = async () => {
-    const newStatus = data?.trangThai === 'TamDong' ? 'DaDuyet' : 'TamDong'
-    try {
-      await doanhNghiepService.luuTinTuyenDung({
-        maCongTy: activeCompany.maCongTy,
-        trangThai: newStatus,
-      })
-      setData((prev) => ({ ...prev, trangThai: newStatus }))
-      setToast({
-        type: 'success',
-        message: newStatus === 'TamDong' ? 'Đã tạm dừng nhận hồ sơ cho vị trí này' : 'Đã mở lại nhận hồ sơ tuyển dụng',
-      })
-    } catch (err) {
-      setToast({ type: 'error', message: 'Lỗi cập nhật trạng thái' })
-    } finally {
       setTimeout(() => setToast(null), 4000)
     }
   }
@@ -159,15 +145,15 @@ export default function QuanLyTinTuyenDungPage() {
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái tuyển dụng</div>
           <div className="mt-2">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-              data?.trangThai === 'TamDong'
-                ? 'bg-rose-100 text-rose-800'
-                : 'bg-emerald-100 text-emerald-800'
+              dangMo ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${data?.trangThai === 'TamDong' ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></span>
-              {data?.trangThai === 'TamDong' ? 'Tạm đóng nhận CV' : 'Đang mở nhận CV'}
+              <span className={`w-2 h-2 rounded-full ${dangMo ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+              {nhanTrangThai}
             </span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1.5">Hiển thị trên Cổng Sinh viên</div>
+          <div className="text-[11px] text-slate-400 mt-1.5">
+            {chiTieu ? `Đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} — tự đóng khi đủ chỉ tiêu` : 'Hiển thị trên Cổng Sinh viên'}
+          </div>
         </div>
       </div>
 
@@ -197,17 +183,6 @@ export default function QuanLyTinTuyenDungPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleToggleStatus}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                data?.trangThai === 'TamDong'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-              }`}
-            >
-              {data?.trangThai === 'TamDong' ? 'Mở lại tin tuyển dụng' : 'Tạm đóng tin tuyển'}
-            </button>
             <button
               type="button"
               onClick={() => setShowModal(true)}
@@ -300,23 +275,16 @@ export default function QuanLyTinTuyenDungPage() {
                   <label className="block font-semibold text-slate-700 mb-1">Chỉ tiêu nhận (SV) *</label>
                   <input
                     type="number"
-                    min="1"
+                    min={Math.max(1, chiTieu?.daTiepNhan || 0)}
                     required
                     value={form.soLuongNhan}
                     onChange={(e) => setForm({ ...form, soLuongNhan: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   />
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Trạng thái tin</label>
-                  <select
-                    value={form.trangThai}
-                    onChange={(e) => setForm({ ...form, trangThai: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                  >
-                    <option value="DaDuyet">Đang mở nhận hồ sơ</option>
-                    <option value="TamDong">Tạm đóng nhận hồ sơ</option>
-                  </select>
+                <div className="text-[11px] text-slate-500 self-end pb-2">
+                  Trạng thái nhận hồ sơ do hệ thống tự động đóng khi đã tiếp nhận đủ chỉ tiêu
+                  {chiTieu ? ` (hiện đã nhận ${chiTieu.daTiepNhan}).` : '.'} Tăng chỉ tiêu sẽ mở lại đợt tuyển.
                 </div>
               </div>
 
