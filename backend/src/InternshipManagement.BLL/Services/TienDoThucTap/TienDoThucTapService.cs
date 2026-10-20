@@ -145,6 +145,11 @@ public class TienDoThucTapService : ITienDoThucTapService
             throw new InvalidOperationException("Báo cáo đã nộp/đã duyệt, không thể sửa.");
         }
 
+        if (existing.DotThucTap?.TrangThai == "DaKetThuc")
+        {
+            throw new InvalidOperationException("Đợt thực tập đã kết thúc, không thể nộp báo cáo tiến độ.");
+        }
+
         existing.NoiDungBaoCao = request.NoiDungBaoCao.Trim();
         existing.NgayNop = DateTime.Now;
         existing.TrangThaiDuyet = "DaNop";
