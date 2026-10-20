@@ -34,7 +34,11 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             .AsNoTracking()
             .Include(s => s.PhanBoThucTaps)
                 .ThenInclude(pb => pb.CongTy)
-            .Where(s => !s.GVHuongDans.Any(h => h.TrangThai == "DangHuongDan"));
+            .Where(s => !s.GVHuongDans.Any(h => h.TrangThai == "DangHuongDan"))
+            // Bỏ qua SV chỉ tham gia các đợt đã kết thúc (đã hoàn thành thực tập ở đợt trước)
+            .Where(s => s.PhanBoThucTaps.Any(p => p.TrangThai != "Huy" && p.DotThucTap.TrangThai != "DaKetThuc")
+                     || s.DangKyThucTaps.Any(d => d.DotThucTap.TrangThai != "DaKetThuc")
+                     || (!s.PhanBoThucTaps.Any() && !s.DangKyThucTaps.Any()));
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -155,6 +159,15 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         gv.ChuyenMon = chuyenMon ?? string.Empty;
         await Context.SaveChangesAsync();
         return true;
+    }
+
+    public async Task<IReadOnlyList<GioiThieu>> GetGioiThieuDaDuyetAsync()
+    {
+        return await Context.GioiThieus
+            .AsNoTracking()
+            .Include(g => g.GiangVien)
+            .Where(g => g.TrangThaiKetNoi == "DaDuyet")
+            .ToListAsync();
     }
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation)

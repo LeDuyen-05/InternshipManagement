@@ -39,7 +39,9 @@ public class TuDongPhanCongPreviewItem
     public string MaGV { get; set; } = default!;
     public string HoTenGV { get; set; } = default!;
     public string ChuyenMonGV { get; set; } = default!;
-    public string LyDoGhep { get; set; } = default!; // "Trùng chuyên môn", "GV giới thiệu DN", "Cân bằng tải"
+    public string LyDoGhep { get; set; } = default!;
+    /// <summary>1 = GV giới thiệu doanh nghiệp, 2 = phù hợp chuyên môn, 3 = cân bằng chỉ tiêu.</summary>
+    public int MucUuTien { get; set; }
 }
 
 public class TuDongPhanCongConfirmRequest
