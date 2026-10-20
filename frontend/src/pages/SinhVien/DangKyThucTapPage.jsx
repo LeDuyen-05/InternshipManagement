@@ -3,15 +3,22 @@ import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import { dangKyThucTapService } from '../../services/dangKyThucTapService'
+import { hoSoNangLucService } from '../../services/hoSoNangLucService'
+import { phongVanService } from '../../services/phongVanService'
+import { CONG_TY, TONE, gpaToiThieu, trangThaiNguyenVong } from '../../utils/trangThai'
 
 export default function DangKyThucTapPage() {
-  const { user, maSV: currentMaSV } = useIdentity()
+  const { maSV: currentMaSV } = useIdentity()
   const { selectedDot } = useDotThucTap()
   const currentMaDot = selectedDot?.maDot || ''
 
   const [activeTab, setActiveTab] = useState('companies') // 'companies' | 'my-applications'
   const [companies, setCompanies] = useState([])
   const [myApplications, setMyApplications] = useState([])
+  const [myProposals, setMyProposals] = useState([])
+  const [placement, setPlacement] = useState(null)
+  const [gpa, setGpa] = useState(null)
+  const [dieuKien, setDieuKien] = useState(null)
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [toast, setToast] = useState(null)
@@ -35,18 +42,27 @@ export default function DangKyThucTapPage() {
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), type === 'error' ? 7000 : 4000)
   }
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [compRes, appRes] = await Promise.all([
+      const [compRes, appRes, propRes, pbRes, hsRes, dkRes] = await Promise.all([
         dangKyThucTapService.getDanhSachCongTy(),
         dangKyThucTapService.getDangKyBySinhVien(currentMaSV),
+        dangKyThucTapService.getDeXuatCuaToi().catch(() => []),
+        phongVanService.getPhanBoThucTap(currentMaSV).catch(() => null),
+        hoSoNangLucService.getHoSoBySinhVien(currentMaSV).catch(() => null),
+        currentMaDot ? dangKyThucTapService.getDieuKien(currentMaDot).catch(() => null) : Promise.resolve(null),
       ])
+      setDieuKien(dkRes)
       setCompanies(compRes || [])
-      setMyApplications(appRes || [])
+      // Giới hạn 3 nguyện vọng và thứ tự ưu tiên tính trong từng đợt
+      setMyApplications((appRes || []).filter((a) => !currentMaDot || a.maDot === currentMaDot))
+      setMyProposals(propRes || [])
+      setPlacement(pbRes && (!currentMaDot || pbRes.maDot === currentMaDot) ? pbRes : null)
+      setGpa(hsRes?.gpa ?? null)
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu thực tập:', err)
       showToast('Không thể kết nối đến máy chủ API', 'error')
@@ -57,10 +73,55 @@ export default function DangKyThucTapPage() {
 
   useEffect(() => {
     fetchData()
-  }, [currentMaSV])
+  }, [currentMaSV, currentMaDot])
+
+  // Chỉ đăng ký được khi đợt đang diễn ra và SV chưa được doanh nghiệp nào tiếp nhận
+  const dotDangMo = selectedDot?.trangThai === 'DangDienRa'
+  // Quy tắc "đã trúng tuyển / đã hoàn thành học phần" do backend quyết định (một nguồn duy nhất)
+  const khongDuDieuKien = dieuKien && !dieuKien.duocDangKy
+  const daCoNoiTiepNhan = Boolean(placement) || Boolean(khongDuDieuKien)
+  const lyDoKhoa = !dotDangMo
+    ? `Đợt "${selectedDot?.tenDot || ''}" ${selectedDot?.labelTrangThai?.toLowerCase() || 'không mở đăng ký'} — không thể đăng ký nguyện vọng.`
+    : khongDuDieuKien
+      ? dieuKien.lyDo
+      : placement
+        ? `Bạn đã trúng tuyển tại ${placement.tenCongTy} trong đợt này nên không thể đăng ký thêm nguyện vọng.`
+        : null
 
   // Mở modal đăng ký cho 1 công ty
-  const handleOpenApply = (company) => {
+  // Hỏi lại backend ngay khi mở form để không mở trên dữ liệu cũ (vd. vừa trúng tuyển ở tab khác)
+  const kiemTraDieuKienMoi = async () => {
+    if (!currentMaDot) return null
+    try {
+      const dk = await dangKyThucTapService.getDieuKien(currentMaDot)
+      setDieuKien(dk)
+      return dk && !dk.duocDangKy ? dk.lyDo : null
+    } catch {
+      return null // backend sẽ chặn lại khi nộp nếu không đủ điều kiện
+    }
+  }
+
+  // Lỗi nghiệp vụ (400/409): đóng form, báo lý do và tải lại để banner/khóa nút cập nhật ngay
+  const xuLyLoiNghiepVu = (err, dongForm, tienTo) => {
+    const status = err.response?.status
+    const message = err.response?.data?.message || err.message
+    showToast(`${tienTo}: ${message}`, 'error')
+    if (status === 400 || status === 409) {
+      dongForm()
+      fetchData()
+    }
+  }
+
+  const handleOpenApply = async (company) => {
+    if (lyDoKhoa) {
+      showToast(lyDoKhoa, 'error')
+      return
+    }
+    const lyDoMoi = await kiemTraDieuKienMoi()
+    if (lyDoMoi) {
+      showToast(lyDoMoi, 'error')
+      return
+    }
     if (myApplications.length >= 3) {
       showToast('Bạn đã đăng ký đủ tối đa 3 nguyện vọng trong đợt này. Vui lòng hủy bớt nếu muốn đổi công ty khác.', 'warning')
       return
@@ -98,7 +159,7 @@ export default function DangKyThucTapPage() {
       setActiveTab('my-applications')
     } catch (err) {
       console.error(err)
-      showToast('Lỗi khi nộp nguyện vọng: ' + (err.response?.data?.message || err.message), 'error')
+      xuLyLoiNghiepVu(err, () => setApplyModalOpen(false), 'Không thể nộp nguyện vọng')
     } finally {
       setIsSubmittingApply(false)
     }
@@ -145,7 +206,7 @@ export default function DangKyThucTapPage() {
       fetchData()
     } catch (err) {
       console.error(err)
-      showToast('Lỗi khi gửi đề xuất: ' + (err.response?.data?.message || err.message), 'error')
+      xuLyLoiNghiepVu(err, () => setProposalModalOpen(false), 'Không thể gửi đề xuất')
     } finally {
       setIsSubmittingProposal(false)
     }
@@ -175,7 +236,7 @@ export default function DangKyThucTapPage() {
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed top-20 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all animate-bounce ${
+          className={`fixed top-20 right-6 z-[60] max-w-md flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all ${
             toast.type === 'error'
               ? 'bg-rose-50 border-rose-200 text-rose-800'
               : 'bg-emerald-50 border-emerald-200 text-emerald-800'
@@ -206,14 +267,30 @@ export default function DangKyThucTapPage() {
         {/* Action Buttons */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => setProposalModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold shadow-xs transition-all"
+            onClick={async () => {
+              const lyDoMoi = lyDoKhoa || (await kiemTraDieuKienMoi())
+              if (lyDoMoi) {
+                showToast(lyDoMoi, 'error')
+                return
+              }
+              setProposalModalOpen(true)
+            }}
+            disabled={daCoNoiTiepNhan}
+            title={daCoNoiTiepNhan ? 'Bạn đã trúng tuyển trong đợt này' : 'Đề xuất doanh nghiệp ngoài danh sách'}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <span className="material-symbols-outlined text-[18px] text-blue-700">add_business</span>
             Đề xuất doanh nghiệp mới
           </button>
         </div>
       </div>
+
+      {lyDoKhoa && (
+        <div className={`p-4 rounded-xl border text-sm font-medium flex items-center gap-2 ${daCoNoiTiepNhan ? TONE.emerald : TONE.amber}`}>
+          <span className="material-symbols-outlined text-[20px]">{daCoNoiTiepNhan ? 'verified' : 'info'}</span>
+          {lyDoKhoa}
+        </div>
+      )}
 
       {/* Bento Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -249,26 +326,27 @@ export default function DangKyThucTapPage() {
             <span className="material-symbols-outlined text-emerald-700 text-[22px]">verified</span>
           </div>
           <div className="mt-3">
-            <div className="text-3xl font-extrabold text-emerald-800">
-              {myApplications.filter((a) => a.trangThai === 'DaDuyet').length}
+            <div className="text-lg font-extrabold text-emerald-800 truncate">
+              {placement ? placement.tenCongTy : '—'}
             </div>
             <div className="text-xs text-emerald-600 font-medium mt-1">
-              {myApplications.some((a) => a.trangThai === 'DaDuyet')
-                ? 'Đã có công ty tiếp nhận'
-                : 'Chờ xét duyệt kết quả'}
+              {placement
+                ? 'Đã có quyết định tiếp nhận'
+                : `${myApplications.filter((a) => a.trangThai === 'DaDuyet').length} hồ sơ đạt vòng xét, chờ phỏng vấn`}
             </div>
           </div>
         </div>
 
         <div className="p-5 bg-blue-50/70 rounded-xl border border-blue-200 shadow-xs flex flex-col justify-between">
           <div className="flex items-center justify-between text-blue-900">
-            <span className="text-xs font-bold uppercase tracking-wider">Thời hạn đợt này</span>
+            <span className="text-xs font-bold uppercase tracking-wider">Đợt thực tập</span>
             <span className="material-symbols-outlined text-blue-800 text-[22px]">schedule</span>
           </div>
           <div className="mt-3">
-            <div className="text-lg font-bold text-blue-950">25/10/2026</div>
+            <div className="text-sm font-bold text-blue-950">{selectedDot?.thoiGian || '—'}</div>
             <div className="text-xs text-blue-800 mt-1 font-medium">
-              Vui lòng hoàn tất nộp trước 23:59
+              {selectedDot?.labelTrangThai || 'Chưa chọn đợt'}
+              {dotDangMo ? ' • Đang nhận nguyện vọng' : ''}
             </div>
           </div>
         </div>
@@ -350,7 +428,9 @@ export default function DangKyThucTapPage() {
             filteredCompanies.map((c) => {
               const applied = isAlreadyApplied(c.maCongTy)
               const full = !!c.daDuChiTieu
-              const blocked = full || myApplications.length >= 3
+              const blocked = full || myApplications.length >= 3 || Boolean(lyDoKhoa)
+              const gpaYeuCau = gpaToiThieu(c.yeuCau)
+              const chuaDatGpa = gpa != null && gpaYeuCau != null && Number(gpa) < gpaYeuCau
               return (
                 <div
                   key={c.maCongTy}
@@ -397,6 +477,12 @@ export default function DangKyThucTapPage() {
                       <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed">
                         {c.yeuCau || '—'}
                       </p>
+                      {chuaDatGpa && (
+                        <p className="mt-2 text-[11px] font-semibold text-amber-700 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">warning</span>
+                          GPA của bạn ({Number(gpa).toFixed(2)}) thấp hơn yêu cầu ({gpaYeuCau})
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -417,10 +503,10 @@ export default function DangKyThucTapPage() {
                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                             : 'bg-blue-700 hover:bg-blue-800 text-white'
                         }`}
-                        title={full ? 'Doanh nghiệp đã đủ chỉ tiêu, đợt tuyển đã đóng' : myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng'}
+                        title={full ? 'Doanh nghiệp đã đủ chỉ tiêu, đợt tuyển đã đóng' : lyDoKhoa || (myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng')}
                       >
-                        <span className="material-symbols-outlined text-[16px]">{full ? 'lock' : 'send'}</span>
-                        {full ? 'Đã đóng tuyển' : myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
+                        <span className="material-symbols-outlined text-[16px]">{full || lyDoKhoa ? 'lock' : 'send'}</span>
+                        {full ? 'Đã đóng tuyển' : lyDoKhoa ? 'Không thể đăng ký' : myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
                       </button>
                     )}
                   </div>
@@ -470,27 +556,12 @@ export default function DangKyThucTapPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {myApplications.map((app) => {
-                    let statusBadge = (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                        Chờ duyệt
+                    const tt = trangThaiNguyenVong(app)
+                    const statusBadge = (
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${TONE[tt.tone]}`}>
+                        {tt.label}
                       </span>
                     )
-                    if (app.trangThai === 'DaDuyet') {
-                      statusBadge = (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          Đã trúng tuyển
-                        </span>
-                      )
-                    } else if (app.trangThai === 'TuChoi') {
-                      statusBadge = (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
-                          Từ chối
-                        </span>
-                      )
-                    }
 
                     return (
                       <tr key={app.maDK} className="hover:bg-slate-50/70 transition-colors">
@@ -511,7 +582,7 @@ export default function DangKyThucTapPage() {
                         </td>
                         <td className="px-5 py-4">{statusBadge}</td>
                         <td className="px-5 py-4 text-right">
-                          {app.trangThai === 'ChoDuyet' ? (
+                          {app.trangThai === 'ChoDuyet' && !app.ketQuaPhongVan ? (
                             <button
                               onClick={() => handleCancelApplication(app.maDK, app.tenCongTy)}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors"
@@ -520,7 +591,9 @@ export default function DangKyThucTapPage() {
                               Hủy nguyện vọng
                             </button>
                           ) : (
-                            <span className="text-xs text-slate-400 italic">Đã chốt kết quả</span>
+                            <span className="text-xs text-slate-400 italic">
+                              {app.daTiepNhan ? 'Xem tại Lịch phỏng vấn & Phân bổ' : 'Đang trong quy trình xét tuyển'}
+                            </span>
                           )}
                         </td>
                       </tr>
@@ -530,6 +603,32 @@ export default function DangKyThucTapPage() {
               </table>
             </div>
           )}
+
+          <div className="p-5 border-t border-slate-200">
+            <h3 className="text-sm font-bold text-slate-900">Doanh nghiệp tôi đã đề xuất</h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Sau khi Khoa duyệt, doanh nghiệp xuất hiện trong danh sách tuyển dụng để bạn đăng ký nguyện vọng.
+            </p>
+            {myProposals.length === 0 ? (
+              <p className="text-xs text-slate-400 mt-3">Chưa có đề xuất nào.</p>
+            ) : (
+              <ul className="mt-3 divide-y divide-slate-100">
+                {myProposals.map((p) => (
+                  <li key={p.maCongTy} className="py-2.5 flex items-center justify-between gap-3 text-sm">
+                    <div>
+                      <div className="font-semibold text-slate-900">{p.tenCongTy}</div>
+                      <div className="text-xs text-slate-500">{p.viTriTuyen || '—'}</div>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${
+                      p.trangThai === 'DaDuyet' ? TONE.emerald : p.trangThai === 'TuChoi' ? TONE.rose : TONE.amber
+                    }`}>
+                      {CONG_TY[p.trangThai] || p.trangThai}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
 
