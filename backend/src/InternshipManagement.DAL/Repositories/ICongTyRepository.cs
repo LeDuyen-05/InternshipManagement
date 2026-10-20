@@ -10,4 +10,5 @@ public interface ICongTyRepository : IRepository<CongTy>
     Task<DotThucTap?> GetDotDangDienRaAsync();
     /// <summary>Số SV đã được tiếp nhận (phân bổ chưa hủy) theo từng công ty trong đợt.</summary>
     Task<Dictionary<string, int>> DemDaTiepNhanTheoCongTyAsync(string maDot);
+    Task<IReadOnlyList<CongTy>> GetDeXuatCuaSinhVienAsync(string maSV);
 }

@@ -26,6 +26,9 @@ public class CongTyRepository : GenericRepository<CongTy>, ICongTyRepository
             .GroupBy(p => p.MaCongTy)
             .ToDictionaryAsync(g => g.Key, g => g.Count());
 
+    public async Task<IReadOnlyList<CongTy>> GetDeXuatCuaSinhVienAsync(string maSV) =>
+        await DbSet.AsNoTracking().Where(c => c.MaSVDeXuat == maSV).OrderBy(c => c.TenCongTy).ToListAsync();
+
     public async Task<bool> ExistsByNameAsync(string tenCongTy)
     {
         var name = tenCongTy.Trim();
