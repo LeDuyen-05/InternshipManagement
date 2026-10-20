@@ -24,6 +24,6 @@ public class PhanBoThucTapRepository : IPhanBoThucTapRepository
                 .ThenInclude(s => s.GVHuongDans.Where(g => g.TrangThai == "DangHuongDan"))
                     .ThenInclude(gvh => gvh.GiangVien)
             .OrderByDescending(p => p.NgayPhanBo)
-            .FirstOrDefaultAsync(p => p.MaSinhVien == maSV);
+            .FirstOrDefaultAsync(p => p.MaSinhVien == maSV && p.TrangThai != "Huy");
     }
 }

@@ -24,16 +24,30 @@ public class DangKyThucTapService : IDangKyThucTapService
     public async Task<IReadOnlyList<CongTyDto>> GetDanhSachCongTyTuyenDungAsync()
     {
         var list = await _congTyRepo.GetDanhSachTuyenDungAsync();
-        return list.Select(c => new CongTyDto
+        var dot = await _congTyRepo.GetDotDangDienRaAsync();
+        var daNhan = dot == null ? new Dictionary<string, int>() : await _congTyRepo.DemDaTiepNhanTheoCongTyAsync(dot.MaSo);
+        return list.Select(c =>
         {
-            MaCongTy = c.MaCongTy,
-            TenCongTy = c.TenCongTy,
-            ViTriTuyen = c.ViTriTuyen,
-            ThoiGian = c.ThoiGian,
-            SoLuongNhan = c.SoLuongNhan,
-            YeuCau = c.YeuCau,
-            TrangThai = c.TrangThai
-        }).ToList();
+            var soDaNhan = daNhan.GetValueOrDefault(c.MaCongTy);
+            var coGioiHan = (c.SoLuongNhan ?? 0) > 0;
+            return new CongTyDto
+            {
+                MaCongTy = c.MaCongTy,
+                TenCongTy = c.TenCongTy,
+                ViTriTuyen = c.ViTriTuyen,
+                ThoiGian = c.ThoiGian,
+                SoLuongNhan = c.SoLuongNhan,
+                YeuCau = c.YeuCau,
+                TrangThai = c.TrangThai,
+                MaDot = dot?.MaSo,
+                DaTiepNhan = soDaNhan,
+                ConLai = coGioiHan ? Math.Max(0, c.SoLuongNhan!.Value - soDaNhan) : null,
+                DaDuChiTieu = coGioiHan && soDaNhan >= c.SoLuongNhan!.Value
+            };
+        })
+        .OrderBy(c => c.DaDuChiTieu)
+        .ThenBy(c => c.MaCongTy)
+        .ToList();
     }
 
     public async Task<CongTyDto> DeXuatCongTyMoiAsync(DeXuatCongTyRequest request)
@@ -137,6 +151,13 @@ public class DangKyThucTapService : IDangKyThucTapService
         var hasApproved = await _dangKyRepo.HasApprovedRegistrationInDotAsync(request.MaSV, request.MaDot);
         if (hasApproved)
             throw new InvalidOperationException("Sinh viên đã có một nguyện vọng được phê duyệt trong đợt này.");
+
+        if (await _dangKyRepo.SinhVienDaDuocTiepNhanAsync(request.MaSV, request.MaDot))
+            throw new InvalidOperationException("Sinh viên đã được doanh nghiệp tiếp nhận trong đợt này.");
+
+        if ((congTy.SoLuongNhan ?? 0) > 0
+            && await _dangKyRepo.CountDaTiepNhanAsync(congTy.MaCongTy, request.MaDot) >= congTy.SoLuongNhan)
+            throw new InvalidOperationException($"Doanh nghiệp \"{congTy.TenCongTy}\" đã đủ chỉ tiêu tiếp nhận nên đã đóng tuyển trong đợt này.");
 
         var maDK = DAL.Common.IdGenerator.New("DK");
         var dangKy = new DAL.Entities.DangKyThucTap

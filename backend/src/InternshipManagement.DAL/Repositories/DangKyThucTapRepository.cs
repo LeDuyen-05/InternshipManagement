@@ -38,6 +38,12 @@ public class DangKyThucTapRepository : GenericRepository<DangKyThucTap>, IDangKy
         return await DbSet.AnyAsync(d => d.MaSV == maSV && d.MaDot == maDot && d.TrangThai == "DaDuyet");
     }
 
+    public Task<int> CountDaTiepNhanAsync(string maCongTy, string maDot) =>
+        Context.PhanBoThucTaps.CountAsync(p => p.MaCongTy == maCongTy && p.MaDot == maDot && p.TrangThai != "Huy");
+
+    public Task<bool> SinhVienDaDuocTiepNhanAsync(string maSV, string maDot) =>
+        Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.TrangThai != "Huy");
+
     public async Task<bool> HasPriorityInDotAsync(string maSV, string maDot, int thuTuUuTien)
     {
         return await DbSet.AnyAsync(d => d.MaSV == maSV && d.MaDot == maDot && d.ThuTuUuTien == thuTuUuTien);
