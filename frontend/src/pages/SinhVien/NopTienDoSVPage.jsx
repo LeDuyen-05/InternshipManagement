@@ -3,6 +3,22 @@ import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
+import { BAO_CAO } from '../../utils/trangThai'
+
+// Khung báo cáo tuần theo kế hoạch: công việc – kết quả – khó khăn – minh chứng
+const MAU_BAO_CAO = `1. Công việc đã thực hiện trong tuần:
+-
+
+2. Kết quả đạt được:
+-
+
+3. Khó khăn / vấn đề cần GVHD hỗ trợ:
+-
+
+4. Minh chứng (link tài liệu, mã nguồn, hình ảnh):
+- `
+
+const nopTre = (r) => r.ngayNop && new Date(r.ngayNop).setHours(0, 0, 0, 0) > new Date(r.mocThoiGian).setHours(0, 0, 0, 0)
 
 export default function NopTienDoSVPage() {
   const { maSV } = useIdentity()
@@ -57,14 +73,14 @@ export default function NopTienDoSVPage() {
   // Mở modal nộp / sửa báo cáo
   const handleOpenSubmitModal = (slot) => {
     setSelectedSlot(slot)
-    setReportContent(slot.noiDungBaoCao || '')
+    setReportContent(slot.noiDungBaoCao || MAU_BAO_CAO)
     setModalOpen(true)
   }
 
   // Submit báo cáo
   const handleSubmitReport = async (e) => {
     e.preventDefault()
-    if (!reportContent.trim()) {
+    if (!reportContent.trim() || reportContent.trim() === MAU_BAO_CAO.trim()) {
       showToast('Vui lòng nhập nội dung báo cáo!', 'error')
       return
     }
@@ -302,6 +318,16 @@ export default function NopTienDoSVPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-sm text-slate-900">Tuần {idx + 1}</span>
                           {getStatusBadge(rep.trangThaiDuyet)}
+                          {nopTre(rep) && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                              Nộp trễ hạn
+                            </span>
+                          )}
+                          {!rep.ngayNop && rep.trangThaiDuyet === 'ChuaNop' && new Date(rep.mocThoiGian) < new Date().setHours(0, 0, 0, 0) && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              Quá hạn
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                           Hạn chót: {new Date(rep.mocThoiGian).toLocaleDateString('vi-VN')}
@@ -418,7 +444,7 @@ export default function NopTienDoSVPage() {
                   Hạn chót: <strong>{new Date(selectedSlot.mocThoiGian).toLocaleDateString('vi-VN')}</strong>
                 </span>
                 <span>
-                  Trạng thái hiện tại: <strong>{selectedSlot.trangThaiDuyet}</strong>
+                  Trạng thái hiện tại: <strong>{BAO_CAO[selectedSlot.trangThaiDuyet] || selectedSlot.trangThaiDuyet}</strong>
                 </span>
               </div>
 
@@ -427,7 +453,7 @@ export default function NopTienDoSVPage() {
                   Nội dung công việc & Kết quả đạt được trong tuần:
                 </label>
                 <textarea
-                  rows={6}
+                  rows={12}
                   value={reportContent}
                   onChange={(e) => setReportContent(e.target.value)}
                   placeholder="Mô tả chi tiết: Nhiệm vụ được giao, công nghệ sử dụng, tiến độ hoàn thành, khó khăn gặp phải..."
