@@ -9,6 +9,8 @@ public class PhieuChamDiem
     public string MaSV { get; set; } = default!;
     public string? MaDaiDien { get; set; }
     public string? MaGVHuongDan { get; set; }
+    public string? NhanXetGV { get; set; }
+    public string? NhanXetDN { get; set; }
 
     public DotThucTap? DotThucTap { get; set; }
     public SinhVien? SinhVien { get; set; }

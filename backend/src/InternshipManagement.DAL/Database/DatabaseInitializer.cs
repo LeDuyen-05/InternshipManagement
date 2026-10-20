@@ -37,33 +37,13 @@ public static class DatabaseInitializer
             if (Convert.ToInt32(await check.ExecuteScalarAsync(ct)) > 0)
             {
                 logger.LogInformation("Database {Db} đã có bảng — tự động cập nhật các cột và bảng tương thích nếu còn thiếu.", dbName);
-                await using var migCmd = conn.CreateCommand();
-                migCmd.CommandText = @"
-IF COL_LENGTH('GIANGVIEN','chiTieuHD') IS NULL
-    ALTER TABLE GIANGVIEN ADD chiTieuHD INT NOT NULL CONSTRAINT DF_GIANGVIEN_chiTieuHD DEFAULT 10;
-IF COL_LENGTH('HOSONANGLUC','FileCV') IS NULL
-    ALTER TABLE HOSONANGLUC ADD FileCV NVARCHAR(500) NULL;
-IF COL_LENGTH('TIENDOTHUCTAP','nhanXet') IS NULL
-    ALTER TABLE TIENDOTHUCTAP ADD nhanXet NVARCHAR(1000) NULL;
-IF COL_LENGTH('TIENDOTHUCTAP','nhanXetGV') IS NULL
-    ALTER TABLE TIENDOTHUCTAP ADD nhanXetGV NVARCHAR(500) NULL;
-IF COL_LENGTH('TAIKHOAN','email') IS NULL
-    ALTER TABLE TAIKHOAN ADD email NVARCHAR(200) NULL;
-IF COL_LENGTH('TAIKHOAN','soDienThoai') IS NULL
-    ALTER TABLE TAIKHOAN ADD soDienThoai NVARCHAR(30) NULL;
-IF OBJECT_ID(N'THONGBAO', N'U') IS NULL
-    CREATE TABLE THONGBAO (
-        maThongBao  NVARCHAR(20)    NOT NULL PRIMARY KEY,
-        tieuDe      NVARCHAR(200)   NOT NULL,
-        noiDung     NVARCHAR(MAX)   NOT NULL,
-        ngayTao     DATETIME2       NOT NULL,
-        maNguoiGui  NVARCHAR(20)    NULL
-    );
-IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_GVHD_SV_ACTIVE')
-    CREATE UNIQUE INDEX UQ_GVHD_SV_ACTIVE ON GVHUONGDAN(maSV) WHERE trangThai = N'DangHuongDan';
-";
-                migCmd.CommandTimeout = 60;
-                await migCmd.ExecuteNonQueryAsync(ct);
+                foreach (var migration in Migrations)
+                {
+                    await using var migCmd = conn.CreateCommand();
+                    migCmd.CommandText = migration;
+                    migCmd.CommandTimeout = 60;
+                    await migCmd.ExecuteNonQueryAsync(ct);
+                }
                 return;
             }
         }
@@ -96,4 +76,61 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_GVHD_SV_ACTIVE')
             throw;                                        // KHÔNG nuốt lỗi
         }
     }
+
+    // Mỗi phần tử là một batch riêng: SQL Server không cho tham chiếu cột vừa ALTER ADD trong cùng batch.
+    private static readonly string[] Migrations =
+    {
+        @"
+IF COL_LENGTH('GIANGVIEN','chiTieuHD') IS NULL
+    ALTER TABLE GIANGVIEN ADD chiTieuHD INT NOT NULL CONSTRAINT DF_GIANGVIEN_chiTieuHD DEFAULT 10;
+IF COL_LENGTH('HOSONANGLUC','FileCV') IS NULL
+    ALTER TABLE HOSONANGLUC ADD FileCV NVARCHAR(500) NULL;
+IF COL_LENGTH('TIENDOTHUCTAP','nhanXet') IS NULL
+    ALTER TABLE TIENDOTHUCTAP ADD nhanXet NVARCHAR(1000) NULL;
+IF COL_LENGTH('TIENDOTHUCTAP','nhanXetGV') IS NULL
+    ALTER TABLE TIENDOTHUCTAP ADD nhanXetGV NVARCHAR(500) NULL;
+IF COL_LENGTH('TAIKHOAN','email') IS NULL
+    ALTER TABLE TAIKHOAN ADD email NVARCHAR(200) NULL;
+IF COL_LENGTH('TAIKHOAN','soDienThoai') IS NULL
+    ALTER TABLE TAIKHOAN ADD soDienThoai NVARCHAR(30) NULL;
+IF OBJECT_ID(N'THONGBAO', N'U') IS NULL
+    CREATE TABLE THONGBAO (
+        maThongBao  NVARCHAR(20)    NOT NULL PRIMARY KEY,
+        tieuDe      NVARCHAR(200)   NOT NULL,
+        noiDung     NVARCHAR(MAX)   NOT NULL,
+        ngayTao     DATETIME2       NOT NULL,
+        maNguoiGui  NVARCHAR(20)    NULL
+    );
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UQ_GVHD_SV_ACTIVE')
+    CREATE UNIQUE INDEX UQ_GVHD_SV_ACTIVE ON GVHUONGDAN(maSV) WHERE trangThai = N'DangHuongDan';
+IF COL_LENGTH('TIEUCHI','nhomDanhGia') IS NULL
+    ALTER TABLE TIEUCHI ADD nhomDanhGia NVARCHAR(10) NULL;
+IF COL_LENGTH('TIEUCHI','thuTu') IS NULL
+    ALTER TABLE TIEUCHI ADD thuTu INT NOT NULL CONSTRAINT DF_TIEUCHI_thuTu DEFAULT 0;
+IF COL_LENGTH('PHIEUCHAMDIEM','nhanXetGV') IS NULL
+    ALTER TABLE PHIEUCHAMDIEM ADD nhanXetGV NVARCHAR(1000) NULL;
+IF COL_LENGTH('PHIEUCHAMDIEM','nhanXetDN') IS NULL
+    ALTER TABLE PHIEUCHAMDIEM ADD nhanXetDN NVARCHAR(1000) NULL;
+",
+        // Bộ tiêu chí 11 CLO theo file chấm điểm của Khoa. Tiêu chí cũ (nhomDanhGia NULL)
+        // được giữ lại để không mất lịch sử điểm nhưng không còn dùng để chấm.
+        @"
+IF NOT EXISTS (SELECT 1 FROM TIEUCHI WHERE maTieuChi = N'CLO1.1')
+BEGIN
+    UPDATE TIEUCHI SET nhomDanhGia = NULL;
+    INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa, nhomDanhGia, thuTu) VALUES
+        (N'CLO1.1', N'Xác định được mục tiêu, nội dung, ý nghĩa của công việc thực tập', 0.75, N'GV', 1),
+        (N'CLO1.2', N'Giới thiệu chung về đơn vị thực tập', 0.75, N'GV', 2),
+        (N'CLO1.3', N'Nắm vững vị trí công việc thực tập (Thông tin vị trí thực tập, lên kế hoạch thực tập)', 0.50, N'GV', 3),
+        (N'CLO2.1', N'Vận dụng được kiến thức giải quyết các công việc được giao', 0.50, N'GV', 4),
+        (N'CLO2.2', N'Giải thích được các phương pháp làm để thực hiện công việc được giao', 0.50, N'GV', 5),
+        (N'CLO3.1', N'Nắm rõ được yêu cầu công việc tham gia tại doanh nghiệp', 0.50, N'GV', 6),
+        (N'CLO3.2', N'Hoàn thành quyển báo cáo đề tài nghiêm túc, hợp lý, ngữ nghĩa trong sáng, không sai lỗi chính tả', 0.50, N'GV', 7),
+        (N'CLO3.3', N'Thuyết trình nội dung rõ ràng với giáo viên', 0.50, N'GV', 8),
+        (N'CLO3.4', N'Trả lời câu hỏi của giáo viên', 0.50, N'GV', 9),
+        (N'CLO4.1', N'Nhận xét của đơn vị thực tập về ý thức, trách nhiệm, kỷ luật (Phiếu nhận xét)', 2.00, N'DN', 10),
+        (N'CLO4.2', N'Khả năng vận dụng kiến thức vào thực tiễn trong quá trình thực tập (Phiếu nhận xét)', 3.00, N'DN', 11);
+END
+"
+    };
 }
