@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import hoSoNangLucService from '../../services/hoSoNangLucService.js'
+import { xepLoaiGpa } from '../../utils/trangThai'
 
 export default function HoSoNangLucPage() {
   const { user, maSV: currentMaSV } = useIdentity()
@@ -69,9 +70,13 @@ export default function HoSoNangLucPage() {
   const handleSubmitEdit = async (e) => {
     e.preventDefault()
     try {
+      // Chỉ gửi phần hồ sơ năng lực; dữ liệu học vụ do Khoa quản lý
       const payload = {
-        ...formData,
-        gpa: formData.gpa === '' ? null : Number(formData.gpa),
+        kyNang: formData.kyNang,
+        congNghe: formData.congNghe,
+        duAnDaThucHien: formData.duAnDaThucHien,
+        ndHoSo: formData.ndHoSo,
+        fileCV: formData.fileCV,
       }
       const res = await hoSoNangLucService.update(currentMaSV, payload)
       setProfile(res.data || { ...profile, ...payload })
@@ -215,9 +220,9 @@ export default function HoSoNangLucPage() {
                 verified
               </span>
               <div className="flex flex-col">
-                <span className="text-xs text-slate-500 font-semibold uppercase">Trạng thái học vụ</span>
-                <span className="text-sm font-semibold text-emerald-700">Đủ điều kiện thực tập</span>
-                <span className="text-xs text-slate-500 mt-0.5">Khóa học: {profile.khoaHoc}</span>
+                <span className="text-xs text-slate-500 font-semibold uppercase">Thông tin học vụ</span>
+                <span className="text-sm font-semibold text-slate-800">Khóa {profile.khoaHoc || '—'} • {profile.chuyenNganh || 'Chưa cập nhật chuyên ngành'}</span>
+                <span className="text-xs text-slate-500 mt-0.5">Do Khoa quản lý</span>
               </div>
             </div>
 
@@ -225,15 +230,15 @@ export default function HoSoNangLucPage() {
             <div className="w-full grid grid-cols-2 gap-3 mt-3">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 flex flex-col items-center">
                 <span className="text-xs text-slate-500 font-medium">GPA Tích Lũy</span>
-                <span className="text-2xl font-bold text-blue-700 mt-1">{profile.gpa?.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-blue-700 mt-1">{profile.gpa != null ? Number(profile.gpa).toFixed(2) : '—'}</span>
                 <span className="text-[11px] text-slate-400">Thang điểm 4.0</span>
               </div>
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200/60 flex flex-col items-center">
                 <span className="text-xs text-slate-500 font-medium">Xếp Loại</span>
                 <span className="text-lg font-bold text-slate-800 mt-1.5">
-                  {profile.gpa >= 3.6 ? 'Xuất sắc' : profile.gpa >= 3.2 ? 'Giỏi' : 'Khá'}
+                  {xepLoaiGpa(profile.gpa) || '—'}
                 </span>
-                <span className="text-[11px] text-emerald-600 font-medium">Đạt tiêu chuẩn</span>
+                <span className="text-[11px] text-slate-400 font-medium">Theo GPA thang 4</span>
               </div>
             </div>
 
@@ -242,7 +247,7 @@ export default function HoSoNangLucPage() {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-700 uppercase">CV Đính kèm</span>
                 <span className="text-[11px] text-slate-400">
-                  Cập nhật: {new Date(profile.ngayCapNhat).toLocaleDateString('vi-VN')}
+                  Cập nhật: {profile.ngayCapNhat ? new Date(profile.ngayCapNhat).toLocaleDateString('vi-VN') : '—'}
                 </span>
               </div>
 
@@ -410,51 +415,13 @@ export default function HoSoNangLucPage() {
             </div>
 
             <form onSubmit={handleSubmitEdit} className="flex flex-col gap-4 text-sm">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Họ và tên</label>
-                  <input
-                    type="text"
-                    name="hoTen"
-                    value={formData.hoTen}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-600"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Lớp</label>
-                  <input
-                    type="text"
-                    name="lop"
-                    value={formData.lop}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Chuyên ngành</label>
-                  <input
-                    type="text"
-                    name="chuyenNganh"
-                    value={formData.chuyenNganh}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-600"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">GPA (Thang 4.0)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="4.0"
-                    name="gpa"
-                    value={formData.gpa}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-600"
-                  />
-                </div>
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2">
+                <span className="material-symbols-outlined text-[18px] text-slate-500 shrink-0">lock</span>
+                <span>
+                  Họ tên, lớp, khóa, chuyên ngành và GPA ({formData.hoTen} • {formData.lop || '—'} • GPA {formData.gpa || '—'})
+                  là dữ liệu học vụ do Khoa quản lý, doanh nghiệp dùng để xét tuyển nên sinh viên không tự chỉnh sửa.
+                  Nếu thông tin chưa đúng, vui lòng liên hệ Văn phòng Khoa.
+                </span>
               </div>
 
               <div>
