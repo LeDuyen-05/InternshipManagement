@@ -62,6 +62,7 @@ public class AppDbContext : DbContext
             e.ToTable("CONGTY");
             e.HasKey(x => x.MaCongTy);
             e.Property(x => x.ThoiGian).HasMaxLength(100);
+            e.Property(x => x.MaSVDeXuat).HasColumnName("maSVDeXuat").HasMaxLength(20);
         });
 
         modelBuilder.Entity<DaiDienDoanhNghiep>(e =>

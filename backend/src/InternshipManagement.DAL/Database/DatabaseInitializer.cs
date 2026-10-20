@@ -111,6 +111,12 @@ IF COL_LENGTH('PHIEUCHAMDIEM','nhanXetGV') IS NULL
     ALTER TABLE PHIEUCHAMDIEM ADD nhanXetGV NVARCHAR(1000) NULL;
 IF COL_LENGTH('PHIEUCHAMDIEM','nhanXetDN') IS NULL
     ALTER TABLE PHIEUCHAMDIEM ADD nhanXetDN NVARCHAR(1000) NULL;
+IF COL_LENGTH('CONGTY','maSVDeXuat') IS NULL
+    ALTER TABLE CONGTY ADD maSVDeXuat NVARCHAR(20) NULL;
+-- Lưu cả giờ phỏng vấn (trước đây cột DATE làm mất giờ doanh nghiệp đã hẹn)
+IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_NAME = 'PHONGVAN' AND COLUMN_NAME = 'ngayPV' AND DATA_TYPE = 'date')
+    ALTER TABLE PHONGVAN ALTER COLUMN ngayPV DATETIME2(0) NOT NULL;
 ",
         // Bộ tiêu chí 11 CLO theo file chấm điểm của Khoa. Tiêu chí cũ (nhomDanhGia NULL)
         // được giữ lại để không mất lịch sử điểm nhưng không còn dùng để chấm.

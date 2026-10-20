@@ -10,6 +10,8 @@ public class CongTy
     public string? YeuCau { get; set; }
     public string TrangThai { get; set; } = "ChoDuyet";
     public string? EmbeddingYeuCau { get; set; }
+    /// <summary>Mã SV đã tự đề xuất doanh nghiệp này (null nếu do Khoa/GV đưa vào).</summary>
+    public string? MaSVDeXuat { get; set; }
 
 
     public ICollection<DaiDienDoanhNghiep> DaiDienDoanhNghieps { get; set; } = new List<DaiDienDoanhNghiep>();

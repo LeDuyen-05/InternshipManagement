@@ -89,6 +89,7 @@ CREATE TABLE CONGTY (
     yeuCau              NVARCHAR(2000)  NULL,
     trangThai           NVARCHAR(50)    NOT NULL DEFAULT N'ChoDuyet',
     embeddingYeuCau     NVARCHAR(MAX)   NULL,   -- Vector embedding (JSON array) cho ML gợi ý
+    maSVDeXuat          NVARCHAR(20)    NULL,   -- SV tự đề xuất doanh nghiệp (NULL = Khoa/GV đưa vào)
     CONSTRAINT PK_CONGTY PRIMARY KEY (maCongTy),
     CONSTRAINT CK_CONGTY_TRANGTHAI CHECK (trangThai IN (N'ChoDuyet', N'DaDuyet', N'TuChoi', N'DongBang'))
 );
@@ -196,7 +197,7 @@ GO
 CREATE TABLE PHONGVAN (
     maPV        NVARCHAR(20)    NOT NULL,
     hinhThuc    NVARCHAR(100)   NULL,
-    ngayPV      DATE            NOT NULL,
+    ngayPV      DATETIME2(0)    NOT NULL,   -- ngày + giờ phỏng vấn
     ketQua      NVARCHAR(50)    NULL,
     maDaiDien   NVARCHAR(20)    NOT NULL,
     maSV        NVARCHAR(20)    NOT NULL,
@@ -751,7 +752,7 @@ INSERT INTO PHONGVAN (maPV, hinhThuc, ngayPV, ketQua, maDaiDien, maSV) VALUES
     ('PV017', N'Trực tuyến', '2026-09-01', N'Dat',      'DD001', 'SV016'),
     ('PV018', N'Trực tiếp',  '2026-09-01', N'Dat',      'DD008', 'SV017'),
     ('PV019', N'Trực tuyến', '2026-09-02', N'Dat',      'DD010', 'SV018'),
-    ('PV020', N'Trực tuyến', '2026-10-25', N'ChuaCoKetQua', 'DD005', 'SV020');
+    ('PV020', N'Trực tuyến', '2026-10-25 09:00', N'ChuaCoKetQua', 'DD005', 'SV020');
 GO
 
 -- 16. Tiến độ thực tập
