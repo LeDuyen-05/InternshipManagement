@@ -12,7 +12,7 @@ public record RegistrationApprovalRequest(string TrangThai);
 public record SupervisorAssignmentRequest(string MaGiangVien);
 public record DeadlineUpdateRequest(DateTime HanCu, DateTime HanMoi);
 public record UpdateRoundRequest(string TenDot, string NamHoc, DateTime ThoiGianBD, DateTime ThoiGianKT, string TrangThai);
-public record SaveCriteriaRequest(string MaTieuChi, string TenTieuChi, double DiemToiDa);
+public record SaveCriteriaRequest(string MaTieuChi, string TenTieuChi, double DiemToiDa, string? NhomDanhGia = "GV", int ThuTu = 0);
 public record ScoreCriterionRequest(string MaTieuChi, double DiemCham);
 public record SaveAssessmentRequest(List<ScoreCriterionRequest> ChiTiet);
 public record SendNotificationRequest(string TieuDe, string NoiDung);

@@ -11,5 +11,15 @@ public record PhieuChamDiemDto(
     decimal? TongDiem,
     DateTime? NgayCham,
     string? XepLoai,
-    List<ChiTietChamDiemDto> ChiTiets
+    List<ChiTietChamDiemDto> ChiTiets,
+    decimal DiemGV = 0,
+    decimal DiemDN = 0,
+    bool DaChamGV = false,
+    bool DaChamDN = false,
+    bool DoanhNghiepChamTrenHeThong = false,
+    bool DaDuDiem = false,
+    string? DiemChu = null,
+    string? KetQua = null,
+    string? NhanXetGV = null,
+    string? NhanXetDN = null
 );

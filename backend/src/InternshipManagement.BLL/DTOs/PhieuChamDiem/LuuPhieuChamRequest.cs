@@ -12,5 +12,6 @@ public record LuuPhieuChamRequest(
     string? MaGVHuongDan,
     [property: Obsolete("Server tự tính từ tổng điểm chi tiết.")]
     decimal? TongDiem,
-    List<ChiTietDiemInput> ChiTiets
+    List<ChiTietDiemInput> ChiTiets,
+    string? NhanXet = null
 );

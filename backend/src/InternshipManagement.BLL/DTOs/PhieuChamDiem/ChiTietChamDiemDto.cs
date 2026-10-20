@@ -5,5 +5,6 @@ public record ChiTietChamDiemDto(
     string MaTieuChi,
     string TenTieuChi,
     decimal DiemCham,
-    decimal DiemToiDa
+    decimal DiemToiDa,
+    string? NhomDanhGia = null
 );
