@@ -14,6 +14,8 @@ import {
 } from 'recharts'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { thongKeService } from '../../services/thongKeService'
+import { phieuChamDiemService } from '../../services/phieuChamDiemService'
+import { xuatBangDiemTheoMauKhoa } from '../../utils/bangDiemExcel.js'
 
 export default function ThongKeCLOPage() {
   const { selectedDot } = useDotThucTap()
@@ -67,6 +69,17 @@ export default function ThongKeCLOPage() {
     }
   }
 
+  // Xuất file chấm điểm đúng mẫu của Khoa (CLO1.1 → CLO4.2, GVHD, Tên công ty)
+  const handleExportMauKhoa = async () => {
+    try {
+      const res = await phieuChamDiemService.getBangDiem(selectedDot?.maDot)
+      xuatBangDiemTheoMauKhoa(res.data?.data, `DiemTTTN_${selectedDot?.maDot || 'Dot'}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      showToast('Đã xuất file chấm điểm theo mẫu của Khoa!')
+    } catch (e) {
+      alert('Lỗi khi xuất file chấm điểm: ' + (e.response?.data?.message || e.message))
+    }
+  }
+
   // Tải CSV từ backend
   const handleExportCsv = () => {
     const url = thongKeService.getExportCsvUrl(selectedDot?.maDot)
@@ -95,7 +108,7 @@ export default function ThongKeCLOPage() {
   }, [data?.danhSachBangDiem, searchKeyword, filterResult])
 
   // Màu sắc cho biểu đồ tròn xếp loại
-  const PIE_COLORS = ['#10b981', '#3b82f6', '#06b6d4', '#f59e0b', '#ef4444']
+  const PIE_COLORS = ['#10b981', '#3b82f6', '#06b6d4', '#8b5cf6', '#f59e0b', '#f97316', '#fb7185', '#ef4444']
 
   const tongQuan = data?.tongQuan || {}
 
@@ -155,6 +168,17 @@ export default function ThongKeCLOPage() {
           >
             <span className="material-symbols-outlined text-base">table_chart</span>
             <span>Xuất Excel (.xlsx)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportMauKhoa}
+            disabled={loading || !selectedDot?.maDot}
+            className="px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            title="File chấm điểm theo mẫu của Khoa: 11 tiêu chí CLO, tổng điểm, GVHD, tên công ty"
+          >
+            <span className="material-symbols-outlined text-base">grading</span>
+            <span>File chấm điểm (mẫu Khoa)</span>
           </button>
         </div>
       </div>
@@ -467,10 +491,10 @@ export default function ThongKeCLOPage() {
                     <th className="py-3 px-3">Sinh Viên</th>
                     <th className="py-3 px-3">Lớp</th>
                     <th className="py-3 px-3">Doanh Nghiệp & GVHD</th>
-                    <th className="py-3 px-2 text-center">CLO 1</th>
-                    <th className="py-3 px-2 text-center">CLO 2</th>
-                    <th className="py-3 px-2 text-center">CLO 3</th>
-                    <th className="py-3 px-2 text-center">CLO 4</th>
+                    <th className="py-3 px-2 text-center">CLO1 (/2)</th>
+                    <th className="py-3 px-2 text-center">CLO2 (/1)</th>
+                    <th className="py-3 px-2 text-center">CLO3 (/2)</th>
+                    <th className="py-3 px-2 text-center">CLO4 – DN (/5)</th>
                     <th className="py-3 px-3 text-center">Tổng Điểm</th>
                     <th className="py-3 px-3 text-center">Xếp Loại</th>
                     <th className="py-3 px-3 text-center">Kết Quả</th>
@@ -493,16 +517,16 @@ export default function ThongKeCLOPage() {
                           </p>
                         </td>
                         <td className="py-3 px-2 text-center font-mono font-medium text-slate-700">
-                          {sv.diemCLO1 != null ? sv.diemCLO1.toFixed(1) : '-'}
+                          {sv.diemCLO1 != null ? sv.diemCLO1.toFixed(2) : '-'}
                         </td>
                         <td className="py-3 px-2 text-center font-mono font-medium text-slate-700">
-                          {sv.diemCLO2 != null ? sv.diemCLO2.toFixed(1) : '-'}
+                          {sv.diemCLO2 != null ? sv.diemCLO2.toFixed(2) : '-'}
                         </td>
                         <td className="py-3 px-2 text-center font-mono font-medium text-slate-700">
-                          {sv.diemCLO3 != null ? sv.diemCLO3.toFixed(1) : '-'}
+                          {sv.diemCLO3 != null ? sv.diemCLO3.toFixed(2) : '-'}
                         </td>
                         <td className="py-3 px-2 text-center font-mono font-medium text-slate-700">
-                          {sv.diemCLO4 != null ? sv.diemCLO4.toFixed(1) : '-'}
+                          {sv.diemCLO4 != null ? sv.diemCLO4.toFixed(2) : '-'}
                         </td>
                         <td className="py-3 px-3 text-center">
                           {sv.tongDiem != null ? (
