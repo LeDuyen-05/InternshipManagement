@@ -23,6 +23,17 @@ public class RecommendationService
             profileText = $"{sv.KyNang} {sv.ChuyenNganh} {sv.CongNghe} {sv.DuAnDaThucHien}";
 
         var companies = await _db.CongTys.AsNoTracking().Where(x => x.TrangThai == "DaDuyet").ToListAsync();
+        // Không gợi ý doanh nghiệp đã đủ chỉ tiêu (đã tự đóng tuyển) trong đợt đang diễn ra
+        var dot = await _db.DotThucTaps.AsNoTracking().Where(d => d.TrangThai == "DangDienRa")
+            .OrderByDescending(d => d.ThoiGianBD).Select(d => d.MaSo).FirstOrDefaultAsync();
+        if (dot != null)
+        {
+            var daNhan = await _db.PhanBoThucTaps.AsNoTracking()
+                .Where(p => p.MaDot == dot && p.TrangThai != "Huy")
+                .GroupBy(p => p.MaCongTy).Select(g => new { g.Key, SoLuong = g.Count() })
+                .ToDictionaryAsync(x => x.Key, x => x.SoLuong);
+            companies = companies.Where(c => (c.SoLuongNhan ?? 0) <= 0 || daNhan.GetValueOrDefault(c.MaCongTy) < c.SoLuongNhan).ToList();
+        }
         var ranked = Rank(profileText!, companies).Take(k).ToList();
 
         if (persist && profile is not null && ranked.Count > 0)
