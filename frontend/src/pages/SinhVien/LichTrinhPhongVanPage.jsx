@@ -3,38 +3,61 @@ import { phongVanService } from '../../services/phongVanService'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
+import { PHAN_BO } from '../../utils/trangThai'
+
+const coGio = (d) => {
+  const t = new Date(d)
+  return t.getHours() !== 0 || t.getMinutes() !== 0
+}
 
 export default function LichTrinhPhongVanPage() {
-  const { user, maSV: currentMaSV } = useIdentity()
+  const { maSV: currentMaSV } = useIdentity()
   const { selectedDot } = useDotThucTap()
 
   const [interviews, setInterviews] = useState([])
   const [placement, setPlacement] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [confirming, setConfirming] = useState(false)
+  const [message, setMessage] = useState(null)
 
-  useEffect(() => {
+  const fetchData = async () => {
     if (!currentMaSV) {
       setLoading(false)
       return
     }
-
-    const fetchData = async () => {
-      setLoading(true)
-      try {
-        const [pvData, pbData] = await Promise.all([
-          phongVanService.getLichPhongVan(currentMaSV),
-          phongVanService.getPhanBoThucTap(currentMaSV),
-        ])
-        setInterviews(pvData || [])
-        setPlacement(pbData || null)
-      } catch (err) {
-        console.error('Lỗi khi tải lịch phỏng vấn và phân bổ:', err)
-      } finally {
-        setLoading(false)
-      }
+    setLoading(true)
+    try {
+      const [pvData, pbData] = await Promise.all([
+        phongVanService.getLichPhongVan(currentMaSV),
+        phongVanService.getPhanBoThucTap(currentMaSV),
+      ])
+      setInterviews(pvData || [])
+      setPlacement(pbData || null)
+    } catch (err) {
+      console.error('Lỗi khi tải lịch phỏng vấn và phân bổ:', err)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchData()
   }, [currentMaSV])
+
+  const handleXacNhan = async () => {
+    if (!placement?.maPhanBo) return
+    if (!window.confirm(`Xác nhận nhận quyết định thực tập tại "${placement.tenCongTy}"?`)) return
+    try {
+      setConfirming(true)
+      const res = await phongVanService.xacNhanTiepNhan(placement.maPhanBo)
+      setPlacement(res.data || placement)
+      setMessage({ type: 'success', text: res.message || 'Đã xác nhận nhận quyết định tiếp nhận.' })
+    } catch (err) {
+      setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể xác nhận. Vui lòng thử lại.' })
+    } finally {
+      setConfirming(false)
+    }
+  }
 
   if (!currentMaSV) {
     return <NoLinkedAccount type="sinh viên" />
@@ -60,10 +83,16 @@ export default function LichTrinhPhongVanPage() {
         {placement && (
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold shrink-0">
             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            Đã có quyết định phân bổ chính thức
+            {PHAN_BO[placement.trangThai] || 'Đã có quyết định tiếp nhận'}
           </div>
         )}
       </div>
+
+      {message && (
+        <div className={`p-4 rounded-xl border text-sm font-medium ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-rose-50 text-rose-800 border-rose-200'}`}>
+          {message.text}
+        </div>
+      )}
 
       {/* Bento Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -113,10 +142,10 @@ export default function LichTrinhPhongVanPage() {
           </div>
           <div className="mt-3">
             <div className="text-base font-bold text-blue-950 truncate">
-              {placement?.giangVienHD ? `TS. ${placement.giangVienHD}` : 'Khoa đang chỉ định'}
+              {placement?.giangVienHD || 'Khoa chưa phân công'}
             </div>
             <div className="text-xs text-blue-800 mt-1 font-medium truncate">
-              {placement?.chuyenMonGV || 'Bộ môn Công nghệ phần mềm'}
+              {placement?.chuyenMonGV || '—'}
             </div>
           </div>
         </div>
@@ -148,10 +177,28 @@ export default function LichTrinhPhongVanPage() {
                   </div>
                 </div>
 
-                <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-                  Mã PB: {placement.maPhanBo}
-                </span>
+                <div className="flex flex-col items-end gap-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                    {PHAN_BO[placement.trangThai] || placement.trangThai}
+                  </span>
+                  {placement.trangThai === 'ChuaNhanViec' && (
+                    <button
+                      type="button"
+                      onClick={handleXacNhan}
+                      disabled={confirming}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold disabled:opacity-50"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                      {confirming ? 'Đang xác nhận...' : 'Xác nhận nhận quyết định'}
+                    </button>
+                  )}
+                </div>
               </div>
+              {placement.trangThai === 'ChuaNhanViec' && (
+                <p className="-mt-2 mb-4 text-xs text-slate-500">
+                  Doanh nghiệp đã đồng ý tiếp nhận bạn. Hãy xác nhận để bắt đầu thực tập và nộp báo cáo tiến độ.
+                </p>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Mentor Doanh Nghiệp */}
@@ -185,7 +232,7 @@ export default function LichTrinhPhongVanPage() {
                       Giảng viên hướng dẫn Khoa CNTT
                     </span>
                     <div className="text-sm font-bold text-slate-900 mt-0.5">
-                      {placement.giangVienHD ? `TS. ${placement.giangVienHD}` : '—'}
+                      {placement.giangVienHD || 'Khoa chưa phân công'}
                     </div>
                     <div className="text-xs text-slate-500">
                       Chuyên môn: {placement.chuyenMonGV || '—'}
@@ -242,7 +289,7 @@ export default function LichTrinhPhongVanPage() {
                         badge = (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            Trúng tuyển (Đạt)
+                            Đạt
                           </span>
                         )
                       } else if (pv.ketQua === 'KhongDat') {
@@ -270,10 +317,12 @@ export default function LichTrinhPhongVanPage() {
                           <td className="px-5 py-4">
                             <div className="text-xs font-bold text-slate-800">
                               {new Date(pv.ngayPV).toLocaleDateString('vi-VN')}
+                              {coGio(pv.ngayPV) &&
+                                ` • ${new Date(pv.ngayPV).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
                             </div>
                             <div className="text-xs text-blue-700 font-medium mt-0.5 flex items-center gap-1">
                               <span className="material-symbols-outlined text-[14px]">
-                                {pv.hinhThuc === 'Trực tuyến' ? 'videocam' : 'location_on'}
+                                {/trực tuyến|online|meet|zoom/i.test(pv.hinhThuc || '') ? 'videocam' : 'location_on'}
                               </span>
                               {pv.hinhThuc || 'Trực tiếp'}
                             </div>
