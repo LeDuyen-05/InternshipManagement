@@ -187,7 +187,7 @@ export default function GoiYCongTyAIPage() {
                   <div>
                     <h2 className="text-base font-bold text-slate-900">{sv.hoTen}</h2>
                     <p className="text-xs text-slate-500">
-                      MSSV: <strong className="text-slate-700 font-mono">{sv.maSV}</strong> | Lớp: {sv.lop || '14DHTH'} | GPA: <strong className="text-emerald-600">{sv.gpa || 3.2}</strong> | Chuyên ngành: {sv.chuyenNganh || 'Công nghệ phần mềm'}
+                      MSSV: <strong className="text-slate-700 font-mono">{sv.maSV}</strong> | Lớp: {sv.lop || '—'} | GPA: <strong className="text-emerald-600">{sv.gpa != null ? sv.gpa : '—'}</strong> | Chuyên ngành: {sv.chuyenNganh || '—'}
                     </p>
                   </div>
                 </div>
@@ -507,11 +507,11 @@ export default function GoiYCongTyAIPage() {
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div className="p-2 bg-slate-50 rounded-lg">
                   <span className="text-slate-400">Chỉ tiêu nhận:</span>{' '}
-                  <strong className="text-slate-800">{selectedCompany.soLuongNhan || 3} SV</strong>
+                  <strong className="text-slate-800">{selectedCompany.soLuongNhan ?? '—'} SV</strong>
                 </div>
                 <div className="p-2 bg-slate-50 rounded-lg">
                   <span className="text-slate-400">Thời gian:</span>{' '}
-                  <strong className="text-slate-800">{selectedCompany.thoiGian || '12 tuần'}</strong>
+                  <strong className="text-slate-800">{selectedCompany.thoiGian || '—'}</strong>
                 </div>
               </div>
             </div>
