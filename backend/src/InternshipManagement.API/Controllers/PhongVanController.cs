@@ -1,5 +1,6 @@
 using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.Services.PhongVan;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace InternshipManagement.API.Controllers;
@@ -32,5 +33,14 @@ public class PhongVanController : ControllerBase
         var result = await _service.GetPhanBoBySinhVienAsync(maSV);
         if (result == null) return NotFound(new { success = false, message = "Sinh viên chưa có quyết định phân bổ tiếp nhận." });
         return Ok(result);
+    }
+
+    [HttpPost("phan-bo/{maPhanBo}/xac-nhan")]
+    [Authorize(Roles = Roles.SinhVien)]
+    public async Task<IActionResult> XacNhanTiepNhan(string maPhanBo)
+    {
+        var maSV = User.MaSV() ?? throw new UnauthorizedAccessException();
+        var result = await _service.XacNhanTiepNhanAsync(maPhanBo, maSV);
+        return Ok(new { success = true, data = result, message = "Đã xác nhận nhận quyết định tiếp nhận thực tập." });
     }
 }

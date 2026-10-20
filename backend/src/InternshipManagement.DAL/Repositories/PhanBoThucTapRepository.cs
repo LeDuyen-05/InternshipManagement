@@ -12,6 +12,11 @@ public class PhanBoThucTapRepository : IPhanBoThucTapRepository
         _context = context;
     }
 
+    public Task<PhanBoThucTap?> GetForUpdateAsync(string maPhanBo) =>
+        _context.PhanBoThucTaps.Include(p => p.DotThucTap).FirstOrDefaultAsync(p => p.MaPhanBo == maPhanBo);
+
+    public Task SaveChangesAsync() => _context.SaveChangesAsync();
+
     public async Task<PhanBoThucTap?> GetBySinhVienAsync(string maSV)
     {
         return await _context.PhanBoThucTaps

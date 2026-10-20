@@ -7,4 +7,5 @@ public interface IPhongVanService
 {
     Task<IReadOnlyList<PhongVanDto>> GetLichPhongVanBySinhVienAsync(string maSV);
     Task<PhanBoThucTapDto?> GetPhanBoBySinhVienAsync(string maSV);
+    Task<PhanBoThucTapDto> XacNhanTiepNhanAsync(string maPhanBo, string maSV);
 }
