@@ -1,0 +1,200 @@
+{
+  "features": [
+    "tfidf_cosine",
+    "khop_dia_diem",
+    "diem_trung_binh_gia_lap"
+  ],
+  "max_depth": 4,
+  "seed": 42,
+  "tree": {
+    "leaf": false,
+    "feature": "tfidf_cosine",
+    "threshold": 0.0,
+    "left": {
+      "leaf": false,
+      "feature": "khop_dia_diem",
+      "threshold": 0.5,
+      "left": {
+        "leaf": false,
+        "feature": "diem_trung_binh_gia_lap",
+        "threshold": 2.23,
+        "left": {
+          "leaf": false,
+          "feature": "diem_trung_binh_gia_lap",
+          "threshold": 2.035,
+          "left": {
+            "leaf": true,
+            "prediction": 0,
+            "class_counts": {
+              "0": 76,
+              "1": 32
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 0,
+            "class_counts": {
+              "0": 350,
+              "1": 200
+            }
+          }
+        },
+        "right": {
+          "leaf": false,
+          "feature": "diem_trung_binh_gia_lap",
+          "threshold": 3.1,
+          "left": {
+            "leaf": true,
+            "prediction": 0,
+            "class_counts": {
+              "0": 1685,
+              "1": 825
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 0,
+            "class_counts": {
+              "0": 1804,
+              "1": 829
+            }
+          }
+        }
+      },
+      "right": {
+        "leaf": false,
+        "feature": "diem_trung_binh_gia_lap",
+        "threshold": 2.955,
+        "left": {
+          "leaf": false,
+          "feature": "diem_trung_binh_gia_lap",
+          "threshold": 2.55,
+          "left": {
+            "leaf": true,
+            "prediction": 0,
+            "class_counts": {
+              "0": 51
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 0,
+            "class_counts": {
+              "0": 32,
+              "1": 3
+            }
+          }
+        },
+        "right": {
+          "leaf": true,
+          "prediction": 0,
+          "class_counts": {
+            "0": 66
+          }
+        }
+      }
+    },
+    "right": {
+      "leaf": false,
+      "feature": "tfidf_cosine",
+      "threshold": 0.2759803103448276,
+      "left": {
+        "leaf": false,
+        "feature": "tfidf_cosine",
+        "threshold": 0.19266149999999999,
+        "left": {
+          "leaf": false,
+          "feature": "tfidf_cosine",
+          "threshold": 0.173353,
+          "left": {
+            "leaf": true,
+            "prediction": 1,
+            "class_counts": {
+              "1": 5,
+              "2": 3
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 2,
+            "class_counts": {
+              "1": 3,
+              "2": 5
+            }
+          }
+        },
+        "right": {
+          "leaf": false,
+          "feature": "tfidf_cosine",
+          "threshold": 0.20606400000000002,
+          "left": {
+            "leaf": true,
+            "prediction": 2,
+            "class_counts": {
+              "2": 7,
+              "3": 2
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 2,
+            "class_counts": {
+              "1": 1,
+              "2": 67
+            }
+          }
+        }
+      },
+      "right": {
+        "leaf": false,
+        "feature": "tfidf_cosine",
+        "threshold": 0.376276775862069,
+        "left": {
+          "leaf": false,
+          "feature": "diem_trung_binh_gia_lap",
+          "threshold": 3.8281724137931032,
+          "left": {
+            "leaf": true,
+            "prediction": 3,
+            "class_counts": {
+              "0": 3,
+              "2": 32,
+              "3": 92
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 2,
+            "class_counts": {
+              "2": 9,
+              "3": 3
+            }
+          }
+        },
+        "right": {
+          "leaf": false,
+          "feature": "diem_trung_binh_gia_lap",
+          "threshold": 3.4450000000000003,
+          "left": {
+            "leaf": true,
+            "prediction": 3,
+            "class_counts": {
+              "0": 1,
+              "2": 5,
+              "3": 75
+            }
+          },
+          "right": {
+            "leaf": true,
+            "prediction": 3,
+            "class_counts": {
+              "0": 5,
+              "2": 3,
+              "3": 26
+            }
+          }
+        }
+      }
+    }
+  }
+}
