@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
+import { xepLoaiGpa } from '../../utils/trangThai'
 
 // Trạng thái hồ sơ theo đúng tiến trình tuyển: xét hồ sơ → phỏng vấn → trúng tuyển
 const trangThaiHoSo = (c) => {
@@ -253,9 +254,11 @@ export default function QuanLyUngVienPage() {
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                               c.gpa >= 3.2
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-blue-100 text-blue-800'
+                                : c.gpa >= 2.5
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-slate-100 text-slate-700'
                             }`}>
-                              {c.gpa >= 3.2 ? 'Giỏi' : 'Khá'}
+                              {xepLoaiGpa(c.gpa)}
                             </span>
                           )}
                         </div>
@@ -396,7 +399,7 @@ export default function QuanLyUngVienPage() {
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase font-bold">Trạng thái hồ sơ</div>
-                  <div className="text-xs font-bold text-emerald-700 mt-1">
+                  <div className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${trangThaiHoSo(selectedCandidate).cls}`}>
                     {trangThaiHoSo(selectedCandidate).label}
                   </div>
                 </div>

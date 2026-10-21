@@ -3,7 +3,13 @@ import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 
-const homNay = () => new Date().toISOString().slice(0, 10)
+// Ngày theo giờ máy (toISOString là giờ UTC → trước 7h sáng ở VN sẽ lệch về hôm qua)
+const homNay = () => {
+  const t = new Date()
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+}
+// Chỉ ghi kết quả khi buổi phỏng vấn đã diễn ra (từ ngày phỏng vấn trở đi)
+const chuaDenNgayPV = (d) => Boolean(d) && new Date(d).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0)
 const coGio = (d) => {
   const t = new Date(d)
   return t.getHours() !== 0 || t.getMinutes() !== 0
@@ -348,11 +354,13 @@ export default function LichPhongVanDNPage() {
                       )}
                       <button
                         type="button"
+                        disabled={chuaDenNgayPV(item.ngayPV)}
+                        title={chuaDenNgayPV(item.ngayPV) ? 'Chưa đến ngày phỏng vấn' : undefined}
                         onClick={() => {
                           setSelectedInterview(item)
                           setResultChoice(item.ketQua === 'Dat' || item.ketQua === 'KhongDat' ? item.ketQua : 'Dat')
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] transition-colors"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Ghi kết quả
                       </button>
