@@ -12,6 +12,7 @@ export default function HoSoNangLucPage() {
   const [error, setError] = useState(null)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('')
+  const [saving, setSaving] = useState(false)
 
   // Form state cho modal chỉnh sửa
   const [formData, setFormData] = useState({
@@ -40,24 +41,29 @@ export default function HoSoNangLucPage() {
       setLoading(true)
       const data = await hoSoNangLucService.getBySinhVien(currentMaSV)
       setProfile(data)
-      setFormData({
-        hoTen: data.hoTen || '',
-        lop: data.lop || '',
-        khoaHoc: data.khoaHoc || '',
-        gpa: data.gpa != null ? data.gpa : '',
-        chuyenNganh: data.chuyenNganh || '',
-        kyNang: data.kyNang || '',
-        congNghe: data.congNghe || '',
-        duAnDaThucHien: data.duAnDaThucHien || '',
-        ndHoSo: data.ndHoSo || '',
-        fileCV: data.fileCV || '',
-      })
     } catch (err) {
       setError('Không thể tải hồ sơ sinh viên. Vui lòng thử lại sau.')
       console.error(err)
     } finally {
       setLoading(false)
     }
+  }
+
+  // Mở form luôn từ dữ liệu đã lưu (bấm Hủy thì bỏ các chỉnh sửa chưa lưu)
+  const moFormChinhSua = () => {
+    setFormData({
+      hoTen: profile.hoTen || '',
+      lop: profile.lop || '',
+      khoaHoc: profile.khoaHoc || '',
+      gpa: profile.gpa != null ? profile.gpa : '',
+      chuyenNganh: profile.chuyenNganh || '',
+      kyNang: profile.kyNang || '',
+      congNghe: profile.congNghe || '',
+      duAnDaThucHien: profile.duAnDaThucHien || '',
+      ndHoSo: profile.ndHoSo || '',
+      fileCV: profile.fileCV || '',
+    })
+    setIsEditModalOpen(true)
   }
 
   const handleInputChange = (e) => {
@@ -70,6 +76,8 @@ export default function HoSoNangLucPage() {
 
   const handleSubmitEdit = async (e) => {
     e.preventDefault()
+    if (saving) return
+    setSaving(true)
     try {
       // Chỉ gửi phần hồ sơ năng lực; dữ liệu học vụ do Khoa quản lý
       const payload = {
@@ -86,6 +94,8 @@ export default function HoSoNangLucPage() {
       setTimeout(() => setSaveSuccessMsg(''), 4000)
     } catch (err) {
       alert('Lỗi cập nhật hồ sơ: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -179,7 +189,7 @@ export default function HoSoNangLucPage() {
           </button>
           <button
             type="button"
-            onClick={() => setIsEditModalOpen(true)}
+            onClick={moFormChinhSua}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-800 font-medium text-sm transition-colors shadow-xs"
           >
             <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -457,14 +467,15 @@ export default function HoSoNangLucPage() {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Dự án đã thực hiện
                 </label>
-                <input
-                  type="text"
+                <textarea
+                  rows="3"
                   name="duAnDaThucHien"
-                  placeholder="Hệ thống quản lý bán hàng, App quản lý chi tiêu..."
+                  maxLength={1000}
+                  placeholder="Mỗi dự án một dòng: tên dự án – vai trò – công nghệ sử dụng..."
                   value={formData.duAnDaThucHien}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-blue-600"
-                />
+                ></textarea>
               </div>
 
               <div>
@@ -505,9 +516,10 @@ export default function HoSoNangLucPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-medium shadow-xs"
+                  disabled={saving}
+                  className="px-5 py-2 rounded-lg bg-blue-700 hover:bg-blue-800 text-white font-medium shadow-xs disabled:opacity-50"
                 >
-                  Lưu thay đổi
+                  {saving ? 'Đang lưu...' : 'Lưu thay đổi'}
                 </button>
               </div>
             </form>
