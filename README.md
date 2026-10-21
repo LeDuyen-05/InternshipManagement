@@ -1,110 +1,78 @@
-# Hệ thống Quản lý công tác thực tập tốt nghiệp — Khoa CNTT
+# Internship Management — Quản lý thực tập + AI gợi ý công ty
 
-Đồ án tốt nghiệp — CNTT-KLCN189.
+## Phạm vi đã chốt
 
+### A. Quản lý hệ thống
+- Đăng nhập / đăng xuất.
+- Phân quyền theo 5 vai trò trong SQL: QuanTriVien, Khoa, GiangVien, SinhVien, DaiDienDN.
+- Quản trị tài khoản: xem, khóa/mở khóa.
+- Đổi mật khẩu.
+- Đăng ký công khai chỉ dành cho SinhVien.
 
-## Kiến trúc: 3 lớp (API → BLL → DAL)
+### B. Quản lý Khoa
+- Danh mục Sinh viên.
+- Danh mục Giảng viên.
+- Danh mục Công ty.
+- Xét duyệt Công ty: ChoDuyet → DaDuyet / TuChoi / DongBang.
+- Danh mục Đợt thực tập.
 
-```
-backend/
-├── InternshipManagement.sln
-├── src/
-│   ├── InternshipManagement.API/     ← Controllers, Program.cs
-│   ├── InternshipManagement.BLL/     ← Services, DTOs, Validators (business logic)
-│   └── InternshipManagement.DAL/     ← Entities, AppDbContext, Repositories (dữ liệu)
-└── tests/InternshipManagement.UnitTests/
+### C. AI — B Mô hình
+Chỉ sử dụng:
 
-frontend/        ← ReactJS + Vite + Tailwind
-ml-service/      ← Script Python (TF-IDF + Cosine Similarity), chạy offline
-database/        ← Script SQL Server, chạy tuần tự 01 → 07
-docs/            ← UML, đặc tả, thiết kế giao diện
-```
+`Hồ sơ SV → TF-IDF → Cosine Similarity → Ranking → Top-K`
 
-**Quy tắc phụ thuộc**: `API → BLL → DAL` — một chiều duy nhất, dễ nhớ.
+Không dùng embedding, BERT, Transformer, collaborative filtering hay `DEXUATCONGTY`.
 
-## PHÂN CÔNG MODULE — đọc kỹ để tránh code chồng lên nhau
+### D. Đánh giá
+- DCG.
+- IDCG.
+- NDCG@K.
+- Ground truth lấy từ đăng ký đã duyệt và phân bổ thực tập trong CSDL.
 
-| Người | Module phụ trách | Thư mục chính |
-|---|---|---|
-| | Admin, Đăng nhập/Phân quyền + tổng hợp/kiểm thử chung | `*/Admin/`, review toàn bộ PR trước khi merge |
-|| Sinh viên, Công ty, Khoa/Ban doanh nghiệp | `*/SinhVien/`, `*/CongTy/`, `*/DangKyThucTap/` |
-|| Giảng viên, Đại diện doanh nghiệp, AI | `*/GiangVien/`, `*/HuongDan/`, `ml-service/` |
+## Database
 
-**3 file dùng chung — chỉ  được sửa, người khác cần thì nhắn thêm giúp:**
-- `DAL/AppDbContext.cs`
-- `API/Program.cs`
-- Các file `.csproj` (khi cần thêm NuGet package mới)
+Toàn bộ T-SQL ban đầu được nhúng vào `backend/src/InternshipManagement.DAL/Database/EmbeddedDatabaseScript.cs`.
+Không cần giữ một file `.sql` riêng để khởi tạo ứng dụng.
 
-## Module mẫu (pattern) đã dựng sẵn hoàn chỉnh: SinhVien
+Khi API khởi động, `DatabaseInitializer`:
+1. kiểm tra database `QuanLyThucTap`;
+2. nếu chưa có thì tạo database;
+3. chạy script nhúng một lần;
+4. nếu bảng `TAIKHOAN` đã tồn tại thì không reset dữ liệu.
 
-Dùng đúng khuôn mẫu này khi code module mới:
-```
-DAL/Entities/SinhVien.cs
-DAL/Repositories/ISinhVienRepository.cs + SinhVienRepository.cs
-BLL/DTOs/SinhVien/*.cs
-BLL/Validators/SinhVien/CreateSinhVienValidator.cs
-BLL/Services/SinhVien/ISinhVienService.cs + SinhVienService.cs
-API/Controllers/SinhVienController.cs
-frontend/src/pages/SinhVien/SinhVienListPage.jsx
-```
+## Chạy
 
-## Bắt đầu nhanh
-
-### 1. Database
-Mở SQL Server Management Studio, chạy tuần tự các file trong `database/` (01 → 07).
-
-### 2. Backend
+### Backend
 ```bash
-cd backend
+cd backend/src/InternshipManagement.API
 dotnet restore
-dotnet build
-dotnet run --project src/InternshipManagement.API
-# Swagger: http://localhost:5100/swagger
+dotnet run
 ```
-Chỉnh connection string trong `backend/src/InternshipManagement.API/appsettings.json` nếu cần.
 
-### 3. Frontend
+### Frontend
 ```bash
 cd frontend
 npm install
-cp .env.example .env
 npm run dev
-# http://localhost:5173
 ```
 
-### 4. ML Service (chạy khi cần cập nhật gợi ý, không cần chạy lúc demo)
-```bash
-cd ml-service
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python generate_recommendations.py
-```
+Tài khoản mẫu: `admin`, `khoa01`, `sv001` — mật khẩu `123456`.
 
-### 5. Test
-```bash
-cd backend
-dotnet test
-```
+## Công thức AI
 
-## Đưa lên GitHub
+### TF-IDF
+`TF-IDF(t,d) = TF(t,d) × IDF(t)`
 
-```bash
-git init
-git add .
-git commit -m "Khởi tạo cấu trúc project"
-git branch -M main
-git remote add origin <link-repo-github-cua-nhom>
-git push -u origin main
-```
+### Cosine Similarity
+`cos(A,B) = (A·B) / (||A|| × ||B||)`
 
-Sau đó mỗi người:
-```bash
-git checkout -b feature/<ten>-<module>     # vd: feature/chi-dangky
-# ... code ...
-git add .
-git commit -m "Mô tả ngắn gọn đã làm gì"
-git push origin feature/<ten>-<module>
-# Rồi tạo Pull Request trên GitHub, nhờ  review + merge vào main
-```
+### Ranking
+Điểm xếp hạng của công ty chính là Cosine Similarity giữa vector TF-IDF của hồ sơ sinh viên và vector TF-IDF của yêu cầu công ty. Các công ty được sắp xếp giảm dần theo điểm này để lấy Top-K.
 
+### NDCG@K
+Relevance được lấy từ dữ liệu nghiệp vụ:
+- Công ty đã phân bổ cho sinh viên: relevance = 3.
+- Đăng ký thực tập đã được duyệt: relevance = 2.
+- Công ty còn lại: relevance = 0.
 
+`NDCG@K = DCG@K / IDCG@K`.

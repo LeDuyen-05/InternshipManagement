@@ -1,16 +1,40 @@
-# Backend (.NET)
+# Visual Studio / VS Code / JetBrains
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.code-workspace
+
+# Build & Compilation logs / diagnostics
+[Bb]in/
+[Oo]bj/
 backend/**/bin/
 backend/**/obj/
-*.user
+*.log
+*-build-diagnostic.txt
+*.diagnostic.txt
 
-# Frontend (Node)
+# Node / Frontend
+node_modules/
 frontend/node_modules/
+dist/
 frontend/dist/
+.env
+.env.local
+.env.*.local
 frontend/.env
-frontend/.env.*
+frontend/.env.local
 
-# ML Service (Python)
+# Python / ML Service
+venv/
+.venv/
 ml-service/venv/
+ml-service/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
 ml-service/__pycache__/
 ml-service/**/__pycache__/
 ml-service/.env
