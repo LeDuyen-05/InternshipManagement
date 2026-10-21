@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
@@ -421,7 +422,7 @@ export default function NopTienDoSVPage() {
 
       {/* Modal Nộp Báo Cáo */}
       {modalOpen && selectedSlot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+        <ModalOverlay onClose={() => setModalOpen(false)}>
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -481,7 +482,7 @@ export default function NopTienDoSVPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

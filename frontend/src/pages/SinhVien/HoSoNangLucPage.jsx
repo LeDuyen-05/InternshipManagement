@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import hoSoNangLucService from '../../services/hoSoNangLucService.js'
@@ -399,7 +400,7 @@ export default function HoSoNangLucPage() {
 
       {/* Modal Chỉnh Sửa Hồ Sơ */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+        <ModalOverlay onClose={() => setIsEditModalOpen(false)}>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 flex flex-col gap-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -511,7 +512,7 @@ export default function HoSoNangLucPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

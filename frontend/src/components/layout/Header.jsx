@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import ModalOverlay from '../common/ModalOverlay.jsx'
 import { Link } from 'react-router-dom'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import apiClient from '../../services/api'
@@ -158,7 +158,7 @@ export default function Header({ currentRole }) {
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
+    <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
       {/* Left section: Breadcrumb / Title */}
       <div className="flex items-center text-slate-500 text-sm">
         <span className="material-symbols-outlined text-[18px] text-blue-700 mr-1.5">school</span>
@@ -422,8 +422,7 @@ export default function Header({ currentRole }) {
 
       {/* 📋 MODAL 1: XEM HỒ SƠ CHI TIẾT (DÙNG PORTAL ĐỂ CĂN GIỮA TOÀN MÀN HÌNH) */}
       {showProfileModal &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <ModalOverlay onClose={() => setShowProfileModal(false)}>
             <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -500,14 +499,12 @@ export default function Header({ currentRole }) {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
-        )}
+          </ModalOverlay>
+        }
 
       {/* 🔑 MODAL 2: ĐỔI MẬT KHẨU */}
       {showPasswordModal &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <ModalOverlay onClose={() => setShowPasswordModal(false)}>
             <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -651,14 +648,12 @@ export default function Header({ currentRole }) {
                 </form>
               )}
             </div>
-          </div>,
-          document.body
-        )}
+          </ModalOverlay>
+        }
 
       {/* 🚪 MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <ModalOverlay onClose={() => setShowLogoutConfirm(false)}>
             <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 max-h-[90vh] overflow-y-auto">
               {logoutSuccess ? (
                 <div className="space-y-3 py-2">
@@ -706,9 +701,8 @@ export default function Header({ currentRole }) {
                 </>
               )}
             </div>
-          </div>,
-          document.body
-        )}
+          </ModalOverlay>
+        }
     </header>
   )
 }

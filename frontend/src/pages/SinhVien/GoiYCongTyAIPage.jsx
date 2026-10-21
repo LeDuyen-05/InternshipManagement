@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { goiYCongTyService } from '../../services/goiYCongTyService'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
@@ -386,7 +387,7 @@ export default function GoiYCongTyAIPage() {
 
       {/* MODAL 1: Chỉnh Sửa Hồ Sơ Năng Lực & Tái Huấn Luyện AI */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+        <ModalOverlay onClose={() => setShowEditModal(false)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -466,12 +467,12 @@ export default function GoiYCongTyAIPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* MODAL 2: Xem Chi Tiết JD Công Ty */}
       {selectedCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+        <ModalOverlay onClose={() => setSelectedCompany(null)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -536,7 +537,7 @@ export default function GoiYCongTyAIPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )
