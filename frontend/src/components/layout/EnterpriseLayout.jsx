@@ -26,6 +26,7 @@ export default function EnterpriseLayout() {
         ...(res?.congTy || {}),
         daiDiens: res?.daiDiens || [],
         daiDienChinh: res?.daiDiens?.[0] || company.daiDienChinh,
+        chiTieu: res?.chiTieu || null,
       })
       localStorage.setItem('active_company_id', company.maCongTy)
     } catch (err) {
@@ -50,6 +51,7 @@ export default function EnterpriseLayout() {
               ...repData.congTy,
               daiDiens: overview?.daiDiens || [],
               daiDienChinh: repData,
+              chiTieu: overview?.chiTieu || null,
             })
             return
           }
@@ -63,8 +65,10 @@ export default function EnterpriseLayout() {
           const overview = await doanhNghiepService.getTongQuan(found.maCongTy)
           setActiveCompany({
             ...found,
+            ...(overview?.congTy || {}),
             daiDiens: overview?.daiDiens || [],
             daiDienChinh: overview?.daiDiens?.[0] || found.daiDienChinh,
+            chiTieu: overview?.chiTieu || null,
           })
         }
       } catch (err) {
@@ -80,7 +84,7 @@ export default function EnterpriseLayout() {
   return (
     <EnterpriseContext.Provider value={{ activeCompany, setActiveCompany: handleSelectCompany, loading }}>
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <EnterpriseSidebar />
+        <EnterpriseSidebar activeCompany={activeCompany} />
         <div className="pl-64 flex flex-col min-h-screen">
           <EnterpriseHeader activeCompany={activeCompany} onSelectCompany={handleSelectCompany} />
           <main className="flex-1 pt-16 p-6">

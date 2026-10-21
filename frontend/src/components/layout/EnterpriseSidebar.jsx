@@ -1,9 +1,18 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 
-export default function EnterpriseSidebar() {
+const TRANG_THAI_TUYEN = {
+  DangTuyen: { label: 'Đang nhận hồ sơ', cls: 'bg-emerald-100 text-emerald-800' },
+  DaDuChiTieu: { label: 'Đã đủ chỉ tiêu', cls: 'bg-rose-100 text-rose-800' },
+  ChuaDuocDuyet: { label: 'Chờ Khoa duyệt', cls: 'bg-amber-100 text-amber-800' },
+  KhongCoDot: { label: 'Chưa mở đợt', cls: 'bg-slate-200 text-slate-700' },
+}
+
+export default function EnterpriseSidebar({ activeCompany }) {
   const { user } = useAuth()
   const isManagerOrAdmin = user?.maVaiTro === 'VT01' || user?.maVaiTro === 'VT02'
+  const chiTieu = activeCompany?.chiTieu
+  const trangThai = TRANG_THAI_TUYEN[chiTieu?.trangThaiTuyen] || TRANG_THAI_TUYEN.KhongCoDot
 
   const navItems = [
     {
@@ -20,7 +29,7 @@ export default function EnterpriseSidebar() {
       ? [
           {
             group: 'Cổng thông tin liên kết',
-            items: [{ path: '/sinh-vien', label: 'Cổng Sinh viên', icon: 'school' }],
+            items: [{ path: user?.maVaiTro === 'VT01' ? '/admin' : '/khoa', label: user?.maVaiTro === 'VT01' ? 'Cổng Quản trị' : 'Cổng Khoa', icon: 'arrow_back' }],
           },
         ]
       : []),
@@ -75,12 +84,14 @@ export default function EnterpriseSidebar() {
       <div className="p-3 m-3 rounded-xl bg-indigo-50/70 border border-indigo-200/80">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[10px] uppercase font-bold text-indigo-600">Đợt tuyển dụng</span>
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-            Đang nhận CV
+          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${trangThai.cls}`}>
+            {trangThai.label}
           </span>
         </div>
-        <div className="text-xs font-semibold text-slate-800">Đợt 2 - HK2 (2026 - 2027)</div>
-        <div className="text-[11px] text-slate-500 mt-0.5">Khoa Công nghệ Thông tin</div>
+        <div className="text-xs font-semibold text-slate-800">{chiTieu?.tenDot || 'Chưa có đợt đang diễn ra'}</div>
+        <div className="text-[11px] text-slate-500 mt-0.5">
+          {chiTieu?.maDot ? `Đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} sinh viên` : 'Khoa Công nghệ Thông tin'}
+        </div>
       </div>
     </aside>
   )

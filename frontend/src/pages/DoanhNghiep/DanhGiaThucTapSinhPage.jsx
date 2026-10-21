@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import phieuChamDiemService from '../../services/phieuChamDiemService.js'
+import { PHAN_BO } from '../../utils/trangThai'
 
 // Phiếu nhận xét của đơn vị thực tập theo file chấm điểm của Khoa:
 // CLO4.1 – ý thức, trách nhiệm, kỷ luật (tối đa 2đ); CLO4.2 – vận dụng kiến thức vào thực tiễn (tối đa 3đ).
@@ -202,7 +204,7 @@ export default function DanhGiaThucTapSinhPage() {
                     {/* Position */}
                     <td className="py-3.5 px-3">
                       <div className="font-semibold text-slate-800 text-xs">{item.viTriThucTap || '—'}</div>
-                      <div className="text-[11px] text-slate-400">{item.thoiGianThucTap || '—'}</div>
+                      <div className="text-[11px] text-slate-400">{item.tenDot || item.thoiGianThucTap || '—'}</div>
                     </td>
 
                     {/* Mentors */}
@@ -236,7 +238,7 @@ export default function DanhGiaThucTapSinhPage() {
                         <span className={`w-1.5 h-1.5 rounded-full ${
                           item.daDanhGia ? 'bg-emerald-500' : 'bg-blue-500 animate-pulse'
                         }`}></span>
-                        {item.daDanhGia ? 'Đã đánh giá' : 'Đang thực tập'}
+                        {item.daDanhGia ? 'Đã đánh giá' : PHAN_BO[item.trangThai] || item.trangThai}
                       </span>
                     </td>
 
@@ -245,7 +247,9 @@ export default function DanhGiaThucTapSinhPage() {
                       <button
                         type="button"
                         onClick={() => handleOpenEvalModal(item)}
-                        className="px-3.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-[11px] transition-colors shadow-2xs flex items-center gap-1 ml-auto"
+                        disabled={item.trangThai === 'ChuaNhanViec'}
+                        title={item.trangThai === 'ChuaNhanViec' ? 'Sinh viên chưa xác nhận nhận việc' : undefined}
+                        className="px-3.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-800 text-white font-bold text-[11px] transition-colors shadow-2xs flex items-center gap-1 ml-auto disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         <span className="material-symbols-outlined text-[15px]">rate_review</span>
                         <span>{item.daDanhGia ? 'Sửa đánh giá' : 'Chấm điểm'}</span>
@@ -267,7 +271,7 @@ export default function DanhGiaThucTapSinhPage() {
 
       {/* Modal Chấm điểm & Đánh giá thực tập sinh */}
       {selectedIntern && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <ModalOverlay onClose={() => setSelectedIntern(null)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -356,7 +360,7 @@ export default function DanhGiaThucTapSinhPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

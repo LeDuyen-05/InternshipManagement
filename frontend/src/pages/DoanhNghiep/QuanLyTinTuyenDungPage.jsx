@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 
 export default function QuanLyTinTuyenDungPage() {
   const { activeCompany } = useEnterprise()
@@ -108,7 +109,7 @@ export default function QuanLyTinTuyenDungPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Quản lý Tin Tuyển Dụng Thực Tập</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Đăng ký và điều chỉnh chỉ tiêu tiếp nhận, tiêu chuẩn năng lực cho đợt thực tập tốt nghiệp HK2 (2026 - 2027)
+            Đăng ký và điều chỉnh chỉ tiêu tiếp nhận, tiêu chuẩn năng lực cho {data?.chiTieu?.tenDot || 'đợt thực tập tốt nghiệp đang diễn ra'}
           </p>
         </div>
         <button
@@ -244,7 +245,7 @@ export default function QuanLyTinTuyenDungPage() {
 
       {/* Modal chỉnh sửa tin tuyển dụng */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <ModalOverlay onClose={() => setShowModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 text-sm">Cập nhật Tin Tuyển Dụng Thực Tập</h3>
@@ -329,7 +330,7 @@ export default function QuanLyTinTuyenDungPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )
