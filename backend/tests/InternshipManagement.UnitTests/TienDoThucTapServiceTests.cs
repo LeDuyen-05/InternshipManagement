@@ -67,9 +67,11 @@ public class TienDoThucTapServiceTests
         {
             MaTienDo = "TD001",
             MaSV = "SV001",
+            MaDot = "DOT1",
             TrangThaiDuyet = "ChuaNop"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
+        _repoMock.Setup(r => r.GetTrangThaiPhanBoAsync("SV001", "DOT1")).ReturnsAsync("DangThucTap");
         _repoMock.Setup(r => r.UpdateAsync(It.IsAny<TienDoThucTap>()))
             .ReturnsAsync((TienDoThucTap t) => t);
 
@@ -85,6 +87,23 @@ public class TienDoThucTapServiceTests
         Assert.Equal("DaNop", result.TrangThaiDuyet);
         Assert.Equal("Báo cáo tuần 1 hoàn thành", result.NoiDungBaoCao);
         _repoMock.Verify(r => r.UpdateAsync(It.Is<TienDoThucTap>(t => t.TrangThaiDuyet == "DaNop")), Times.Once);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("ChuaNhanViec")]
+    public async Task NopBaoCaoTienDoAsync_BeforeConfirmingPlacement_ThrowsInvalidOperationException(string? trangThaiPhanBo)
+    {
+        var service = CreateService();
+        var existing = new TienDoThucTap { MaTienDo = "TD001", MaSV = "SV001", MaDot = "DOT1", TrangThaiDuyet = "ChuaNop" };
+        _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
+        _repoMock.Setup(r => r.GetTrangThaiPhanBoAsync("SV001", "DOT1")).ReturnsAsync(trangThaiPhanBo);
+
+        var request = new NopBaoCaoRequest { MaTienDo = "TD001", MaSV = "SV001", NoiDungBaoCao = "Báo cáo tuần 1" };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.NopBaoCaoTienDoAsync(request, userMaSV: "SV001"));
+        _repoMock.Verify(r => r.UpdateAsync(It.IsAny<TienDoThucTap>()), Times.Never);
     }
 
     [Fact]

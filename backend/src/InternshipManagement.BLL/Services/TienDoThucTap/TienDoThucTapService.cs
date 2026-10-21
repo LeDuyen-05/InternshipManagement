@@ -150,6 +150,13 @@ public class TienDoThucTapService : ITienDoThucTapService
             throw new InvalidOperationException("Đợt thực tập đã kết thúc, không thể nộp báo cáo tiến độ.");
         }
 
+        // Chỉ nộp báo cáo tuần khi đã có quyết định tiếp nhận và sinh viên đã xác nhận nhận việc
+        var trangThaiPhanBo = await _tienDoThucTapRepository.GetTrangThaiPhanBoAsync(existing.MaSV, existing.MaDot);
+        if (trangThaiPhanBo == null)
+            throw new InvalidOperationException("Bạn chưa có quyết định tiếp nhận thực tập trong đợt này nên chưa thể nộp báo cáo tiến độ.");
+        if (trangThaiPhanBo == "ChuaNhanViec")
+            throw new InvalidOperationException("Bạn cần xác nhận nhận quyết định tiếp nhận (mục Lịch phỏng vấn & Phân bổ) trước khi nộp báo cáo tiến độ.");
+
         existing.NoiDungBaoCao = request.NoiDungBaoCao.Trim();
         existing.NgayNop = DateTime.Now;
         existing.TrangThaiDuyet = "DaNop";
