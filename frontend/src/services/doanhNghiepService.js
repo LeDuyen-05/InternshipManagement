@@ -55,6 +55,12 @@ export const doanhNghiepService = {
     return res.data
   },
 
+  // Dời lịch / đổi người phỏng vấn / hình thức cho buổi chưa có kết quả
+  doiLichPhongVan: async (maPV, data) => {
+    const res = await apiClient.put(`/DoanhNghiep/phong-van/${maPV}`, data)
+    return res.data
+  },
+
   // Cập nhật kết quả phỏng vấn
   capNhatKetQuaPhongVan: async (maPV, data) => {
     const res = await apiClient.put(`/DoanhNghiep/phong-van/${maPV}/ket-qua`, data)

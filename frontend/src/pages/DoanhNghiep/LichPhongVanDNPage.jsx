@@ -1,6 +1,21 @@
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
+
+const homNay = () => new Date().toISOString().slice(0, 10)
+const coGio = (d) => {
+  const t = new Date(d)
+  return t.getHours() !== 0 || t.getMinutes() !== 0
+}
+const tachNgayGio = (d) => {
+  const t = new Date(d)
+  const pad = (n) => String(n).padStart(2, '0')
+  return {
+    ngay: `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}`,
+    gio: coGio(d) ? `${pad(t.getHours())}:${pad(t.getMinutes())}` : '09:00',
+  }
+}
 
 export default function LichPhongVanDNPage() {
   const { activeCompany } = useEnterprise()
@@ -12,6 +27,7 @@ export default function LichPhongVanDNPage() {
   const [toast, setToast] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   const [chiTieu, setChiTieu] = useState(null)
+  const [doiLich, setDoiLich] = useState(null) // { maPV, hoTenSV, ngayPV, gioPV, hinhThuc, maDaiDien }
 
   // Form tạo lịch mới
   const [formSchedule, setFormSchedule] = useState({
@@ -35,8 +51,8 @@ export default function LichPhongVanDNPage() {
           doanhNghiepService.getTongQuan(activeCompany.maCongTy),
         ])
         setInterviews(pvRes || [])
-        // Chỉ hồ sơ còn hiệu lực và SV chưa được nơi nào tiếp nhận mới được xếp lịch phỏng vấn
-        const eligible = (uvRes || []).filter((c) => c.trangThai !== 'TuChoi' && !c.daDuocTiepNhan)
+        // Chỉ hồ sơ còn hiệu lực, SV chưa được nơi nào tiếp nhận và chưa có lịch chờ kết quả mới được xếp lịch
+        const eligible = (uvRes || []).filter((c) => c.trangThai !== 'TuChoi' && !c.daDuocTiepNhan && !c.coLichPhongVanCho)
         setCandidates(eligible)
         setChiTieu(tqRes?.chiTieu || null)
         uvRes = eligible
@@ -72,32 +88,15 @@ export default function LichPhongVanDNPage() {
         ? `${formSchedule.ngayPV}T${formSchedule.gioPV || '09:00'}:00`
         : new Date(Date.now() + 2 * 86400000).toISOString()
 
-      const res = await doanhNghiepService.taoLichPhongVan({
+      await doanhNghiepService.taoLichPhongVan({
         maSinhVien: formSchedule.maSinhVien,
         maDaiDien: formSchedule.maDaiDien,
         hinhThuc: formSchedule.hinhThuc,
         ngayPV: dateTimeStr,
       })
-
-      const sv = candidates.find((c) => c.maSV === formSchedule.maSinhVien)
-      const dd = activeCompany?.daiDiens?.find((d) => d.maSo === formSchedule.maDaiDien)
-
-      const newInterview = {
-        maPV: res.phongVan?.maPV || 'PV_NEW',
-        maSinhVien: formSchedule.maSinhVien,
-        hoTenSV: sv?.hoTen || formSchedule.maSinhVien,
-        lopSV: sv?.lop || '',
-        gpaSV: sv?.gpa != null ? sv.gpa : null,
-        maDaiDien: formSchedule.maDaiDien,
-        tenNguoiPV: dd?.hoTen || '',
-        chucVuNguoiPV: dd?.chucVu || '',
-        emailNguoiPV: dd?.email || '',
-        hinhThuc: formSchedule.hinhThuc,
-        ngayPV: dateTimeStr,
-        ketQua: res.phongVan?.ketQua || 'ChuaCoKetQua',
-      }
-
-      setInterviews((prev) => [newInterview, ...prev])
+      // Tải lại từ server: danh sách lịch + ứng viên còn xếp lịch được
+      setFormSchedule((prev) => ({ ...prev, maSinhVien: '' }))
+      await fetchData()
       setToast({ type: 'success', message: 'Lên lịch phỏng vấn thành công!' })
       setShowScheduleModal(false)
     } catch (err) {
@@ -106,6 +105,27 @@ export default function LichPhongVanDNPage() {
     } finally {
       setSubmitting(false)
       setTimeout(() => setToast(null), 4000)
+    }
+  }
+
+  const handleDoiLich = async (e) => {
+    e.preventDefault()
+    if (!doiLich) return
+    try {
+      setSubmitting(true)
+      const res = await doanhNghiepService.doiLichPhongVan(doiLich.maPV, {
+        maDaiDien: doiLich.maDaiDien,
+        hinhThuc: doiLich.hinhThuc,
+        ngayPV: `${doiLich.ngayPV}T${doiLich.gioPV || '09:00'}:00`,
+      })
+      setToast({ type: 'success', message: res?.message || 'Đã cập nhật lịch phỏng vấn.' })
+      setDoiLich(null)
+      await fetchData()
+    } catch (err) {
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể dời lịch phỏng vấn.' })
+    } finally {
+      setSubmitting(false)
+      setTimeout(() => setToast(null), 5000)
     }
   }
 
@@ -195,7 +215,7 @@ export default function LichPhongVanDNPage() {
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng buổi phỏng vấn</div>
           <div className="text-2xl font-black text-slate-900 mt-2">{stats.total} <span className="text-xs font-normal text-slate-500">lịch hẹn</span></div>
-          <div className="text-[11px] text-slate-400 mt-1">Đợt HK2 (2026 - 2027)</div>
+          <div className="text-[11px] text-slate-400 mt-1">{chiTieu?.tenDot || 'Tất cả các đợt'}</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
@@ -269,7 +289,9 @@ export default function LichPhongVanDNPage() {
                         {item.ngayPV ? new Date(item.ngayPV).toLocaleDateString('vi-VN') : 'Chưa định ngày'}
                       </div>
                       <div className="text-[11px] text-slate-400">
-                        {item.ngayPV ? new Date(item.ngayPV).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+                        {item.ngayPV && coGio(item.ngayPV)
+                          ? new Date(item.ngayPV).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                          : 'Chưa hẹn giờ'}
                       </div>
                     </td>
 
@@ -299,12 +321,31 @@ export default function LichPhongVanDNPage() {
                           ? 'Đạt (Trúng tuyển)'
                           : item.ketQua === 'KhongDat'
                           ? 'Không đạt'
-                          : 'Đang xử lý'}
+                          : 'Chờ kết quả'}
                       </span>
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      {(!item.ketQua || item.ketQua === 'ChuaCoKetQua') && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const { ngay, gio } = tachNgayGio(item.ngayPV)
+                            setDoiLich({
+                              maPV: item.maPV,
+                              hoTenSV: item.hoTenSV,
+                              ngayPV: ngay < homNay() ? homNay() : ngay,
+                              gioPV: gio,
+                              hinhThuc: item.hinhThuc || 'Trực tuyến qua Google Meet',
+                              maDaiDien: item.maDaiDien,
+                            })
+                          }}
+                          className="mr-2 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition-colors"
+                        >
+                          Dời lịch
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -332,7 +373,7 @@ export default function LichPhongVanDNPage() {
 
       {/* Modal Lên lịch phỏng vấn mới */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <ModalOverlay onClose={() => setShowScheduleModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 text-sm">Lên Lịch Phỏng Vấn Ứng Viên Mới</h3>
@@ -374,7 +415,7 @@ export default function LichPhongVanDNPage() {
                   <option value="">-- Chọn người phỏng vấn --</option>
                   {activeCompany?.daiDiens?.map((d) => (
                     <option key={d.maSo} value={d.maSo}>
-                      {d.hoTen} - {d.chucVu} ({d.email})
+                      {d.hoTen}{d.chucVu ? ` - ${d.chucVu}` : ''}{d.email ? ` (${d.email})` : ''}
                     </option>
                   ))}
                 </select>
@@ -386,6 +427,7 @@ export default function LichPhongVanDNPage() {
                   <input
                     type="date"
                     required
+                    min={homNay()}
                     value={formSchedule.ngayPV}
                     onChange={(e) => setFormSchedule({ ...formSchedule, ngayPV: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
@@ -433,12 +475,83 @@ export default function LichPhongVanDNPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
+      )}
+
+      {/* Modal Dời lịch phỏng vấn */}
+      {doiLich && (
+        <ModalOverlay onClose={() => setDoiLich(null)}>
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm">Dời lịch phỏng vấn – {doiLich.hoTenSV}</h3>
+              <button type="button" onClick={() => setDoiLich(null)} className="text-slate-400 hover:text-slate-600 rounded-lg p-1">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleDoiLich} className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block font-semibold text-slate-700">
+                  Ngày phỏng vấn *
+                  <input
+                    type="date"
+                    required
+                    min={homNay()}
+                    value={doiLich.ngayPV}
+                    onChange={(e) => setDoiLich({ ...doiLich, ngayPV: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 font-normal"
+                  />
+                </label>
+                <label className="block font-semibold text-slate-700">
+                  Giờ phỏng vấn *
+                  <input
+                    type="time"
+                    required
+                    value={doiLich.gioPV}
+                    onChange={(e) => setDoiLich({ ...doiLich, gioPV: e.target.value })}
+                    className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 font-normal"
+                  />
+                </label>
+              </div>
+              <label className="block font-semibold text-slate-700">
+                Người phỏng vấn
+                <select
+                  value={doiLich.maDaiDien}
+                  onChange={(e) => setDoiLich({ ...doiLich, maDaiDien: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 font-normal"
+                >
+                  {activeCompany?.daiDiens?.map((d) => (
+                    <option key={d.maSo} value={d.maSo}>{d.hoTen}{d.chucVu ? ` - ${d.chucVu}` : ''}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block font-semibold text-slate-700">
+                Hình thức
+                <select
+                  value={doiLich.hinhThuc}
+                  onChange={(e) => setDoiLich({ ...doiLich, hinhThuc: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 rounded-xl border border-slate-300 font-normal"
+                >
+                  {[...new Set([doiLich.hinhThuc, 'Trực tuyến qua Google Meet', 'Trực tiếp tại văn phòng công ty', 'Trực tuyến qua Zoom'])].map((h) => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="pt-3 flex items-center justify-end gap-2 border-t border-slate-100">
+                <button type="button" onClick={() => setDoiLich(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-semibold">
+                  Hủy
+                </button>
+                <button type="submit" disabled={submitting} className="px-5 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white font-bold disabled:opacity-50">
+                  {submitting ? 'Đang lưu...' : 'Lưu lịch mới'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </ModalOverlay>
       )}
 
       {/* Modal Cập nhật kết quả phỏng vấn */}
       {selectedInterview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <ModalOverlay onClose={() => setSelectedInterview(null)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 text-sm">Ghi Nhận Kết Quả Phỏng Vấn</h3>
@@ -511,7 +624,7 @@ export default function LichPhongVanDNPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )
