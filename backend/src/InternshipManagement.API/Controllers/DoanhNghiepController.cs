@@ -69,6 +69,10 @@ public class DoanhNghiepController : ControllerBase
     public async Task<IActionResult> TaoPhongVan([FromBody] TaoPhongVanRequest request) =>
         Ok(await _service.TaoPhongVanAsync(request, await PhamViCongTyAsync()));
 
+    [HttpPut("phong-van/{maPV}")]
+    public async Task<IActionResult> DoiLichPhongVan(string maPV, [FromBody] DoiLichPhongVanRequest request) =>
+        Ok(await _service.DoiLichPhongVanAsync(maPV, request, await PhamViCongTyAsync()));
+
     /// <summary>Cập nhật kết quả phỏng vấn; "Dat" tạo quyết định tiếp nhận và tự đóng tuyển khi đủ chỉ tiêu.</summary>
     [HttpPut("phong-van/{maPV}/ket-qua")]
     public async Task<IActionResult> CapNhatKetQuaPhongVan(string maPV, [FromBody] CapNhatKetQuaPhongVanRequest request)

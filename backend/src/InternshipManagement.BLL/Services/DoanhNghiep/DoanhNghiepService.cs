@@ -141,7 +141,15 @@ public class DoanhNghiepService
         var dangKy = _db.DangKyThucTaps.AsNoTracking().Where(d => d.MaCongTy == maCongTy);
         if (chiTieu.MaDot != null) dangKy = dangKy.Where(d => d.MaDot == chiTieu.MaDot);
 
-        var daiDienIds = daiDiens.Select(d => d.MaSo).ToList();
+        var maSVTrongDot = await dangKy.Select(d => d.MaSV).Distinct().ToListAsync();
+        var phongVanTrongDot = _db.PhongVans.AsNoTracking()
+            .Where(p => p.DaiDienDoanhNghiep.MaCongTy == maCongTy && maSVTrongDot.Contains(p.MaSinhVien));
+        var soTieuChiDN = await _db.TieuChis.CountAsync(t => t.NhomDanhGia == ThangDiem.NhomDoanhNghiep);
+        var soDaDanhGia = chiTieu.MaDot == null || soTieuChiDN == 0 ? 0 : await _db.PhanBoThucTaps.AsNoTracking()
+            .Where(p => p.MaCongTy == maCongTy && p.MaDot == chiTieu.MaDot && p.TrangThai != "Huy")
+            .CountAsync(p => _db.PhieuChamDiems.Any(pc => pc.MaSV == p.MaSinhVien && pc.MaDot == p.MaDot
+                && pc.ChiTietChamDiems.Count(c => c.TieuChi.NhomDanhGia == ThangDiem.NhomDoanhNghiep) >= soTieuChiDN));
+
         var ungVienMoiNhat = await dangKy
             .OrderByDescending(d => d.NgayDangKy)
             .Take(5)
@@ -179,8 +187,10 @@ public class DoanhNghiepService
                 soUngVien = await dangKy.CountAsync(),
                 soChoDuyet = await dangKy.CountAsync(d => d.TrangThai == "ChoDuyet"),
                 soDaDuyet = await dangKy.CountAsync(d => d.TrangThai == "DaDuyet"),
-                soPhongVan = await _db.PhongVans.CountAsync(p => daiDienIds.Contains(p.MaDaiDien)),
-                soThucTapSinh = chiTieu.DaTiepNhan
+                soPhongVan = await phongVanTrongDot.CountAsync(),
+                soPhongVanChoKetQua = await phongVanTrongDot.CountAsync(p => p.KetQua == "ChuaCoKetQua"),
+                soThucTapSinh = chiTieu.DaTiepNhan,
+                soDaDanhGia
             },
             ungVienMoiNhat
         };
@@ -263,9 +273,11 @@ public class DoanhNghiepService
     public async Task<object> GetUngVienAsync(string maCongTy, string? phamViCongTy)
     {
         KiemTraPhamVi(phamViCongTy, maCongTy);
+        var dot = await GetDotDangDienRaAsync();
         var dangKys = await _db.DangKyThucTaps.AsNoTracking()
             .Include(d => d.SinhVien).ThenInclude(s => s.HoSoNangLuc)
-            .Where(d => d.MaCongTy == maCongTy)
+            // Mặc định chỉ hiện hồ sơ của đợt đang tuyển (hồ sơ các đợt cũ không còn xét)
+            .Where(d => d.MaCongTy == maCongTy && (dot == null || d.MaDot == dot.MaSo))
             .OrderBy(d => d.ThuTuUuTien)
             .ThenByDescending(d => d.NgayDangKy)
             .ToListAsync();
@@ -274,6 +286,10 @@ public class DoanhNghiepService
         var phanBos = await _db.PhanBoThucTaps.AsNoTracking()
             .Include(p => p.CongTy)
             .Where(p => maSVs.Contains(p.MaSinhVien) && p.TrangThai != "Huy")
+            .ToListAsync();
+        var phongVanCho = await _db.PhongVans.AsNoTracking()
+            .Where(p => p.DaiDienDoanhNghiep.MaCongTy == maCongTy && maSVs.Contains(p.MaSinhVien) && p.KetQua == "ChuaCoKetQua")
+            .Select(p => p.MaSinhVien)
             .ToListAsync();
 
         return dangKys.Select(d =>
@@ -302,7 +318,9 @@ public class DoanhNghiepService
                 FileCV = hs?.FileCV ?? "",
                 // SV đã được tiếp nhận (tại công ty này hoặc công ty khác) trong cùng đợt
                 DaDuocTiepNhan = pb != null,
-                NoiTiepNhan = pb?.CongTy?.TenCongTy
+                NoiTiepNhan = pb?.CongTy?.TenCongTy,
+                TiepNhanTaiDay = pb != null && pb.MaCongTy == maCongTy,
+                CoLichPhongVanCho = phongVanCho.Contains(d.MaSV)
             };
         }).ToList();
     }
@@ -315,6 +333,18 @@ public class DoanhNghiepService
         var dk = await _db.DangKyThucTaps.Include(d => d.CongTy).FirstOrDefaultAsync(d => d.MaDK == maDK)
                  ?? throw new KeyNotFoundException($"Không tìm thấy phiếu đăng ký {maDK}");
         KiemTraPhamVi(phamViCongTy, dk.MaCongTy);
+
+        if (trangThai != dk.TrangThai)
+        {
+            var tiepNhanTaiDay = await _db.PhanBoThucTaps.AnyAsync(p =>
+                p.MaSinhVien == dk.MaSV && p.MaCongTy == dk.MaCongTy && p.MaDot == dk.MaDot && p.TrangThai != "Huy");
+            if (tiepNhanTaiDay)
+                throw new InvalidOperationException("Sinh viên đã trúng tuyển tại doanh nghiệp. Muốn thay đổi, hãy cập nhật kết quả phỏng vấn.");
+            var coLichPhongVan = await _db.PhongVans.AnyAsync(p =>
+                p.MaSinhVien == dk.MaSV && p.DaiDienDoanhNghiep.MaCongTy == dk.MaCongTy && p.KetQua == "ChuaCoKetQua");
+            if (coLichPhongVan && trangThai != "DaDuyet")
+                throw new InvalidOperationException("Hồ sơ đang có lịch phỏng vấn chờ kết quả. Hãy ghi kết quả phỏng vấn thay vì đổi trạng thái hồ sơ.");
+        }
 
         if (trangThai == "DaDuyet" && dk.TrangThai != "DaDuyet")
         {
@@ -383,6 +413,14 @@ public class DoanhNghiepService
             throw new InvalidOperationException("Doanh nghiệp đã đủ chỉ tiêu tiếp nhận — đợt tuyển đã đóng, không thể tạo lịch phỏng vấn mới.");
         if (await SinhVienDaDuocTiepNhanAsync(request.MaSinhVien, dangKy.MaDot))
             throw new InvalidOperationException("Sinh viên đã được một doanh nghiệp tiếp nhận trong đợt này.");
+        if (request.NgayPV.HasValue && request.NgayPV.Value.Date < DateTime.Today)
+            throw new ArgumentException("Ngày phỏng vấn không được ở trong quá khứ.");
+        if (await _db.PhongVans.AnyAsync(p => p.MaSinhVien == request.MaSinhVien
+                && p.DaiDienDoanhNghiep.MaCongTy == daiDien.MaCongTy && p.KetQua == "ChuaCoKetQua"))
+            throw new InvalidOperationException("Sinh viên đã có lịch phỏng vấn chưa có kết quả tại doanh nghiệp. Hãy dời lịch hoặc ghi kết quả buổi đó.");
+
+        // Mời phỏng vấn đồng nghĩa hồ sơ đã qua vòng xét
+        if (dangKy.TrangThai == "ChoDuyet") dangKy.TrangThai = "DaDuyet";
 
         var pv = new DAL.Entities.PhongVan
         {
@@ -401,6 +439,34 @@ public class DoanhNghiepService
             message = "Tạo lịch phỏng vấn thành công",
             phongVan = new { pv.MaPV, pv.MaSinhVien, pv.MaDaiDien, pv.HinhThuc, pv.NgayPV, pv.KetQua }
         };
+    }
+
+    /// <summary>Dời lịch / đổi hình thức / đổi người phỏng vấn cho buổi phỏng vấn chưa có kết quả.</summary>
+    public async Task<object> DoiLichPhongVanAsync(string maPV, DoiLichPhongVanRequest request, string? phamViCongTy)
+    {
+        var pv = await _db.PhongVans.Include(p => p.DaiDienDoanhNghiep).FirstOrDefaultAsync(p => p.MaPV == maPV)
+                 ?? throw new KeyNotFoundException($"Không tìm thấy buổi phỏng vấn {maPV}");
+        KiemTraPhamVi(phamViCongTy, pv.DaiDienDoanhNghiep.MaCongTy);
+        if (pv.KetQua is "Dat" or "KhongDat")
+            throw new InvalidOperationException("Buổi phỏng vấn đã có kết quả, không thể dời lịch.");
+        if (!request.NgayPV.HasValue)
+            throw new ArgumentException("Vui lòng chọn ngày giờ phỏng vấn mới.");
+        if (request.NgayPV.Value.Date < DateTime.Today)
+            throw new ArgumentException("Ngày phỏng vấn không được ở trong quá khứ.");
+
+        if (!string.IsNullOrWhiteSpace(request.MaDaiDien) && request.MaDaiDien != pv.MaDaiDien)
+        {
+            var dd = await _db.DaiDienDoanhNghieps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == request.MaDaiDien)
+                     ?? throw new KeyNotFoundException($"Không tìm thấy người đại diện {request.MaDaiDien}");
+            if (dd.MaCongTy != pv.DaiDienDoanhNghiep.MaCongTy)
+                throw new UnauthorizedAccessException("Người phỏng vấn phải thuộc doanh nghiệp.");
+            pv.MaDaiDien = dd.MaSo;
+        }
+        pv.NgayPV = request.NgayPV.Value;
+        if (!string.IsNullOrWhiteSpace(request.HinhThuc)) pv.HinhThuc = request.HinhThuc.Trim();
+        await _db.SaveChangesAsync();
+
+        return new { message = "Đã cập nhật lịch phỏng vấn", phongVan = new { pv.MaPV, pv.MaDaiDien, pv.HinhThuc, pv.NgayPV, pv.KetQua } };
     }
 
     /// <summary>Nguyện vọng của SV vào công ty, ưu tiên đợt đang diễn ra. Mặc định bỏ qua nguyện vọng đã bị từ chối.</summary>
@@ -573,6 +639,7 @@ public class DoanhNghiepService
         var congTy = await GetCongTyAsync(maCongTy, phamViCongTy);
         var phanBos = await _db.PhanBoThucTaps.AsNoTracking()
             .Include(p => p.SinhVien)
+            .Include(p => p.DotThucTap)
             .Include(p => p.HuongDanDoanhNghieps).ThenInclude(h => h.DaiDienDoanhNghiep)
             .Where(p => p.MaCongTy == maCongTy && p.TrangThai != "Huy")
             .OrderByDescending(p => p.NgayPhanBo)
@@ -608,6 +675,7 @@ public class DoanhNghiepService
                 pb.MaSinhVien,
                 pb.MaCongTy,
                 pb.MaDot,
+                TenDot = pb.DotThucTap?.TenDot,
                 pb.NgayPhanBo,
                 pb.TrangThai,
                 HoTenSV = pb.SinhVien?.HoTen ?? pb.MaSinhVien,
@@ -640,6 +708,8 @@ public class DoanhNghiepService
         KiemTraPhamVi(phamViCongTy, pb.MaCongTy);
         if (pb.TrangThai == "Huy")
             throw new InvalidOperationException("Quyết định tiếp nhận đã bị hủy, không thể đánh giá.");
+        if (pb.TrangThai == "ChuaNhanViec")
+            throw new InvalidOperationException("Sinh viên chưa xác nhận nhận việc nên chưa thể đánh giá kết quả thực tập.");
 
         var hd = pb.HuongDanDoanhNghieps.FirstOrDefault();
         var maDaiDien = maDaiDienActor ?? hd?.MaDaiDien

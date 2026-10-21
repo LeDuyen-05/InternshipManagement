@@ -37,6 +37,14 @@ public class TaoPhongVanRequest
     public DateTime? NgayPV { get; set; }
 }
 
+/// <summary>Dời lịch buổi phỏng vấn chưa có kết quả (người phỏng vấn, hình thức có thể giữ nguyên).</summary>
+public class DoiLichPhongVanRequest
+{
+    public DateTime? NgayPV { get; set; }
+    public string? MaDaiDien { get; set; }
+    public string? HinhThuc { get; set; }
+}
+
 public class CapNhatKetQuaPhongVanRequest
 {
     public string KetQua { get; set; } = "Dat";

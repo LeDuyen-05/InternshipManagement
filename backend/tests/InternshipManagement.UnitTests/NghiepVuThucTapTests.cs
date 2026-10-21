@@ -247,6 +247,50 @@ public class NghiepVuThucTapTests
     }
 
     [Fact]
+    public async Task DoanhNghiep_KhongTuChoiDuocHoSoDaTrungTuyen()
+    {
+        await using var db = TaoDb();
+        var service = new DoanhNghiepService(db, new Mock<IPhieuChamDiemService>().Object);
+        await service.CapNhatKetQuaPhongVanAsync("PV1", "Dat", "CT001");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CapNhatTrangThaiUngVienAsync("DK1", "TuChoi", "CT001"));
+        Assert.Equal("DaDuyet", db.DangKyThucTaps.Single(d => d.MaDK == "DK1").TrangThai);
+    }
+
+    [Fact]
+    public async Task LichPhongVan_KhongTrungLich_KhongNgayQuaKhu_VaDoiLichDuoc()
+    {
+        await using var db = TaoDb();
+        var service = new DoanhNghiepService(db, new Mock<IPhieuChamDiemService>().Object);
+
+        // SV001 đã có PV1 chờ kết quả → không tạo thêm
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.TaoPhongVanAsync(
+            new TaoPhongVanRequest { MaSinhVien = "SV001", MaDaiDien = "DD001", NgayPV = DateTime.Today.AddDays(1) }, "CT001"));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.TaoPhongVanAsync(
+            new TaoPhongVanRequest { MaSinhVien = "SV002", MaDaiDien = "DD001", NgayPV = DateTime.Today.AddDays(-1) }, "CT001"));
+
+        var moi = DateTime.Today.AddDays(3).AddHours(14);
+        await service.DoiLichPhongVanAsync("PV1", new DoiLichPhongVanRequest { NgayPV = moi, HinhThuc = "Trực tiếp" }, "CT001");
+        Assert.Equal(moi, db.PhongVans.Single(p => p.MaPV == "PV1").NgayPV);
+
+        await service.CapNhatKetQuaPhongVanAsync("PV1", "KhongDat", "CT001");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DoiLichPhongVanAsync(
+            "PV1", new DoiLichPhongVanRequest { NgayPV = moi }, "CT001"));
+    }
+
+    [Fact]
+    public async Task DanhGia_ChiKhiSinhVienDaNhanViec()
+    {
+        await using var db = TaoDb();
+        var service = new DoanhNghiepService(db, new Mock<IPhieuChamDiemService>().Object);
+        await service.CapNhatKetQuaPhongVanAsync("PV1", "Dat", "CT001");
+        var maPB = db.PhanBoThucTaps.Single().MaPhanBo;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.DanhGiaThucTapSinhAsync(
+            new DanhGiaThucTapSinhRequest { MaPhanBo = maPB, NhanXet = "x" }, "DD001", "CT001"));
+    }
+
+    [Fact]
     public async Task DaiDienDoanhNghiep_KhongDuocThaoTacCongTyKhac()
     {
         await using var db = TaoDb();
