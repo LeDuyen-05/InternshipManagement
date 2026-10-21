@@ -39,17 +39,8 @@ ml-service/__pycache__/
 ml-service/**/__pycache__/
 ml-service/.env
 
-# Local review and scratch output
-.tmp-doc-review/
-scratch/
-
-# OS / Editor
+# OS Files
 .DS_Store
-.vscode/
-.idea/
-.vs/
-*.suo
-*.userosscache
-*.sln.docstates
-*.code-workspace
+Thumbs.db
+Desktop.ini
 
