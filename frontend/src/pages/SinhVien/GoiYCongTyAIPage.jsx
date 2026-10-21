@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { goiYCongTyService } from '../../services/goiYCongTyService'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -6,6 +7,9 @@ import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
 
 export default function GoiYCongTyAIPage() {
   const { maSV: selectedMaSV } = useIdentity()
+  const navigate = useNavigate()
+  // Nộp nguyện vọng thật qua trang Đăng ký (kiểm tra đợt, chỉ tiêu, giới hạn 3 NV, đã trúng tuyển...)
+  const dangKyNguyenVong = (item) => navigate('/sinh-vien/dang-ky', { state: { maCongTy: item.maCongTy } })
   const [topK, setTopK] = useState(5)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -366,9 +370,8 @@ export default function GoiYCongTyAIPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
-                                showToast(`Đã lưu nguyện vọng ứng tuyển vào ${item.tenCongTy}!`)
-                              }
+                              onClick={() => dangKyNguyenVong(item)}
+                              title="Mở form đăng ký nguyện vọng cho doanh nghiệp này"
                               className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition-colors shadow-sm cursor-pointer"
                             >
                               Đăng ký
@@ -527,13 +530,10 @@ export default function GoiYCongTyAIPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  showToast(`Đã lưu nguyện vọng ứng tuyển vào ${selectedCompany.tenCongTy}!`)
-                  setSelectedCompany(null)
-                }}
+                onClick={() => dangKyNguyenVong(selectedCompany)}
                 className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-sm"
               >
-                Ứng tuyển ngay
+                Đăng ký nguyện vọng
               </button>
             </div>
           </div>

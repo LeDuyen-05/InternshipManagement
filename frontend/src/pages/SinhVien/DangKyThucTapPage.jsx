@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
@@ -11,6 +12,8 @@ import { CONG_TY, TONE, gpaToiThieu, trangThaiNguyenVong } from '../../utils/tra
 export default function DangKyThucTapPage() {
   const { maSV: currentMaSV } = useIdentity()
   const { selectedDot } = useDotThucTap()
+  const location = useLocation()
+  const navigate = useNavigate()
   const currentMaDot = selectedDot?.maDot || ''
 
   const [activeTab, setActiveTab] = useState('companies') // 'companies' | 'my-applications'
@@ -43,7 +46,7 @@ export default function DangKyThucTapPage() {
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
-    setTimeout(() => setToast(null), type === 'error' ? 7000 : 4000)
+    setTimeout(() => setToast(null), type === 'success' ? 4000 : 7000)
   }
 
   const fetchData = async () => {
@@ -89,6 +92,12 @@ export default function DangKyThucTapPage() {
         ? `Bạn đã trúng tuyển tại ${placement.tenCongTy} trong đợt này nên không thể đăng ký thêm nguyện vọng.`
         : null
 
+  // Backend không cho đăng ký thêm khi đã có một nguyện vọng đạt vòng hồ sơ (đang chờ phỏng vấn/kết quả)
+  const nvDangXet = myApplications.find((a) => a.trangThai === 'DaDuyet' && !a.daTiepNhan)
+  const lyDoDangKy = lyDoKhoa || (nvDangXet
+    ? `Hồ sơ của bạn tại ${nvDangXet.tenCongTy} đã đạt vòng xét và đang chờ phỏng vấn/kết quả nên chưa thể đăng ký thêm nguyện vọng.`
+    : null)
+
   // Mở modal đăng ký cho 1 công ty
   // Hỏi lại backend ngay khi mở form để không mở trên dữ liệu cũ (vd. vừa trúng tuyển ở tab khác)
   const kiemTraDieuKienMoi = async () => {
@@ -114,8 +123,8 @@ export default function DangKyThucTapPage() {
   }
 
   const handleOpenApply = async (company) => {
-    if (lyDoKhoa) {
-      showToast(lyDoKhoa, 'error')
+    if (lyDoDangKy) {
+      showToast(lyDoDangKy, 'error')
       return
     }
     const lyDoMoi = await kiemTraDieuKienMoi()
@@ -213,6 +222,18 @@ export default function DangKyThucTapPage() {
     }
   }
 
+  // Đến từ trang Gợi ý AI: mở form nguyện vọng cho công ty đã chọn (vẫn qua đủ các bước kiểm tra)
+  const maCongTyChon = location.state?.maCongTy
+  useEffect(() => {
+    if (loading || !maCongTyChon) return
+    navigate(location.pathname, { replace: true, state: null })
+    const ct = companies.find((c) => c.maCongTy === maCongTyChon)
+    if (!ct) showToast('Doanh nghiệp này hiện không còn trong danh sách tuyển dụng của đợt.', 'warning')
+    else if (myApplications.some((a) => a.maCongTy === ct.maCongTy)) showToast(`Bạn đã đăng ký nguyện vọng vào "${ct.tenCongTy}".`, 'warning')
+    else if (ct.daDuChiTieu) showToast(`"${ct.tenCongTy}" đã đủ chỉ tiêu, đợt tuyển đã đóng.`, 'warning')
+    else handleOpenApply(ct)
+  }, [loading, maCongTyChon])
+
   // Filter companies theo từ khóa
   const filteredCompanies = companies.filter((c) => {
     const q = searchQuery.toLowerCase()
@@ -240,11 +261,13 @@ export default function DangKyThucTapPage() {
           className={`fixed top-20 right-6 z-[60] max-w-md flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all ${
             toast.type === 'error'
               ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : toast.type === 'warning'
+                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
           }`}
         >
           <span className="material-symbols-outlined text-[20px]">
-            {toast.type === 'error' ? 'error' : 'check_circle'}
+            {toast.type === 'error' ? 'error' : toast.type === 'warning' ? 'warning' : 'check_circle'}
           </span>
           <span>{toast.message}</span>
         </div>
@@ -286,10 +309,10 @@ export default function DangKyThucTapPage() {
         </div>
       </div>
 
-      {lyDoKhoa && (
-        <div className={`p-4 rounded-xl border text-sm font-medium flex items-center gap-2 ${daCoNoiTiepNhan ? TONE.emerald : TONE.amber}`}>
+      {lyDoDangKy && (
+        <div className={`p-4 rounded-xl border text-sm font-medium flex items-center gap-2 ${daCoNoiTiepNhan ? TONE.emerald : lyDoKhoa ? TONE.amber : TONE.blue}`}>
           <span className="material-symbols-outlined text-[20px]">{daCoNoiTiepNhan ? 'verified' : 'info'}</span>
-          {lyDoKhoa}
+          {lyDoDangKy}
         </div>
       )}
 
@@ -429,7 +452,7 @@ export default function DangKyThucTapPage() {
             filteredCompanies.map((c) => {
               const applied = isAlreadyApplied(c.maCongTy)
               const full = !!c.daDuChiTieu
-              const blocked = full || myApplications.length >= 3 || Boolean(lyDoKhoa)
+              const blocked = full || myApplications.length >= 3 || Boolean(lyDoDangKy)
               const gpaYeuCau = gpaToiThieu(c.yeuCau)
               const chuaDatGpa = gpa != null && gpaYeuCau != null && Number(gpa) < gpaYeuCau
               return (
@@ -504,10 +527,10 @@ export default function DangKyThucTapPage() {
                             ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                             : 'bg-blue-700 hover:bg-blue-800 text-white'
                         }`}
-                        title={full ? 'Doanh nghiệp đã đủ chỉ tiêu, đợt tuyển đã đóng' : lyDoKhoa || (myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng')}
+                        title={full ? 'Doanh nghiệp đã đủ chỉ tiêu, đợt tuyển đã đóng' : lyDoDangKy || (myApplications.length >= 3 ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này' : 'Nộp nguyện vọng')}
                       >
-                        <span className="material-symbols-outlined text-[16px]">{full || lyDoKhoa ? 'lock' : 'send'}</span>
-                        {full ? 'Đã đóng tuyển' : lyDoKhoa ? 'Không thể đăng ký' : myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
+                        <span className="material-symbols-outlined text-[16px]">{full || lyDoDangKy ? 'lock' : 'send'}</span>
+                        {full ? 'Đã đóng tuyển' : lyDoDangKy ? 'Không thể đăng ký' : myApplications.length >= 3 ? 'Đủ 3 NV' : 'Nộp nguyện vọng'}
                       </button>
                     )}
                   </div>
