@@ -67,6 +67,39 @@ Nhãn (thang 0–3, dùng trực tiếp làm relevance cho NDCG@K):
   `label_nguon == "tuong_tac"` để kết quả không bị lạc quan giả.
 - Hồ sơ ảo (`maSV` bắt đầu bằng `SYN`) chỉ có nhãn yếu; không ghi vào CSDL.
 
+### Bộ dữ liệu thu thập ngoài (`du-lieu-train`)
+Giải nén vào `data_raw/du-lieu-train/` (gồm `ho_so_sv_an_danh.csv`, `jd_tong_hop.csv`, `nhan_0_3.csv`;
+thư mục này không đưa lên git), rồi chạy:
+```bash
+python run_external_pipeline.py      # → output/external/
+```
+Tiền xử lý (`data_pipeline/external_dataset.py`):
+- **Ẩn danh lại**: 72/237 hồ sơ gốc còn số điện thoại, ngày sinh, mảnh họ tên cạnh `[TEN]` → thay bằng
+  `[SDT]`, `[NGAY]`, `[EMAIL]`, `[URL]`, `[TEN]` (còn 0). Bỏ 1 hồ sơ rỗng.
+- **Làm sạch kỹ năng JD**: danh sách gốc gán nhầm do khớp chuỗi con (`go` ở 63 JD nhưng chỉ 1 JD thật sự
+  yêu cầu Golang; `net` ← "Network"; `nan`, `erp`) → kỹ năng mơ hồ chỉ giữ khi văn bản có bằng chứng, bổ sung
+  kỹ năng trích từ tiêu đề + `technical_skills` + mô tả; chuẩn hóa cách viết hai phía (springboot/spring boot…).
+- **Vị trí JD** suy từ tiêu đề (backend, frontend, BA, tester, design, game…); vị trí SV từ nhóm BE/FE/BA.
+- **Embedding**: TF-IDF fit chung CV + JD → LSA (TruncatedSVD 256 chiều, chuẩn hóa L2).
+- **Nhãn** `nhan` tính lại theo cùng luật với nhãn gốc (tỉ lệ kỹ năng JD được đáp ứng: 0 → 0; <0.3 → 1;
+  <0.6 → 2; ≥0.6 → 3 nếu đúng vị trí, ngược lại 2) nhưng trên kỹ năng đã làm sạch và **không tính kỹ năng chung**
+  (`git`, `teamwork`, `agile`); nhãn gốc giữ ở `nhan_goc`.
+- `split` theo hồ sơ (70/15/15, phân tầng theo nhóm, seed 42).
+
+| File `output/external/` | Nội dung |
+|---|---|
+| `cap_huan_luyen.csv` / `.json` | 42 008 cặp (hồ sơ × JD) + đặc trưng + `nhan_goc` + `nhan` + `split` |
+| `ho_so_da_xu_ly.csv`, `jd_da_xu_ly.csv` | văn bản đã ẩn danh lại, kỹ năng chuẩn, vị trí |
+| `emb_ho_so.npy`, `emb_jd.npy` (+ `*_ids.csv`) | embedding LSA, cùng thứ tự với file id |
+| `tfidf_vectorizer.joblib`, `lsa_svd.joblib` | để biến đổi hồ sơ/JD mới vào cùng không gian |
+| `bo_mau_gan_nhan_tay.csv` | 20 SV tập test × 12 JD, cột `nhan_tay_0_3` để trống cho GVHD/nhóm gán tay |
+| `bao_cao_du_lieu.json` | thống kê làm sạch, phân bố nhãn, ma trận nhãn gốc × mới, baseline NDCG@K |
+
+**Lưu ý khi huấn luyện:** cả `nhan` lẫn `nhan_goc` đều sinh bằng luật trên độ trùng kỹ năng (cây quyết định
+độ sâu 4 tái tạo nhãn gốc 98,5%), nên **không** đưa các cột trong `cot_dinh_nghia_nhan_khong_dung_lam_dac_trung`
+(`ti_le_dap_ung_jd`, `so_ky_nang_trung`, `jaccard_ky_nang`, `khop_vi_tri`, …) vào mô hình — nếu không mô hình chỉ
+học lại luật và NDCG cao giả. Dùng embedding/`tfidf_cosine`/`lsa_cosine`/GPA, và đánh giá cuối trên tập gán tay.
+
 ## Phần B/C — Gợi ý Top-K
 ```bash
 python generate_recommendations.py   # TF-IDF + cosine → ghi bảng GOIYCONGTY
