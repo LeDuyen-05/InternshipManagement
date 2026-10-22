@@ -51,8 +51,23 @@ public class AuthController : ControllerBase
     [HttpPost("change-password")]
     public async Task<IActionResult> ChangePassword(ChangePasswordRequest request)
     {
-        await _service.ChangePasswordAsync(User.MaTaiKhoan() ?? "", request);
-        return Ok(new { message = "Đổi mật khẩu thành công." });
+        try
+        {
+            await _service.ChangePasswordAsync(User.MaTaiKhoan() ?? "", request);
+            return Ok(new { message = "Đổi mật khẩu thành công." });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     [Authorize]

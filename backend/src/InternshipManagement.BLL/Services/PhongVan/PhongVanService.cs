@@ -32,6 +32,23 @@ public class PhongVanService : IPhongVanService
         }).ToList();
     }
 
+    /// <summary>Sinh viên xác nhận nhận quyết định tiếp nhận → bắt đầu thực tập (ChuaNhanViec → DangThucTap).</summary>
+    public async Task<PhanBoThucTapDto> XacNhanTiepNhanAsync(string maPhanBo, string maSV)
+    {
+        var pb = await _phanBoRepo.GetForUpdateAsync(maPhanBo)
+                 ?? throw new KeyNotFoundException("Không tìm thấy quyết định tiếp nhận.");
+        if (!string.Equals(pb.MaSinhVien, maSV, StringComparison.OrdinalIgnoreCase))
+            throw new UnauthorizedAccessException("Bạn không thể xác nhận quyết định tiếp nhận của sinh viên khác.");
+        if (pb.TrangThai != "ChuaNhanViec")
+            throw new InvalidOperationException("Quyết định tiếp nhận này không ở trạng thái chờ sinh viên xác nhận.");
+        if (pb.DotThucTap?.TrangThai == "DaKetThuc")
+            throw new InvalidOperationException("Đợt thực tập đã kết thúc.");
+
+        pb.TrangThai = "DangThucTap";
+        await _phanBoRepo.SaveChangesAsync();
+        return (await GetPhanBoBySinhVienAsync(maSV))!;
+    }
+
     public async Task<PhanBoThucTapDto?> GetPhanBoBySinhVienAsync(string maSV)
     {
         var pb = await _phanBoRepo.GetBySinhVienAsync(maSV);

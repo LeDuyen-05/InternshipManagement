@@ -37,7 +37,7 @@ public class HoSoNangLucController : ControllerBase
         if (User.IsInRole(Roles.SinhVien) && !string.Equals(User.MaSV(), maSV, StringComparison.OrdinalIgnoreCase))
             return Forbid();
 
-        var result = await _service.UpdateHoSoAsync(maSV, request);
+        var result = await _service.UpdateHoSoAsync(maSV, request, laKhoa: User.IsStaff());
         return Ok(new { success = true, data = result, message = "Cập nhật hồ sơ năng lực thành công" });
     }
 }

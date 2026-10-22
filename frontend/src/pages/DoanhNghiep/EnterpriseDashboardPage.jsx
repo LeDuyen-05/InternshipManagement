@@ -1,12 +1,18 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
-import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+
+// Trạng thái hợp tác do Khoa phê duyệt (CONGTY.trangThai)
+const HOP_TAC = {
+  DaDuyet: { label: 'Đối tác đã được Khoa CNTT phê duyệt', icon: 'verified', cls: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30' },
+  ChoDuyet: { label: 'Đang chờ Khoa CNTT thẩm định', icon: 'hourglass_top', cls: 'bg-amber-500/20 text-amber-100 border-amber-400/30' },
+  TuChoi: { label: 'Khoa CNTT chưa chấp thuận hợp tác', icon: 'block', cls: 'bg-rose-500/20 text-rose-100 border-rose-400/30' },
+  DongBang: { label: 'Tạm ngưng hợp tác', icon: 'pause_circle', cls: 'bg-slate-500/20 text-slate-100 border-slate-400/30' },
+}
 
 export default function EnterpriseDashboardPage() {
   const { activeCompany } = useEnterprise()
-  const { selectedDot } = useDotThucTap()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -33,8 +39,13 @@ export default function EnterpriseDashboardPage() {
     soChoDuyet: 0,
     soDaDuyet: 0,
     soPhongVan: 0,
+    soPhongVanChoKetQua: 0,
     soThucTapSinh: 0,
+    soDaDanhGia: 0,
   }
+  const chiTieu = data?.chiTieu
+  const trangThaiCongTy = data?.congTy?.trangThai || activeCompany?.trangThai
+  const hopTac = HOP_TAC[trangThaiCongTy] || HOP_TAC.ChoDuyet
 
   // Tính toán trạng thái các bước quy trình dựa trên dữ liệu thật từ DB
   const step1Done = thongKe.soViTriTuyen > 0
@@ -59,9 +70,9 @@ export default function EnterpriseDashboardPage() {
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-500/20 px-3 py-1 text-xs font-semibold text-indigo-200 border border-indigo-400/30">
-              <span className="material-symbols-outlined text-[16px]">verified</span>
-              <span>Đối tác Doanh nghiệp chính thức • Khoa CNTT</span>
+            <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border ${hopTac.cls}`}>
+              <span className="material-symbols-outlined text-[16px]">{hopTac.icon}</span>
+              <span>{hopTac.label}</span>
             </div>
 
             <div>
@@ -108,6 +119,14 @@ export default function EnterpriseDashboardPage() {
         </div>
       </div>
 
+      {trangThaiCongTy && trangThaiCongTy !== 'DaDuyet' && (
+        <div className="p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-900 text-xs font-medium flex items-center gap-2">
+          <span className="material-symbols-outlined text-[18px]">info</span>
+          Doanh nghiệp chưa ở trạng thái được Khoa duyệt nên chưa hiển thị với sinh viên và chưa thể tiếp nhận thực tập sinh.
+          Bạn vẫn có thể hoàn thiện tin tuyển dụng trong lúc chờ.
+        </div>
+      )}
+
       {/* 2. 4 Thẻ KPI Bento Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* KPI 1 */}
@@ -121,8 +140,8 @@ export default function EnterpriseDashboardPage() {
           <div className="mt-3">
             <div className="text-2xl font-black text-slate-900">{thongKe.soViTriTuyen} <span className="text-xs font-normal text-slate-500">vị trí</span></div>
             <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <span>Chỉ tiêu tuyển: </span>
-              <strong className="text-indigo-700 font-bold">{thongKe.soLuongNhan} sinh viên</strong>
+              <span>Đã nhận: </span>
+              <strong className="text-indigo-700 font-bold">{thongKe.soThucTapSinh}/{thongKe.soLuongNhan} sinh viên</strong>
             </div>
           </div>
         </div>
@@ -156,7 +175,7 @@ export default function EnterpriseDashboardPage() {
             <div className="text-2xl font-black text-slate-900">{thongKe.soPhongVan} <span className="text-xs font-normal text-slate-500">lượt PV</span></div>
             <div className="text-xs text-emerald-600 font-medium mt-1 flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              <span>Google Meet & Trực tiếp</span>
+              <span>{thongKe.soPhongVanChoKetQua} buổi chờ ghi kết quả</span>
             </div>
           </div>
         </div>
@@ -172,7 +191,7 @@ export default function EnterpriseDashboardPage() {
           <div className="mt-3">
             <div className="text-2xl font-black text-slate-900">{thongKe.soThucTapSinh} <span className="text-xs font-normal text-slate-500">thực tập sinh</span></div>
             <div className="text-xs text-purple-700 font-medium mt-1">
-              Chính thức thực tập tại DN
+              {thongKe.soDaDanhGia}/{thongKe.soThucTapSinh} đã có Phiếu nhận xét
             </div>
           </div>
         </div>
@@ -186,7 +205,7 @@ export default function EnterpriseDashboardPage() {
             <div>
               <h2 className="text-base font-bold text-slate-800">Quy trình Hợp tác & Tuyển dụng Thực tập</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Tiến độ đợt thực tập tốt nghiệp {selectedDot?.tenDot || 'HK2 (2026 - 2027)'}
+                {chiTieu?.tenDot ? `Tiến độ ${chiTieu.tenDot}` : 'Chưa có đợt thực tập đang diễn ra'}
               </p>
             </div>
             <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
@@ -295,13 +314,15 @@ export default function EnterpriseDashboardPage() {
                 </div>
                 <div className="font-bold text-xs text-slate-900">4. Đánh giá TTS</div>
                 <p className="text-[11px] text-slate-500 mt-1">
-                  {step4Active ? `${thongKe.soThucTapSinh} sinh viên thực tập` : 'Chưa có thực tập sinh'}
+                  {step4Active
+                    ? `${thongKe.soThucTapSinh} thực tập sinh • ${thongKe.soDaDanhGia} đã đánh giá`
+                    : 'Chưa có thực tập sinh'}
                 </p>
               </div>
               <span className={`text-[10px] font-bold mt-3 block uppercase ${
                 step4Active ? 'text-purple-700' : 'text-slate-400'
               }`}>
-                {step4Active ? 'Đang tiếp nhận' : 'Sắp tới'}
+                {!step4Active ? 'Sắp tới' : thongKe.soDaDanhGia >= thongKe.soThucTapSinh ? 'Đã đánh giá xong' : 'Đang thực tập'}
               </span>
             </div>
           </div>
@@ -410,7 +431,7 @@ export default function EnterpriseDashboardPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-slate-800">Đánh Giá Thực Tập Sinh</div>
-                  <div className="text-[11px] text-slate-500 truncate">Chấm điểm chuyên môn & chuyên cần</div>
+                  <div className="text-[11px] text-slate-500 truncate">Phiếu nhận xét CLO4.1, CLO4.2</div>
                 </div>
                 <span className="material-symbols-outlined text-[16px] text-slate-400 group-hover:text-purple-600">chevron_right</span>
               </Link>
@@ -419,7 +440,7 @@ export default function EnterpriseDashboardPage() {
 
           <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px] text-indigo-600 shrink-0">contact_support</span>
-            <span>Hỗ trợ kỹ thuật Khoa CNTT: fit.internship@edu.vn</span>
+            <span>Cần hỗ trợ về quy trình thực tập? Liên hệ Văn phòng Khoa CNTT.</span>
           </div>
         </div>
       </div>

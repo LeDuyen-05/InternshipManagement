@@ -30,7 +30,7 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white/95 backdrop-blur-md border-b border-slate-200 z-40 px-6 flex items-center justify-between shadow-xs">
+    <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 px-6 flex items-center justify-between shadow-xs">
       {/* Left section: Breadcrumb & Company Info */}
       <div className="flex items-center gap-4">
         <div className="flex items-center text-slate-500 text-sm">
@@ -98,21 +98,21 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
 
       {/* Right section: Switch to Student Portal, Profile & Logout */}
       <div className="flex items-center gap-3">
-        {/* Switch Portal Button (only for student/admin) */}
-        {user?.maVaiTro !== 'VT05' && (
+        {/* Khoa / Quản trị quay về cổng quản lý của mình */}
+        {isManagerOrAdmin && (
           <Link
-            to="/sinh-vien"
+            to={user?.maVaiTro === 'VT01' ? '/admin' : '/khoa'}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-semibold transition-all shadow-2xs"
           >
-            <span className="material-symbols-outlined text-[16px]">school</span>
-            <span>Cổng Sinh viên</span>
+            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
+            <span>{user?.maVaiTro === 'VT01' ? 'Cổng Quản trị' : 'Cổng Khoa'}</span>
           </Link>
         )}
 
-        {/* Semester Tag */}
+        {/* Đợt thực tập đang tuyển (lấy từ hệ thống) */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-100 border border-slate-200 rounded-full text-xs font-medium text-slate-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>HK2 (2026 - 2027)</span>
+          <span className={`w-2 h-2 rounded-full ${activeCompany?.chiTieu?.maDot ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+          <span>{activeCompany?.chiTieu?.tenDot || 'Chưa có đợt đang diễn ra'}</span>
         </div>
 
         {/* Representative Avatar */}

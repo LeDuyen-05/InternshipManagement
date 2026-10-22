@@ -9,9 +9,12 @@ namespace InternshipManagement.API.Controllers;
 public class ThongBaoController(AdminService service) : ControllerBase
 {
     [HttpGet]
-    public async Task<IActionResult> GetNotifications()
+    public async Task<IActionResult> GetNotifications([FromQuery] string? role)
     {
-        return Ok(await service.NotificationsAsync());
+        var userRole = User.FindFirst("role")?.Value
+            ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value
+            ?? role;
+        return Ok(await service.NotificationsAsync(userRole));
     }
 
     [HttpPost, Authorize(Roles = "Khoa")]

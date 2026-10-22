@@ -240,7 +240,7 @@ public class GoiYCongTyService : IGoiYCongTyService
 
             var cosSim = ComputeCosineSimilarity(studentVector, companyVector);
             // Chuẩn hóa sang thang 100%, có ngưỡng sàn thực tế để hiển thị đẹp
-            var percentage = Math.Min(98.5, Math.Max(25.0, cosSim * 100.0));
+            var percentage = Math.Clamp(cosSim * 100.0, 0.0, 100.0);
             result.Add((congTys[i], percentage));
         }
 

@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { goiYCongTyService } from '../../services/goiYCongTyService'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
 
 export default function GoiYCongTyAIPage() {
   const { maSV: selectedMaSV } = useIdentity()
+  const navigate = useNavigate()
+  // Nộp nguyện vọng thật qua trang Đăng ký (kiểm tra đợt, chỉ tiêu, giới hạn 3 NV, đã trúng tuyển...)
+  const dangKyNguyenVong = (item) => navigate('/sinh-vien/dang-ky', { state: { maCongTy: item.maCongTy } })
   const [topK, setTopK] = useState(5)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -187,7 +192,7 @@ export default function GoiYCongTyAIPage() {
                   <div>
                     <h2 className="text-base font-bold text-slate-900">{sv.hoTen}</h2>
                     <p className="text-xs text-slate-500">
-                      MSSV: <strong className="text-slate-700 font-mono">{sv.maSV}</strong> | Lớp: {sv.lop || '14DHTH'} | GPA: <strong className="text-emerald-600">{sv.gpa || 3.2}</strong> | Chuyên ngành: {sv.chuyenNganh || 'Công nghệ phần mềm'}
+                      MSSV: <strong className="text-slate-700 font-mono">{sv.maSV}</strong> | Lớp: {sv.lop || '—'} | GPA: <strong className="text-emerald-600">{sv.gpa != null ? sv.gpa : '—'}</strong> | Chuyên ngành: {sv.chuyenNganh || '—'}
                     </p>
                   </div>
                 </div>
@@ -365,9 +370,8 @@ export default function GoiYCongTyAIPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() =>
-                                showToast(`Đã lưu nguyện vọng ứng tuyển vào ${item.tenCongTy}!`)
-                              }
+                              onClick={() => dangKyNguyenVong(item)}
+                              title="Mở form đăng ký nguyện vọng cho doanh nghiệp này"
                               className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition-colors shadow-sm cursor-pointer"
                             >
                               Đăng ký
@@ -386,7 +390,7 @@ export default function GoiYCongTyAIPage() {
 
       {/* MODAL 1: Chỉnh Sửa Hồ Sơ Năng Lực & Tái Huấn Luyện AI */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+        <ModalOverlay onClose={() => setShowEditModal(false)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -466,12 +470,12 @@ export default function GoiYCongTyAIPage() {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
 
       {/* MODAL 2: Xem Chi Tiết JD Công Ty */}
       {selectedCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+        <ModalOverlay onClose={() => setSelectedCompany(null)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -507,11 +511,11 @@ export default function GoiYCongTyAIPage() {
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div className="p-2 bg-slate-50 rounded-lg">
                   <span className="text-slate-400">Chỉ tiêu nhận:</span>{' '}
-                  <strong className="text-slate-800">{selectedCompany.soLuongNhan || 3} SV</strong>
+                  <strong className="text-slate-800">{selectedCompany.soLuongNhan ?? '—'} SV</strong>
                 </div>
                 <div className="p-2 bg-slate-50 rounded-lg">
                   <span className="text-slate-400">Thời gian:</span>{' '}
-                  <strong className="text-slate-800">{selectedCompany.thoiGian || '12 tuần'}</strong>
+                  <strong className="text-slate-800">{selectedCompany.thoiGian || '—'}</strong>
                 </div>
               </div>
             </div>
@@ -526,17 +530,14 @@ export default function GoiYCongTyAIPage() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  showToast(`Đã lưu nguyện vọng ứng tuyển vào ${selectedCompany.tenCongTy}!`)
-                  setSelectedCompany(null)
-                }}
+                onClick={() => dangKyNguyenVong(selectedCompany)}
                 className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-sm"
               >
-                Ứng tuyển ngay
+                Đăng ký nguyện vọng
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

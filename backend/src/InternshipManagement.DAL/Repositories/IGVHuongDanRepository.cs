@@ -18,4 +18,6 @@ public interface IGVHuongDanRepository : IRepository<GVHuongDan>
     Task<bool> CapNhatChiTieuAsync(string maGV, int soLuongMoi);
     Task<bool> UpdateGiangVienChuyenMonAsync(string maGV, string? chuyenMon);
     Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation);
+    /// <summary>Các quan hệ giảng viên giới thiệu công ty đã được Khoa duyệt.</summary>
+    Task<IReadOnlyList<GioiThieu>> GetGioiThieuDaDuyetAsync();
 }

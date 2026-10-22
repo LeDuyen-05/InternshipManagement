@@ -1,6 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
+import { xepLoaiGpa } from '../../utils/trangThai'
+
+// Trạng thái hồ sơ theo đúng tiến trình tuyển: xét hồ sơ → phỏng vấn → trúng tuyển
+const trangThaiHoSo = (c) => {
+  if (c.tiepNhanTaiDay) return { label: 'Trúng tuyển', cls: 'bg-emerald-100 text-emerald-800', dot: 'bg-emerald-500' }
+  if (c.daDuocTiepNhan) return { label: `Đã nhận tại ${c.noiTiepNhan || 'DN khác'}`, cls: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' }
+  if (c.trangThai === 'TuChoi') return { label: 'Đã từ chối', cls: 'bg-rose-100 text-rose-800', dot: 'bg-rose-500' }
+  if (c.coLichPhongVanCho) return { label: 'Đã có lịch phỏng vấn', cls: 'bg-blue-100 text-blue-800', dot: 'bg-blue-500' }
+  if (c.trangThai === 'DaDuyet') return { label: 'Đạt vòng hồ sơ (mời PV)', cls: 'bg-indigo-100 text-indigo-800', dot: 'bg-indigo-500' }
+  return { label: 'Chờ duyệt', cls: 'bg-amber-100 text-amber-800', dot: 'bg-amber-500' }
+}
+// Chỉ đổi trạng thái hồ sơ khi chưa trúng tuyển và chưa có lịch phỏng vấn chờ kết quả
+const coTheDoiTrangThai = (c) => !c.daDuocTiepNhan && !c.coLichPhongVanCho
 
 export default function QuanLyUngVienPage() {
   const { activeCompany } = useEnterprise()
@@ -11,22 +25,30 @@ export default function QuanLyUngVienPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [toast, setToast] = useState(null)
   const [processingId, setProcessingId] = useState(null)
+  const [chiTieu, setChiTieu] = useState(null)
+
+  const fetchCandidates = async () => {
+    if (!activeCompany?.maCongTy) return
+    try {
+      setLoading(true)
+      const [res, tq] = await Promise.all([
+        doanhNghiepService.getUngVien(activeCompany.maCongTy),
+        doanhNghiepService.getTongQuan(activeCompany.maCongTy),
+      ])
+      setCandidates(res || [])
+      setChiTieu(tq?.chiTieu || null)
+    } catch (err) {
+      console.error('Lỗi lấy danh sách ứng viên:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchCandidates() {
-      if (!activeCompany?.maCongTy) return
-      try {
-        setLoading(true)
-        const res = await doanhNghiepService.getUngVien(activeCompany.maCongTy)
-        setCandidates(res || [])
-      } catch (err) {
-        console.error('Lỗi lấy danh sách ứng viên:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchCandidates()
   }, [activeCompany?.maCongTy])
+
+  const daDongTuyen = !!chiTieu?.daDuChiTieu
 
   const handleUpdateStatus = async (maDK, newStatus) => {
     try {
@@ -47,7 +69,7 @@ export default function QuanLyUngVienPage() {
       })
     } catch (err) {
       console.error('Lỗi duyệt hồ sơ:', err)
-      setToast({ type: 'error', message: 'Không thể cập nhật trạng thái. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể cập nhật trạng thái. Vui lòng thử lại.' })
     } finally {
       setProcessingId(null)
       setTimeout(() => setToast(null), 4000)
@@ -69,11 +91,22 @@ export default function QuanLyUngVienPage() {
     total: candidates.length,
     choDuyet: candidates.filter((c) => c.trangThai === 'ChoDuyet' || !c.trangThai).length,
     daDuyet: candidates.filter((c) => c.trangThai === 'DaDuyet').length,
+    // Đạt vòng hồ sơ nhưng chưa có kết quả tuyển (còn cần phỏng vấn)
+    choPhongVan: candidates.filter((c) => c.trangThai === 'DaDuyet' && !c.daDuocTiepNhan).length,
+    trungTuyen: candidates.filter((c) => c.tiepNhanTaiDay).length,
     tuChoi: candidates.filter((c) => c.trangThai === 'TuChoi').length,
   }
 
   return (
     <div className="space-y-6">
+      {chiTieu && (
+        <div className={`p-4 rounded-xl text-xs font-semibold border flex items-center gap-2 ${daDongTuyen ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
+          <span className="material-symbols-outlined text-[18px]">{daDongTuyen ? 'lock' : 'groups'}</span>
+          {daDongTuyen
+            ? `Đã đủ chỉ tiêu tiếp nhận (${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}) — hệ thống đã tự động đóng tuyển và từ chối các hồ sơ đang chờ.`
+            : `Đã tiếp nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} sinh viên — còn ${chiTieu.conLai} chỉ tiêu. Khi đủ chỉ tiêu, đợt tuyển sẽ tự động đóng.`}
+        </div>
+      )}
       {/* Toast Alert */}
       {toast && (
         <div
@@ -110,7 +143,7 @@ export default function QuanLyUngVienPage() {
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng ứng viên nộp</div>
           <div className="text-2xl font-black text-slate-900 mt-2">{stats.total} <span className="text-xs font-normal text-slate-500">hồ sơ</span></div>
-          <div className="text-[11px] text-slate-400 mt-1">Đợt HK2 (2026 - 2027)</div>
+          <div className="text-[11px] text-slate-400 mt-1">{chiTieu?.tenDot || 'Đợt đang diễn ra'}</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
@@ -120,9 +153,9 @@ export default function QuanLyUngVienPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đã duyệt (Mời PV)</div>
-          <div className="text-2xl font-black text-emerald-700 mt-2">{stats.daDuyet} <span className="text-xs font-normal text-slate-500">ứng viên</span></div>
-          <div className="text-[11px] text-emerald-600 font-medium mt-1">Sẵn sàng lên lịch phỏng vấn</div>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đạt hồ sơ – chờ phỏng vấn</div>
+          <div className="text-2xl font-black text-indigo-700 mt-2">{stats.choPhongVan} <span className="text-xs font-normal text-slate-500">ứng viên</span></div>
+          <div className="text-[11px] text-emerald-600 font-medium mt-1">Đã trúng tuyển: {stats.trungTuyen} sinh viên</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
@@ -139,7 +172,7 @@ export default function QuanLyUngVienPage() {
           {[
             { id: 'ALL', label: 'Tất cả ứng viên', count: stats.total },
             { id: 'ChoDuyet', label: 'Chờ duyệt', count: stats.choDuyet },
-            { id: 'DaDuyet', label: 'Đã duyệt (Mời PV)', count: stats.daDuyet },
+            { id: 'DaDuyet', label: 'Đạt vòng hồ sơ', count: stats.daDuyet },
             { id: 'TuChoi', label: 'Đã từ chối', count: stats.tuChoi },
           ].map((tab) => (
             <button
@@ -221,9 +254,11 @@ export default function QuanLyUngVienPage() {
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                               c.gpa >= 3.2
                                 ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-blue-100 text-blue-800'
+                                : c.gpa >= 2.5
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-slate-100 text-slate-700'
                             }`}>
-                              {c.gpa >= 3.2 ? 'Giỏi' : 'Khá'}
+                              {xepLoaiGpa(c.gpa)}
                             </span>
                           )}
                         </div>
@@ -262,21 +297,9 @@ export default function QuanLyUngVienPage() {
 
                       {/* Status */}
                       <td className="py-3.5 px-3">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                          c.trangThai === 'DaDuyet'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : c.trangThai === 'TuChoi'
-                            ? 'bg-rose-100 text-rose-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            c.trangThai === 'DaDuyet' ? 'bg-emerald-500' : c.trangThai === 'TuChoi' ? 'bg-rose-500' : 'bg-amber-500'
-                          }`}></span>
-                          {c.trangThai === 'DaDuyet'
-                            ? 'Đã duyệt (Mời PV)'
-                            : c.trangThai === 'TuChoi'
-                            ? 'Đã từ chối'
-                            : 'Chờ duyệt'}
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${trangThaiHoSo(c).cls}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${trangThaiHoSo(c).dot}`}></span>
+                          {trangThaiHoSo(c).label}
                         </span>
                       </td>
 
@@ -291,7 +314,7 @@ export default function QuanLyUngVienPage() {
                             Xem CV
                           </button>
 
-                          {c.trangThai !== 'DaDuyet' && (
+                          {c.trangThai !== 'DaDuyet' && !daDongTuyen && coTheDoiTrangThai(c) && (
                             <button
                               type="button"
                               disabled={isProcessing}
@@ -303,7 +326,7 @@ export default function QuanLyUngVienPage() {
                             </button>
                           )}
 
-                          {c.trangThai !== 'TuChoi' && (
+                          {c.trangThai !== 'TuChoi' && coTheDoiTrangThai(c) && (
                             <button
                               type="button"
                               disabled={isProcessing}
@@ -336,7 +359,7 @@ export default function QuanLyUngVienPage() {
 
       {/* Modal chi tiết hồ sơ & CV ứng viên */}
       {selectedCandidate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <ModalOverlay onClose={() => setSelectedCandidate(null)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -376,12 +399,8 @@ export default function QuanLyUngVienPage() {
                 </div>
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase font-bold">Trạng thái hồ sơ</div>
-                  <div className="text-xs font-bold text-emerald-700 mt-1">
-                    {selectedCandidate.trangThai === 'DaDuyet'
-                      ? 'Đã duyệt (Mời PV)'
-                      : selectedCandidate.trangThai === 'TuChoi'
-                      ? 'Đã từ chối'
-                      : 'Đang chờ duyệt'}
+                  <div className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-bold ${trangThaiHoSo(selectedCandidate).cls}`}>
+                    {trangThaiHoSo(selectedCandidate).label}
                   </div>
                 </div>
               </div>
@@ -471,7 +490,7 @@ export default function QuanLyUngVienPage() {
                 Đóng
               </button>
               <div className="flex items-center gap-2">
-                {selectedCandidate.trangThai !== 'TuChoi' && (
+                {selectedCandidate.trangThai !== 'TuChoi' && coTheDoiTrangThai(selectedCandidate) && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedCandidate.maDK, 'TuChoi')}
@@ -480,7 +499,7 @@ export default function QuanLyUngVienPage() {
                     Từ chối hồ sơ
                   </button>
                 )}
-                {selectedCandidate.trangThai !== 'DaDuyet' && (
+                {selectedCandidate.trangThai !== 'DaDuyet' && !daDongTuyen && coTheDoiTrangThai(selectedCandidate) && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedCandidate.maDK, 'DaDuyet')}
@@ -493,7 +512,7 @@ export default function QuanLyUngVienPage() {
               </div>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import ModalOverlay from '../common/ModalOverlay.jsx'
 import { Link } from 'react-router-dom'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import apiClient from '../../services/api'
@@ -18,7 +18,7 @@ export default function Header({ currentRole }) {
   // State Modal Hồ sơ & Đổi mật khẩu
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [profileEditing, setProfileEditing] = useState(false)
-  const [profileForm, setProfileForm] = useState({ email: '', soDienThoai: '' })
+  const [profileForm, setProfileForm] = useState({ hoTen: '', email: '', soDienThoai: '' })
   const [profileStatus, setProfileStatus] = useState(null)
   const [savingProfile, setSavingProfile] = useState(false)
   const [showPasswordModal, setShowPasswordModal] = useState(false)
@@ -128,11 +128,11 @@ export default function Header({ currentRole }) {
     setIsUserMenuOpen(false)
     setProfileEditing(false)
     setProfileStatus(null)
-    setProfileForm({ email: authUser?.email || '', soDienThoai: authUser?.soDienThoai || '' })
+    setProfileForm({ hoTen: authUser?.hoTen || '', email: authUser?.email || '', soDienThoai: authUser?.soDienThoai || '' })
     setShowProfileModal(true)
     try {
       const { data } = await apiClient.get('/auth/profile')
-      setProfileForm({ email: data.email || '', soDienThoai: data.soDienThoai || '' })
+      setProfileForm({ hoTen: data.hoTen || '', email: data.email || '', soDienThoai: data.soDienThoai || '' })
     } catch (err) {
       setProfileStatus(err.response?.data?.message || 'Không thể tải thông tin liên hệ mới nhất.')
     }
@@ -146,8 +146,8 @@ export default function Header({ currentRole }) {
         email: profileForm.email,
         soDienThoai: profileForm.soDienThoai,
       })
-      updateUser({ email: data.email, soDienThoai: data.soDienThoai })
-      setProfileForm({ email: data.email || '', soDienThoai: data.soDienThoai || '' })
+      updateUser({ hoTen: data.hoTen, email: data.email, soDienThoai: data.soDienThoai })
+      setProfileForm({ hoTen: data.hoTen || '', email: data.email || '', soDienThoai: data.soDienThoai || '' })
       setProfileEditing(false)
       setProfileStatus('Đã cập nhật thông tin liên hệ.')
     } catch (err) {
@@ -158,7 +158,7 @@ export default function Header({ currentRole }) {
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
+    <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
       {/* Left section: Breadcrumb / Title */}
       <div className="flex items-center text-slate-500 text-sm">
         <span className="material-symbols-outlined text-[18px] text-blue-700 mr-1.5">school</span>
@@ -422,8 +422,7 @@ export default function Header({ currentRole }) {
 
       {/* 📋 MODAL 1: XEM HỒ SƠ CHI TIẾT (DÙNG PORTAL ĐỂ CĂN GIỮA TOÀN MÀN HÌNH) */}
       {showProfileModal &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <ModalOverlay onClose={() => setShowProfileModal(false)}>
             <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               {/* Header */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -468,6 +467,10 @@ export default function Header({ currentRole }) {
                     <span className="text-slate-400 block font-medium text-[11px]">Khoa phụ trách:</span>
                     <span className="font-semibold text-slate-800">{user.faculty}</span>
                   </div>
+                  <div className="col-span-2">
+                    <span className="text-slate-400 block font-medium text-[11px]">Họ tên:</span>
+                    <span className="font-semibold text-slate-800">{profileForm.hoTen || user.name || '—'}</span>
+                  </div>
                   <div>
                     <span className="text-slate-400 block font-medium text-[11px]">Email:</span>
                     {profileEditing ? (
@@ -500,14 +503,12 @@ export default function Header({ currentRole }) {
                 </button>
               </div>
             </div>
-          </div>,
-          document.body
-        )}
+          </ModalOverlay>
+        }
 
       {/* 🔑 MODAL 2: ĐỔI MẬT KHẨU */}
       {showPasswordModal &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <ModalOverlay onClose={() => setShowPasswordModal(false)}>
             <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2.5">
@@ -651,14 +652,12 @@ export default function Header({ currentRole }) {
                 </form>
               )}
             </div>
-          </div>,
-          document.body
-        )}
+          </ModalOverlay>
+        }
 
       {/* 🚪 MODAL 3: XÁC NHẬN ĐĂNG XUẤT */}
       {showLogoutConfirm &&
-        createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+          <ModalOverlay onClose={() => setShowLogoutConfirm(false)}>
             <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-center space-y-4 max-h-[90vh] overflow-y-auto">
               {logoutSuccess ? (
                 <div className="space-y-3 py-2">
@@ -706,9 +705,8 @@ export default function Header({ currentRole }) {
                 </>
               )}
             </div>
-          </div>,
-          document.body
-        )}
+          </ModalOverlay>
+        }
     </header>
   )
 }

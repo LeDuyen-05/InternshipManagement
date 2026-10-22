@@ -27,6 +27,16 @@ public class DangKyThucTapController : ControllerBase
         return Ok(list);
     }
 
+    /// <summary>Sinh viên đang đăng nhập có được đăng ký nguyện vọng trong đợt không (kèm lý do nếu không).</summary>
+    [HttpGet("dieu-kien")]
+    [Authorize(Roles = Roles.SinhVien)]
+    public async Task<IActionResult> KiemTraDieuKien([FromQuery] string maDot)
+    {
+        var maSV = User.MaSV() ?? throw new UnauthorizedAccessException();
+        var lyDo = await _service.KiemTraDieuKienDangKyAsync(maSV, maDot);
+        return Ok(new { duocDangKy = lyDo == null, lyDo });
+    }
+
     [HttpPost]
     [Authorize(Roles = Roles.SinhVien)]
     public async Task<IActionResult> DangKy([FromBody] CreateDangKyThucTapRequest request)

@@ -71,6 +71,12 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
             .AnyAsync(g => g.MaGiangVien == maGV && g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
     }
 
+    public Task<string?> GetTrangThaiPhanBoAsync(string maSV, string maDot) =>
+        Context.PhanBoThucTaps
+            .Where(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.TrangThai != "Huy")
+            .Select(p => p.TrangThai)
+            .FirstOrDefaultAsync();
+
     public override async Task<TienDoThucTap?> GetByIdAsync(string maTienDo)
     {
         return await DbSet

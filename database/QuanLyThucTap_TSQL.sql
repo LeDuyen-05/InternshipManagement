@@ -22,6 +22,7 @@ GO
 -- ============================================================
 -- XÓA CÁC BẢNG NẾU ĐÃ TỒN TẠI (theo thứ tự phụ thuộc FK)
 -- ============================================================
+IF OBJECT_ID('THONGBAO',           'U') IS NOT NULL DROP TABLE THONGBAO;
 IF OBJECT_ID('TAIKHOAN',           'U') IS NOT NULL DROP TABLE TAIKHOAN;
 IF OBJECT_ID('CHITIETCHAMDIEM',    'U') IS NOT NULL DROP TABLE CHITIETCHAMDIEM;
 IF OBJECT_ID('PHIEUCHAMDIEM',      'U') IS NOT NULL DROP TABLE PHIEUCHAMDIEM;
@@ -88,6 +89,7 @@ CREATE TABLE CONGTY (
     yeuCau              NVARCHAR(2000)  NULL,
     trangThai           NVARCHAR(50)    NOT NULL DEFAULT N'ChoDuyet',
     embeddingYeuCau     NVARCHAR(MAX)   NULL,   -- Vector embedding (JSON array) cho ML gợi ý
+    maSVDeXuat          NVARCHAR(20)    NULL,   -- SV tự đề xuất doanh nghiệp (NULL = Khoa/GV đưa vào)
     CONSTRAINT PK_CONGTY PRIMARY KEY (maCongTy),
     CONSTRAINT CK_CONGTY_TRANGTHAI CHECK (trangThai IN (N'ChoDuyet', N'DaDuyet', N'TuChoi', N'DongBang'))
 );
@@ -195,7 +197,7 @@ GO
 CREATE TABLE PHONGVAN (
     maPV        NVARCHAR(20)    NOT NULL,
     hinhThuc    NVARCHAR(100)   NULL,
-    ngayPV      DATE            NOT NULL,
+    ngayPV      DATETIME2(0)    NOT NULL,   -- ngày + giờ phỏng vấn
     ketQua      NVARCHAR(50)    NULL,
     maDaiDien   NVARCHAR(20)    NOT NULL,
     maSV        NVARCHAR(20)    NOT NULL,
@@ -289,13 +291,18 @@ GO
 -- ============================================================
 -- BẢNG 15: TIEUCHI
 -- Danh sách tiêu chí chấm điểm (CLO) thực tập
+-- nhomDanhGia: 'GV' = giảng viên hướng dẫn chấm, 'DN' = đơn vị thực tập chấm
+--              (Phiếu nhận xét), NULL = tiêu chí cũ không còn sử dụng.
 -- ============================================================
 CREATE TABLE TIEUCHI (
     maTieuChi   NVARCHAR(20)    NOT NULL,
     tenTieuChi  NVARCHAR(200)   NOT NULL,
     diemToiDa   DECIMAL(5,2)    NOT NULL DEFAULT 10,
+    nhomDanhGia NVARCHAR(10)    NULL,
+    thuTu       INT             NOT NULL DEFAULT 0,
     CONSTRAINT PK_TIEUCHI PRIMARY KEY (maTieuChi),
-    CONSTRAINT CK_TIEUCHI_DIEM CHECK (diemToiDa > 0)
+    CONSTRAINT CK_TIEUCHI_DIEM CHECK (diemToiDa > 0),
+    CONSTRAINT CK_TIEUCHI_NHOM CHECK (nhomDanhGia IN (N'GV', N'DN'))
 );
 GO
 
@@ -311,6 +318,8 @@ CREATE TABLE PHIEUCHAMDIEM (
     maSV            NVARCHAR(20)    NOT NULL,
     maHuongDanDN    NVARCHAR(20)    NULL,   -- Đại diện DN chấm điểm
     maGVHuongDan    NVARCHAR(20)    NULL,   -- GV hướng dẫn chấm điểm
+    nhanXetGV       NVARCHAR(1000)  NULL,   -- Nhận xét của GVHD
+    nhanXetDN       NVARCHAR(1000)  NULL,   -- Nhận xét của đơn vị thực tập (Phiếu nhận xét)
     CONSTRAINT PK_PHIEUCHAMDIEM PRIMARY KEY (maPhieu),
     CONSTRAINT UQ_PCD_SV_DOT    UNIQUE (maSV, maDot),
     CONSTRAINT FK_PCD_DOTTHUCTAP        FOREIGN KEY (maDot)          REFERENCES DOTTHUCTAP(maSo),
@@ -388,11 +397,15 @@ GO
 -- Lưu thông báo hệ thống
 -- ============================================================
 CREATE TABLE THONGBAO (
-    maThongBao  NVARCHAR(20)    NOT NULL PRIMARY KEY,
-    tieuDe      NVARCHAR(200)   NOT NULL,
-    noiDung     NVARCHAR(MAX)   NOT NULL,
-    ngayTao     DATETIME2       NOT NULL,
-    maNguoiGui  NVARCHAR(20)    NULL
+    maThongBao   NVARCHAR(20)    NOT NULL PRIMARY KEY,
+    tieuDe       NVARCHAR(200)   NOT NULL,
+    noiDung      NVARCHAR(MAX)   NOT NULL,
+    ngayTao      DATETIME2       NOT NULL,
+    maNguoiGui   NVARCHAR(20)    NULL,
+    doiTuong     NVARCHAR(50)    NULL DEFAULT 'ALL',
+    loaiThongBao NVARCHAR(50)   NULL DEFAULT 'Chung',
+    tepDinhKem   NVARCHAR(500)   NULL,
+    ghim         BIT             NULL DEFAULT 0
 );
 GO
 
@@ -465,7 +478,10 @@ GO
 
 -- ============================================================
 -- DỮ LIỆU MẪU (Seed Data)
--- 2 đợt: DOT01 (đã kết thúc, SV001-SV003 có điểm) và DOT02 (đang diễn ra, SV004-SV010)
+-- DOT01 (đã kết thúc, SV001-SV003 có điểm), DOT02 (đang diễn ra, SV004-SV020)
+-- Kịch bản demo: SV016-SV018 đã được tiếp nhận nhưng CHƯA có GVHD (phân công tự động
+-- ưu tiên GV đã giới thiệu công ty); CT005 đã đủ chỉ tiêu (tự đóng tuyển);
+-- SV020 đang chờ phỏng vấn tại CT004 (tài khoản dd005 / sv020).
 -- ============================================================
 
 -- 1. Vai trò hệ thống
@@ -477,12 +493,22 @@ INSERT INTO VAITRO (maVaiTro, tenVaiTro, moTa) VALUES
     ('VT05', N'DaiDienDN',      N'Đại diện doanh nghiệp tiếp nhận và hướng dẫn sinh viên');
 GO
 
--- 2. Tiêu chí chấm điểm CLO (tổng điểm tối đa = 10)
-INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa) VALUES
-    ('TC01', N'Thái độ và kỷ luật làm việc',        3.0),
-    ('TC02', N'Năng lực chuyên môn và kỹ thuật',    4.0),
-    ('TC03', N'Kỹ năng giao tiếp và làm việc nhóm', 2.0),
-    ('TC04', N'Báo cáo và tài liệu thực tập',       1.0);
+-- 2. Tiêu chí chấm điểm CLO theo file chấm điểm Thực tập nghề nghiệp của Khoa
+--    GVHD chấm CLO1.1 → CLO3.4 (tối đa 5.0 điểm)
+--    Đơn vị thực tập chấm CLO4.1, CLO4.2 qua Phiếu nhận xét (tối đa 5.0 điểm)
+--    Tổng điểm tối đa = 10
+INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa, nhomDanhGia, thuTu) VALUES
+    ('CLO1.1', N'Xác định được mục tiêu, nội dung, ý nghĩa của công việc thực tập',                                   0.75, N'GV', 1),
+    ('CLO1.2', N'Giới thiệu chung về đơn vị thực tập',                                                                0.75, N'GV', 2),
+    ('CLO1.3', N'Nắm vững vị trí công việc thực tập (Thông tin vị trí thực tập, lên kế hoạch thực tập)',              0.50, N'GV', 3),
+    ('CLO2.1', N'Vận dụng được kiến thức giải quyết các công việc được giao',                                         0.50, N'GV', 4),
+    ('CLO2.2', N'Giải thích được các phương pháp làm để thực hiện công việc được giao',                               0.50, N'GV', 5),
+    ('CLO3.1', N'Nắm rõ được yêu cầu công việc tham gia tại doanh nghiệp',                                            0.50, N'GV', 6),
+    ('CLO3.2', N'Hoàn thành quyển báo cáo đề tài nghiêm túc, hợp lý, ngữ nghĩa trong sáng, không sai lỗi chính tả',   0.50, N'GV', 7),
+    ('CLO3.3', N'Thuyết trình nội dung rõ ràng với giáo viên',                                                         0.50, N'GV', 8),
+    ('CLO3.4', N'Trả lời câu hỏi của giáo viên',                                                                        0.50, N'GV', 9),
+    ('CLO4.1', N'Nhận xét của đơn vị thực tập về ý thức, trách nhiệm, kỷ luật (Phiếu nhận xét)',                       2.00, N'DN', 10),
+    ('CLO4.2', N'Khả năng vận dụng kiến thức vào thực tiễn trong quá trình thực tập (Phiếu nhận xét)',                 3.00, N'DN', 11);
 GO
 
 -- 3. Giảng viên (soLuongSVHD sẽ được trigger tự cập nhật)
@@ -515,7 +541,12 @@ INSERT INTO SINHVIEN (maSV, hoTen, lop, khoaHoc, gpa, kyNang, chuyenNganh, congN
     ('SV012', N'Trần Mai Phương',  N'CNTT02', N'2022', 3.65, N'An toàn thông tin, Kiểm thử thâm nhập', N'An toàn thông tin',   N'Python, Kali Linux, Wireshark, BurpSuite', N'Đánh giá an toàn hệ thống thông tin nội bộ'),
     ('SV013', N'Đoàn Bảo Long',   N'CNTT03', N'2022', 2.95, N'Lập trình Web, ReactJS, TypeScript',    N'Công nghệ thông tin', N'ReactJS, TypeScript, Tailwind CSS, Redux',N'Trang thương mại điện tử phụ kiện số'),
     ('SV014', N'Vũ Hoàng Yến',    N'KHDL01', N'2022', 3.80, N'Trí tuệ nhân tạo, Xử lý ngôn ngữ tự nhiên', N'Khoa học dữ liệu', N'Python, BERT, LLM, PyTorch',       N'Trợ lý ảo hỏi đáp quy chế học vụ'),
-    ('SV015', N'Nguyễn Đức Huy',   N'CNTT02', N'2022', 2.65, N'Kiểm thử phần mềm, Automation Testing', N'Công nghệ thông tin', N'Selenium, Postman, Jest, Cypress',      N'Bộ kiểm thử tự động cho hệ thống E-commerce');
+    ('SV015', N'Nguyễn Đức Huy',   N'CNTT02', N'2022', 2.65, N'Kiểm thử phần mềm, Automation Testing', N'Công nghệ thông tin', N'Selenium, Postman, Jest, Cypress',      N'Bộ kiểm thử tự động cho hệ thống E-commerce'),
+    ('SV016', N'Lý Minh Khoa',     N'CNTT01', N'2022', 3.15, N'Lập trình Web Fullstack, Làm việc nhóm',  N'Công nghệ thông tin', N'React, Node.js, Express, MySQL',      N'Website đặt vé xem phim'),
+    ('SV017', N'Trương Gia Hân',   N'CNTT02', N'2022', 3.25, N'An toàn mạng, Phân tích log, Linux',      N'An toàn thông tin',   N'Linux, Wireshark, Splunk, Python',    N'Hệ thống giám sát phát hiện xâm nhập mạng'),
+    ('SV018', N'Phạm Quỳnh Như',   N'CNTT03', N'2022', 3.05, N'Lập trình Frontend, UI/UX',               N'Công nghệ thông tin', N'ReactJS, Redux, Tailwind CSS, Figma', N'Dashboard quản lý bán hàng responsive'),
+    ('SV019', N'Hồ Tấn Phát',      N'KHDL01', N'2022', 3.50, N'Phân tích dữ liệu, Machine Learning',     N'Khoa học dữ liệu',    N'Python, Pandas, scikit-learn, SQL',   N'Dự báo doanh số bán lẻ'),
+    ('SV020', N'Nguyễn Hoài Bảo',  N'CNTT01', N'2022', 2.95, N'Phát triển di động',                      N'Công nghệ thông tin', N'Flutter, Dart, Firebase',             N'Ứng dụng ghi chú học tập');
 GO
 
 -- 5. Công ty (CT006 đang chờ duyệt)
@@ -524,7 +555,7 @@ INSERT INTO CONGTY (maCongTy, tenCongTy, viTriTuyen, thoiGian, soLuongNhan, yeuC
     ('CT002', N'Công ty CP VNG Corporation',                           N'Kỹ sư AI/ML',                        N'Từ 14/09/2026 đến 25/12/2026', 3, N'Biết Python, Machine Learning cơ bản, GPA >= 3.0',             N'DaDuyet'),
     ('CT003', N'Công ty TNHH Tiki',                                    N'Lập trình viên Backend',             N'Từ 14/09/2026 đến 25/12/2026', 4, N'Biết Java hoặc PHP, hiểu RESTful API, GPA >= 2.8',            N'DaDuyet'),
     ('CT004', N'Công ty CP Công nghệ Sao Việt',                        N'Lập trình viên Mobile',              N'Từ 14/09/2026 đến 25/12/2026', 3, N'Biết Flutter hoặc Kotlin, GPA >= 2.8',                        N'DaDuyet'),
-    ('CT005', N'Công ty TNHH Dữ liệu Lạc Việt',                        N'Kỹ sư dữ liệu',                      N'Từ 14/09/2026 đến 25/12/2026', 2, N'Biết SQL, Python, hiểu ETL, GPA >= 3.0',                      N'DaDuyet'),
+    ('CT005', N'Công ty TNHH Dữ liệu Lạc Việt',                        N'Kỹ sư dữ liệu',                      N'Từ 14/09/2026 đến 25/12/2026', 1, N'Biết SQL, Python, hiểu ETL, GPA >= 3.0',                      N'DaDuyet'),
     ('CT006', N'Công ty TNHH Giải pháp Phần mềm ABC',                  N'Kiểm thử phần mềm',                  N'Từ 14/09/2026 đến 25/12/2026', 2, N'Hiểu quy trình kiểm thử, GPA >= 2.5',                         N'ChoDuyet'),
     ('CT007', N'Tập đoàn Công nghiệp - Viễn thông Quân đội (Viettel)', N'Kỹ sư An toàn thông tin & Cloud',     N'Từ 14/09/2026 đến 25/12/2026', 4, N'Biết Linux, Network, hiểu bảo mật hoặc Cloud AWS, GPA >= 2.8', N'DaDuyet'),
     ('CT008', N'Công ty CP Dịch vụ Di động Trực tuyến (MoMo)',         N'Lập trình viên Backend Golang/Java', N'Từ 14/09/2026 đến 25/12/2026', 3, N'Hiểu microservices, cơ sở dữ liệu phân tán, GPA >= 3.0',      N'DaDuyet'),
@@ -572,7 +603,12 @@ INSERT INTO HOSONANGLUC (maHoSo, NDHoSo, ngayCapNhat, maSV) VALUES
     ('HS012', N'Đam mê bảo mật, an toàn thông tin mạng, thành thạo công cụ rà quét lỗ hổng và kiểm thử thâm nhập, mong muốn thực tập Security/SOC.', '2026-08-20', 'SV012'),
     ('HS013', N'Kỹ năng lập trình ReactJS, TypeScript và UI/UX Responsive, mong muốn thực tập vị trí Frontend Developer.', '2026-08-20', 'SV013'),
     ('HS014', N'Nghiên cứu mô hình ngôn ngữ lớn (LLM), Natural Language Processing với PyTorch và HuggingFace, mong muốn thực tập Kỹ sư AI/NLP.', '2026-08-20', 'SV014'),
-    ('HS015', N'Kiến thức kiểm thử hộp đen, hộp trắng, viết kịch bản test tự động bằng Selenium và Postman, mong muốn thực tập QA/Automation Tester.', '2026-08-20', 'SV015');
+    ('HS015', N'Kiến thức kiểm thử hộp đen, hộp trắng, viết kịch bản test tự động bằng Selenium và Postman, mong muốn thực tập QA/Automation Tester.', '2026-08-20', 'SV015'),
+    ('HS016', N'Lập trình Web Fullstack với React, Node.js và MySQL, đã làm website đặt vé xem phim, mong muốn thực tập Web Fullstack.', '2026-08-21', 'SV016'),
+    ('HS017', N'Quan tâm an toàn mạng, phân tích log hệ thống trên Linux, đã xây dựng hệ thống phát hiện xâm nhập, mong muốn thực tập Security/SOC.', '2026-08-21', 'SV017'),
+    ('HS018', N'Lập trình Frontend ReactJS, Redux, Tailwind CSS, thiết kế UI/UX trên Figma, mong muốn thực tập Frontend Developer.', '2026-08-21', 'SV018'),
+    ('HS019', N'Phân tích dữ liệu với Python, Pandas, scikit-learn và SQL, đã làm dự báo doanh số bán lẻ, mong muốn thực tập Data/AI.', '2026-08-21', 'SV019'),
+    ('HS020', N'Phát triển ứng dụng di động với Flutter và Firebase, mong muốn thực tập Mobile Developer.', '2026-08-21', 'SV020');
 GO
 
 -- 9. Gợi ý công ty từ mô hình ML
@@ -646,7 +682,13 @@ INSERT INTO DANGKYTHUCTAP (maDK, ngayDangKy, thuTuUuTien, trangThai, maSV, maCon
     ('DK016', '2026-08-27', 1, N'DaDuyet', 'SV012', 'CT007', 'DOT02'),
     ('DK017', '2026-08-27', 1, N'DaDuyet', 'SV013', 'CT009', 'DOT02'),
     ('DK018', '2026-08-28', 1, N'DaDuyet', 'SV014', 'CT011', 'DOT02'),
-    ('DK019', '2026-08-28', 1, N'DaDuyet', 'SV015', 'CT010', 'DOT02');
+    ('DK019', '2026-08-28', 1, N'DaDuyet', 'SV015', 'CT010', 'DOT02'),
+    ('DK020', '2026-08-28', 1, N'DaDuyet', 'SV016', 'CT001', 'DOT02'),
+    ('DK021', '2026-08-28', 1, N'DaDuyet', 'SV017', 'CT007', 'DOT02'),
+    ('DK022', '2026-08-28', 1, N'DaDuyet', 'SV018', 'CT009', 'DOT02'),
+    ('DK023', '2026-08-29', 1, N'ChoDuyet', 'SV019', 'CT011', 'DOT02'),
+    ('DK024', '2026-08-29', 2, N'ChoDuyet', 'SV019', 'CT002', 'DOT02'),
+    ('DK025', '2026-08-29', 1, N'ChoDuyet', 'SV020', 'CT004', 'DOT02');
 GO
 
 -- 13. Phân bổ thực tập
@@ -665,7 +707,10 @@ INSERT INTO PHANBOTHUCTAP (maPB, ngayPhanBo, trangThai, maDot, maCongTy, maSV) V
     ('PB012', '2026-09-05', N'DangThucTap','DOT02', 'CT007', 'SV012'),
     ('PB013', '2026-09-05', N'DangThucTap','DOT02', 'CT009', 'SV013'),
     ('PB014', '2026-09-05', N'DangThucTap','DOT02', 'CT011', 'SV014'),
-    ('PB015', '2026-09-05', N'DangThucTap','DOT02', 'CT010', 'SV015');
+    ('PB015', '2026-09-05', N'DangThucTap','DOT02', 'CT010', 'SV015'),
+    ('PB016', '2026-09-05', N'DangThucTap','DOT02', 'CT001', 'SV016'),
+    ('PB017', '2026-09-05', N'DangThucTap','DOT02', 'CT007', 'SV017'),
+    ('PB018', '2026-09-05', N'DangThucTap','DOT02', 'CT009', 'SV018');
 GO
 
 -- 14. Đại diện doanh nghiệp hướng dẫn sinh viên
@@ -684,7 +729,10 @@ INSERT INTO HUONGDANDOANHNGHIEP (maSo, ngayBD, vaiTro, danhGia, maPB, maDaiDien)
     ('HD012', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB012', 'DD008'),
     ('HD013', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB013', 'DD010'),
     ('HD014', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB014', 'DD012'),
-    ('HD015', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB015', 'DD011');
+    ('HD015', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB015', 'DD011'),
+    ('HD016', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB016', 'DD001'),
+    ('HD017', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB017', 'DD008'),
+    ('HD018', '2026-09-14', N'Hướng dẫn chính', NULL, 'PB018', 'DD010');
 GO
 
 -- 15. Phỏng vấn
@@ -704,7 +752,11 @@ INSERT INTO PHONGVAN (maPV, hinhThuc, ngayPV, ketQua, maDaiDien, maSV) VALUES
     ('PV013', N'Trực tiếp',  '2026-08-31', N'Dat',      'DD008', 'SV012'),
     ('PV014', N'Trực tuyến', '2026-08-31', N'Dat',      'DD010', 'SV013'),
     ('PV015', N'Trực tiếp',  '2026-08-31', N'Dat',      'DD012', 'SV014'),
-    ('PV016', N'Trực tuyến', '2026-08-31', N'Dat',      'DD011', 'SV015');
+    ('PV016', N'Trực tuyến', '2026-08-31', N'Dat',      'DD011', 'SV015'),
+    ('PV017', N'Trực tuyến', '2026-09-01', N'Dat',      'DD001', 'SV016'),
+    ('PV018', N'Trực tiếp',  '2026-09-01', N'Dat',      'DD008', 'SV017'),
+    ('PV019', N'Trực tuyến', '2026-09-02', N'Dat',      'DD010', 'SV018'),
+    ('PV020', N'Trực tuyến', '2026-10-25 09:00', N'ChuaCoKetQua', 'DD005', 'SV020');
 GO
 
 -- 16. Tiến độ thực tập
@@ -730,35 +782,27 @@ INSERT INTO TIENDOTHUCTAP (maTienDo, mocThoiGian, noiDungBaoCao, ngayNop, trangT
 GO
 
 -- 17. Phiếu chấm điểm (DOT01 & DOT02) - tongDiem = tổng điểm chi tiết bên dưới
-INSERT INTO PHIEUCHAMDIEM (maPhieu, tongDiem, ngayCham, maDot, maSV, maHuongDanDN, maGVHuongDan) VALUES
-    ('PCD001', 8.50, '2026-05-25', 'DOT01', 'SV001', 'DD001', 'PC001'),
-    ('PCD002', 9.10, '2026-05-25', 'DOT01', 'SV002', 'DD003', 'PC002'),
-    ('PCD003', 7.30, '2026-05-26', 'DOT01', 'SV003', 'DD004', 'PC003'),
-    ('PCD004', 8.80, '2026-10-10', 'DOT02', 'SV004', 'DD001', 'PC004'),
-    ('PCD005', 9.40, '2026-10-10', 'DOT02', 'SV005', 'DD002', 'PC005'),
-    ('PCD006', 6.70, '2026-10-11', 'DOT02', 'SV006', 'DD003', 'PC006'),
-    ('PCD007', 7.80, '2026-10-11', 'DOT02', 'SV007', 'DD004', 'PC007'),
-    ('PCD008', 4.80, '2026-10-12', 'DOT02', 'SV008', 'DD004', 'PC008');
+INSERT INTO PHIEUCHAMDIEM (maPhieu, tongDiem, ngayCham, maDot, maSV, maHuongDanDN, maGVHuongDan, nhanXetGV, nhanXetDN) VALUES
+    ('PCD001', 8.75, '2026-05-25', 'DOT01', 'SV001', 'DD001', 'PC001', N'Báo cáo đầy đủ, thuyết trình tự tin.',        N'Hoàn thành tốt công việc, chủ động học hỏi.'),
+    ('PCD002', 9.40, '2026-05-25', 'DOT01', 'SV002', 'DD003', 'PC002', N'Nắm vững phương pháp, trả lời tốt câu hỏi.', N'Nắm vững kiến thức ML, hoàn thành đúng hạn.'),
+    ('PCD003', 7.40, '2026-05-26', 'DOT01', 'SV003', 'DD004', 'PC003', N'Cần trình bày báo cáo chặt chẽ hơn.',        N'Hoàn thành công việc, cần cải thiện kỹ năng báo cáo.'),
+    ('PCD004', 8.90, '2026-10-10', 'DOT02', 'SV004', 'DD001', 'PC004', NULL, NULL),
+    ('PCD005', 9.40, '2026-10-10', 'DOT02', 'SV005', 'DD002', 'PC005', NULL, NULL),
+    ('PCD006', 6.55, '2026-10-11', 'DOT02', 'SV006', 'DD003', 'PC006', NULL, NULL),
+    ('PCD007', 8.15, '2026-10-11', 'DOT02', 'SV007', 'DD004', 'PC007', NULL, NULL),
+    ('PCD008', 5.00, '2026-10-12', 'DOT02', 'SV008', 'DD004', 'PC008', NULL, NULL);
 GO
 
--- 18. Chi tiết chấm điểm (trigger kiểm tra không vượt điểm tối đa của tiêu chí)
+-- 18. Chi tiết chấm điểm theo 11 CLO (trigger kiểm tra không vượt điểm tối đa của tiêu chí)
 INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
-    ('CD001', 2.50, 'PCD001', 'TC01'), ('CD002', 3.50, 'PCD001', 'TC02'),
-    ('CD003', 1.50, 'PCD001', 'TC03'), ('CD004', 1.00, 'PCD001', 'TC04'),
-    ('CD005', 2.80, 'PCD002', 'TC01'), ('CD006', 3.60, 'PCD002', 'TC02'),
-    ('CD007', 1.80, 'PCD002', 'TC03'), ('CD008', 0.90, 'PCD002', 'TC04'),
-    ('CD009', 2.00, 'PCD003', 'TC01'), ('CD010', 3.00, 'PCD003', 'TC02'),
-    ('CD011', 1.50, 'PCD003', 'TC03'), ('CD012', 0.80, 'PCD003', 'TC04'),
-    ('CD013', 2.70, 'PCD004', 'TC01'), ('CD014', 3.60, 'PCD004', 'TC02'),
-    ('CD015', 1.60, 'PCD004', 'TC03'), ('CD016', 0.90, 'PCD004', 'TC04'),
-    ('CD017', 2.90, 'PCD005', 'TC01'), ('CD018', 3.80, 'PCD005', 'TC02'),
-    ('CD019', 1.80, 'PCD005', 'TC03'), ('CD020', 0.90, 'PCD005', 'TC04'),
-    ('CD021', 2.00, 'PCD006', 'TC01'), ('CD022', 2.50, 'PCD006', 'TC02'),
-    ('CD023', 1.40, 'PCD006', 'TC03'), ('CD024', 0.80, 'PCD006', 'TC04'),
-    ('CD025', 2.40, 'PCD007', 'TC01'), ('CD026', 3.10, 'PCD007', 'TC02'),
-    ('CD027', 1.50, 'PCD007', 'TC03'), ('CD028', 0.80, 'PCD007', 'TC04'),
-    ('CD029', 1.50, 'PCD008', 'TC01'), ('CD030', 1.80, 'PCD008', 'TC02'),
-    ('CD031', 1.00, 'PCD008', 'TC03'), ('CD032', 0.50, 'PCD008', 'TC04');
+    ('CD001', 0.60, 'PCD001', 'CLO1.1'), ('CD002', 0.65, 'PCD001', 'CLO1.2'), ('CD003', 0.45, 'PCD001', 'CLO1.3'), ('CD004', 0.45, 'PCD001', 'CLO2.1'), ('CD005', 0.40, 'PCD001', 'CLO2.2'), ('CD006', 0.40, 'PCD001', 'CLO3.1'), ('CD007', 0.45, 'PCD001', 'CLO3.2'), ('CD008', 0.45, 'PCD001', 'CLO3.3'), ('CD009', 0.45, 'PCD001', 'CLO3.4'), ('CD010', 1.75, 'PCD001', 'CLO4.1'), ('CD011', 2.70, 'PCD001', 'CLO4.2'),
+    ('CD012', 0.70, 'PCD002', 'CLO1.1'), ('CD013', 0.70, 'PCD002', 'CLO1.2'), ('CD014', 0.45, 'PCD002', 'CLO1.3'), ('CD015', 0.45, 'PCD002', 'CLO2.1'), ('CD016', 0.45, 'PCD002', 'CLO2.2'), ('CD017', 0.45, 'PCD002', 'CLO3.1'), ('CD018', 0.50, 'PCD002', 'CLO3.2'), ('CD019', 0.45, 'PCD002', 'CLO3.3'), ('CD020', 0.50, 'PCD002', 'CLO3.4'), ('CD021', 1.90, 'PCD002', 'CLO4.1'), ('CD022', 2.85, 'PCD002', 'CLO4.2'),
+    ('CD023', 0.55, 'PCD003', 'CLO1.1'), ('CD024', 0.55, 'PCD003', 'CLO1.2'), ('CD025', 0.40, 'PCD003', 'CLO1.3'), ('CD026', 0.40, 'PCD003', 'CLO2.1'), ('CD027', 0.40, 'PCD003', 'CLO2.2'), ('CD028', 0.40, 'PCD003', 'CLO3.1'), ('CD029', 0.35, 'PCD003', 'CLO3.2'), ('CD030', 0.35, 'PCD003', 'CLO3.3'), ('CD031', 0.35, 'PCD003', 'CLO3.4'), ('CD032', 1.50, 'PCD003', 'CLO4.1'), ('CD033', 2.15, 'PCD003', 'CLO4.2'),
+    ('CD034', 0.65, 'PCD004', 'CLO1.1'), ('CD035', 0.70, 'PCD004', 'CLO1.2'), ('CD036', 0.45, 'PCD004', 'CLO1.3'), ('CD037', 0.45, 'PCD004', 'CLO2.1'), ('CD038', 0.40, 'PCD004', 'CLO2.2'), ('CD039', 0.45, 'PCD004', 'CLO3.1'), ('CD040', 0.45, 'PCD004', 'CLO3.2'), ('CD041', 0.45, 'PCD004', 'CLO3.3'), ('CD042', 0.45, 'PCD004', 'CLO3.4'), ('CD043', 1.80, 'PCD004', 'CLO4.1'), ('CD044', 2.65, 'PCD004', 'CLO4.2'),
+    ('CD045', 0.65, 'PCD005', 'CLO1.1'), ('CD046', 0.70, 'PCD005', 'CLO1.2'), ('CD047', 0.50, 'PCD005', 'CLO1.3'), ('CD048', 0.50, 'PCD005', 'CLO2.1'), ('CD049', 0.45, 'PCD005', 'CLO2.2'), ('CD050', 0.50, 'PCD005', 'CLO3.1'), ('CD051', 0.45, 'PCD005', 'CLO3.2'), ('CD052', 0.45, 'PCD005', 'CLO3.3'), ('CD053', 0.50, 'PCD005', 'CLO3.4'), ('CD054', 1.85, 'PCD005', 'CLO4.1'), ('CD055', 2.85, 'PCD005', 'CLO4.2'),
+    ('CD056', 0.45, 'PCD006', 'CLO1.1'), ('CD057', 0.50, 'PCD006', 'CLO1.2'), ('CD058', 0.30, 'PCD006', 'CLO1.3'), ('CD059', 0.30, 'PCD006', 'CLO2.1'), ('CD060', 0.35, 'PCD006', 'CLO2.2'), ('CD061', 0.35, 'PCD006', 'CLO3.1'), ('CD062', 0.30, 'PCD006', 'CLO3.2'), ('CD063', 0.35, 'PCD006', 'CLO3.3'), ('CD064', 0.35, 'PCD006', 'CLO3.4'), ('CD065', 1.35, 'PCD006', 'CLO4.1'), ('CD066', 1.95, 'PCD006', 'CLO4.2'),
+    ('CD067', 0.65, 'PCD007', 'CLO1.1'), ('CD068', 0.60, 'PCD007', 'CLO1.2'), ('CD069', 0.40, 'PCD007', 'CLO1.3'), ('CD070', 0.40, 'PCD007', 'CLO2.1'), ('CD071', 0.40, 'PCD007', 'CLO2.2'), ('CD072', 0.45, 'PCD007', 'CLO3.1'), ('CD073', 0.40, 'PCD007', 'CLO3.2'), ('CD074', 0.40, 'PCD007', 'CLO3.3'), ('CD075', 0.40, 'PCD007', 'CLO3.4'), ('CD076', 1.55, 'PCD007', 'CLO4.1'), ('CD077', 2.50, 'PCD007', 'CLO4.2'),
+    ('CD078', 0.40, 'PCD008', 'CLO1.1'), ('CD079', 0.35, 'PCD008', 'CLO1.2'), ('CD080', 0.25, 'PCD008', 'CLO1.3'), ('CD081', 0.25, 'PCD008', 'CLO2.1'), ('CD082', 0.25, 'PCD008', 'CLO2.2'), ('CD083', 0.25, 'PCD008', 'CLO3.1'), ('CD084', 0.25, 'PCD008', 'CLO3.2'), ('CD085', 0.25, 'PCD008', 'CLO3.3'), ('CD086', 0.25, 'PCD008', 'CLO3.4'), ('CD087', 1.00, 'PCD008', 'CLO4.1'), ('CD088', 1.50, 'PCD008', 'CLO4.2');
 GO
 
 -- 19. Tài khoản mẫu (matKhau lưu dạng thường '123456', sẽ mã hóa sau bằng script riêng)
@@ -777,7 +821,9 @@ INSERT INTO TAIKHOAN (maTaiKhoan, tenDangNhap, matKhau, trangThai, maVaiTro, maS
     ('TK012', 'sv012', '123456', N'HoatDong', 'VT04', 'SV012', NULL,    NULL),
     ('TK013', 'sv013', '123456', N'HoatDong', 'VT04', 'SV013', NULL,    NULL),
     ('TK014', 'sv014', '123456', N'HoatDong', 'VT04', 'SV014', NULL,    NULL),
-    ('TK015', 'sv015', '123456', N'HoatDong', 'VT04', 'SV015', NULL,    NULL);
+    ('TK015', 'sv015', '123456', N'HoatDong', 'VT04', 'SV015', NULL,    NULL),
+    ('TK016', 'sv020', '123456', N'HoatDong', 'VT04', 'SV020', NULL,    NULL),
+    ('TK017', 'dd005', '123456', N'HoatDong', 'VT05', NULL,    NULL,    'DD005');
 GO
 
 -- ============================================================

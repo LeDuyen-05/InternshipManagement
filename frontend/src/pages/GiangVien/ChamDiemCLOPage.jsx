@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Fragment } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -7,6 +7,7 @@ import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import RubricCLOModal from '../../components/giang-vien/RubricCLOModal.jsx'
 import PhieuDiemPdfModal from '../../components/giang-vien/PhieuDiemPdfModal.jsx'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
+import { xuatBangDiemTheoMauKhoa } from '../../utils/bangDiemExcel.js'
 
 export default function ChamDiemCLOPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -31,6 +32,27 @@ export default function ChamDiemCLOPage() {
   const [scores, setScores] = useState({})
   const [generalReview, setGeneralReview] = useState('')
   const [confirmIntegrity, setConfirmIntegrity] = useState(false)
+  // Đơn vị thực tập đã chấm Phiếu nhận xét trên hệ thống → GV chỉ xem, không sửa CLO4.x
+  const [dnLocked, setDnLocked] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  const criteriaGV = criteria.filter((c) => c.nhomDanhGia !== 'DN')
+  const criteriaDN = criteria.filter((c) => c.nhomDanhGia === 'DN')
+  const tongNhom = (list) => list.reduce((sum, c) => sum + (parseFloat(scores[c.maTieuChi]) || 0), 0)
+  const daNhap = (c) => scores[c.maTieuChi] !== undefined && scores[c.maTieuChi] !== ''
+
+  const handleExportBangDiem = async () => {
+    if (!selectedDot?.maDot) return
+    try {
+      setExporting(true)
+      const res = await phieuChamDiemService.getBangDiem(selectedDot.maDot, maGV)
+      xuatBangDiemTheoMauKhoa(res.data?.data, `DiemTTTN_${selectedDot.maDot}_${maGV || 'Khoa'}.xlsx`)
+    } catch (err) {
+      setError('Không thể xuất bảng điểm: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   // Lấy thông tin giảng viên thật
   useEffect(() => {
@@ -110,22 +132,23 @@ export default function ChamDiemCLOPage() {
         setLoadingGrade(true)
         setScores({})
         setGeneralReview('')
+        setDnLocked(false)
         const res = await phieuChamDiemService.getPhieuChamBySinhVien(selectedMaSV, selectedDot.maDot)
         if (res.data?.success && res.data.data) {
           const p = res.data.data
-          if (p.chiTiets && p.chiTiets.length > 0) {
-            const loaded = {}
-            p.chiTiets.forEach((ct) => {
-              loaded[ct.maTieuChi] = Number(ct.diemCham)
-            })
-            setScores(loaded)
-            setGeneralReview(p.nhanXet || '')
-          }
+          const loaded = {}
+          ;(p.chiTiets || []).forEach((ct) => {
+            loaded[ct.maTieuChi] = Number(ct.diemCham)
+          })
+          setScores(loaded)
+          setGeneralReview(p.nhanXetGV || '')
+          setDnLocked(!!p.doanhNghiepChamTrenHeThong)
         }
       } catch {
         // Chưa có phiếu chấm: giữ form rỗng
         setScores({})
         setGeneralReview('')
+        setDnLocked(false)
       } finally {
         setLoadingGrade(false)
       }
@@ -150,14 +173,16 @@ export default function ChamDiemCLOPage() {
     if (!hasAnyScore && num === 0) {
       return { letter: '-', rank: 'Chưa chấm', passed: false, color: 'text-slate-600 bg-slate-50 border-slate-200' }
     }
-    if (num >= 8.5) return { letter: 'A', rank: 'Xuất sắc', passed: true, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
-    if (num >= 8.0) return { letter: 'B+', rank: 'Giỏi', passed: true, color: 'text-blue-700 bg-blue-50 border-blue-200' }
+    if (num >= 8.5) return { letter: 'A', rank: 'Giỏi', passed: true, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+    if (num >= 8.0) return { letter: 'B+', rank: 'Khá giỏi', passed: true, color: 'text-blue-700 bg-blue-50 border-blue-200' }
     if (num >= 7.0) return { letter: 'B', rank: 'Khá', passed: true, color: 'text-cyan-700 bg-cyan-50 border-cyan-200' }
     if (num >= 6.5) return { letter: 'C+', rank: 'Trung bình khá', passed: true, color: 'text-amber-700 bg-amber-50 border-amber-200' }
     if (num >= 5.5) return { letter: 'C', rank: 'Trung bình', passed: true, color: 'text-amber-700 bg-amber-50 border-amber-200' }
+    if (num >= 5.0) return { letter: 'D+', rank: 'Trung bình yếu', passed: true, color: 'text-orange-700 bg-orange-50 border-orange-200' }
     if (num >= 4.0) return { letter: 'D', rank: 'Yếu', passed: true, color: 'text-orange-700 bg-orange-50 border-orange-200' }
     return { letter: 'F', rank: 'Không đạt', passed: false, color: 'text-rose-700 bg-rose-50 border-rose-200' }
   }, [totalScore, scores])
+  const duDiemThanhPhan = criteria.length > 0 && criteria.every(daNhap)
 
   if (!maGV && !isStaff) {
     return <NoLinkedAccount />
@@ -189,7 +214,12 @@ export default function ChamDiemCLOPage() {
       return
     }
 
-    // Kiểm tra điểm từng tiêu chí
+    // Phần giảng viên chấm phải nhập đủ; phần đơn vị thực tập có thể nhập sau
+    const thieu = criteriaGV.filter((c) => !daNhap(c))
+    if (thieu.length > 0) {
+      alert(`Vui lòng nhập đủ điểm phần giảng viên: ${thieu.map((c) => c.maTieuChi).join(', ')}.`)
+      return
+    }
     for (const c of criteria) {
       const val = Number(scores[c.maTieuChi] ?? 0)
       if (val < 0 || val > c.diemToiDa) {
@@ -197,6 +227,7 @@ export default function ChamDiemCLOPage() {
         return
       }
     }
+    const guiDiem = [...criteriaGV, ...(dnLocked ? [] : criteriaDN.filter(daNhap))]
 
     try {
       setSubmitting(true)
@@ -204,10 +235,11 @@ export default function ChamDiemCLOPage() {
       await phieuChamDiemService.chamDiem({
         maSV: currentStudent.maSV,
         maDot: selectedDot.maDot,
-        chiTiets: criteria.map((c) => ({
+        chiTiets: guiDiem.map((c) => ({
           maTieuChi: c.maTieuChi,
           diemCham: Number(scores[c.maTieuChi] ?? 0),
         })),
+        nhanXet: generalReview,
       })
 
       setSavedSuccess(`Đã lưu điểm thành công cho sinh viên ${currentStudent.hoTen} (${totalScore}/10).`)
@@ -356,8 +388,16 @@ export default function ChamDiemCLOPage() {
                   </span>
                   <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                     <span className="material-symbols-outlined text-sm">check_circle</span>
-                    {gradeInfo.passed ? 'Đạt' : 'Chưa đạt'}
+                    {!duDiemThanhPhan ? 'Chưa đủ điểm thành phần' : gradeInfo.passed ? 'Đạt' : 'Không đạt'}
                   </span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                  <div className="px-3 py-2 rounded-xl bg-white/10">
+                    GVHD chấm: <b>{tongNhom(criteriaGV).toFixed(2)}</b> / {criteriaGV.reduce((a, c) => a + Number(c.diemToiDa), 0).toFixed(1)}
+                  </div>
+                  <div className="px-3 py-2 rounded-xl bg-white/10">
+                    Đơn vị thực tập: <b>{tongNhom(criteriaDN).toFixed(2)}</b> / {criteriaDN.reduce((a, c) => a + Number(c.diemToiDa), 0).toFixed(1)}
+                  </div>
                 </div>
               </div>
 
@@ -401,10 +441,25 @@ export default function ChamDiemCLOPage() {
                       </td>
                     </tr>
                   ) : (
-                    criteria.map((c) => {
+                    criteria.map((c, idx) => {
                       const currentVal = scores[c.maTieuChi] ?? ''
+                      const isDN = c.nhomDanhGia === 'DN'
+                      const locked = isReadOnly || (isDN && dnLocked)
+                      const batDauNhom = idx === 0 || criteria[idx - 1].nhomDanhGia !== c.nhomDanhGia
                       return (
-                        <tr key={c.maTieuChi} className="hover:bg-slate-50/70 transition-colors">
+                        <Fragment key={c.maTieuChi}>
+                        {batDauNhom && (
+                          <tr className={isDN ? 'bg-indigo-50/70' : 'bg-blue-50/70'}>
+                            <td colSpan={4} className="py-2.5 px-4 text-xs font-bold text-slate-700">
+                              {isDN
+                                ? dnLocked
+                                  ? 'Phần B – Đơn vị thực tập đánh giá (Phiếu nhận xét) · Doanh nghiệp đã chấm trên hệ thống'
+                                  : 'Phần B – Đơn vị thực tập đánh giá (Phiếu nhận xét) · Doanh nghiệp chưa chấm trên hệ thống, GVHD nhập từ Phiếu nhận xét bản giấy'
+                                : 'Phần A – Giảng viên hướng dẫn chấm'}
+                            </td>
+                          </tr>
+                        )}
+                        <tr className="hover:bg-slate-50/70 transition-colors">
                           <td className="py-4 px-4 align-top">
                             <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-mono">
                               {c.maTieuChi}
@@ -424,7 +479,7 @@ export default function ChamDiemCLOPage() {
                                 min="0"
                                 max={c.diemToiDa}
                                 value={currentVal}
-                                disabled={isReadOnly}
+                                disabled={locked}
                                 onChange={(e) => handleScoreChange(c.maTieuChi, e.target.value, c.diemToiDa)}
                                 placeholder="0"
                                 className="w-24 px-3 py-1.5 rounded-xl border border-slate-200 text-center font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-100"
@@ -433,6 +488,7 @@ export default function ChamDiemCLOPage() {
                             </div>
                           </td>
                         </tr>
+                        </Fragment>
                       )
                     })
                   )}
@@ -471,6 +527,16 @@ export default function ChamDiemCLOPage() {
 
               {/* Toolbar nút hành động */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={handleExportBangDiem}
+                  disabled={exporting}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                  title="Xuất file Excel theo mẫu chấm điểm của Khoa (CLO1.1 → CLO4.2)"
+                >
+                  <span className="material-symbols-outlined text-base text-emerald-600">table_view</span>
+                  {exporting ? 'Đang xuất...' : 'Xuất file chấm điểm (mẫu Khoa)'}
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowPdfModal(true)}

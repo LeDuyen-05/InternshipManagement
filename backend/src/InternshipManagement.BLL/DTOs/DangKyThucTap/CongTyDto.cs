@@ -9,6 +9,12 @@ public class CongTyDto
     public int? SoLuongNhan { get; set; }
     public string? YeuCau { get; set; }
     public string TrangThai { get; set; } = default!;
+
+    // Chỉ tiêu trong đợt đang diễn ra: khi đủ chỉ tiêu, công ty tự động đóng tuyển.
+    public string? MaDot { get; set; }
+    public int DaTiepNhan { get; set; }
+    public int? ConLai { get; set; }
+    public bool DaDuChiTieu { get; set; }
 }
 
 public class DeXuatCongTyRequest

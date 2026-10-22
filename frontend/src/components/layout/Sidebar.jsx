@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import ModalOverlay from '../common/ModalOverlay.jsx'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
@@ -308,7 +309,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
 
       {/* Modal 2 tầng: Chọn Năm học -> Đợt thực tập */}
       {showDotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-150">
+        <ModalOverlay onClose={() => setShowDotModal(false)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
@@ -424,7 +425,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </aside>
   )

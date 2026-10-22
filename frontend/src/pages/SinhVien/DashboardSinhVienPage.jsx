@@ -8,6 +8,7 @@ import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { hoSoNangLucService } from '../../services/hoSoNangLucService'
 import { dangKyThucTapService } from '../../services/dangKyThucTapService'
 import { phieuChamDiemService } from '../../services/phieuChamDiemService'
+import { PHAN_BO } from '../../utils/trangThai'
 
 export default function DashboardSinhVienPage() {
   const { user, maSV: currentMaSV } = useIdentity()
@@ -32,19 +33,24 @@ export default function DashboardSinhVienPage() {
         const [profData, pbData, repData, dkData, diemData] = await Promise.allSettled([
           hoSoNangLucService.getHoSoBySinhVien(currentMaSV),
           phongVanService.getPhanBoThucTap(currentMaSV),
-          tienDoThucTapService.getTienDoBySinhVien(currentMaSV),
+          tienDoThucTapService.getTienDoBySinhVien(currentMaSV, selectedDot?.maDot),
           dangKyThucTapService.getDangKyBySinhVien(currentMaSV),
-          phieuChamDiemService.getPhieuChamBySinhVien(currentMaSV, selectedDot?.maDot),
+          selectedDot?.maDot
+            ? phieuChamDiemService.getPhieuChamBySinhVien(currentMaSV, selectedDot.maDot)
+            : Promise.resolve(null),
         ])
 
+        // Mọi số liệu trên bảng điều khiển đều theo đợt thực tập đang chọn
+        const thuocDot = (x) => !selectedDot?.maDot || x?.maDot === selectedDot.maDot
         if (profData.status === 'fulfilled') setProfile(profData.value || null)
-        if (pbData.status === 'fulfilled') setPlacement(pbData.value || null)
+        if (pbData.status === 'fulfilled') setPlacement(pbData.value && thuocDot(pbData.value) ? pbData.value : null)
         if (repData.status === 'fulfilled') {
           const list = repData.value
           setReports(Array.isArray(list) ? list : (list?.data || []))
         }
-        if (dkData.status === 'fulfilled') setRegistrations(dkData.value || [])
-        if (diemData.status === 'fulfilled') setPhieuDiem(diemData.value?.data || diemData.value || null)
+        if (dkData.status === 'fulfilled') setRegistrations((dkData.value || []).filter(thuocDot))
+        // apiClient trả về response axios → body là { success, data }
+        if (diemData.status === 'fulfilled') setPhieuDiem(diemData.value?.data?.data ?? null)
       } catch (err) {
         console.error('Lỗi khi tải dữ liệu bảng điều khiển:', err)
       } finally {
@@ -67,7 +73,9 @@ export default function DashboardSinhVienPage() {
   const g1Done = Boolean(profile && registrations.length > 0)
   const g2Done = Boolean(placement)
   const g3Done = Boolean(placement && approvedReports > 0)
-  const g4Done = Boolean(phieuDiem && phieuDiem.tongDiem != null)
+  const g4Done = Boolean(phieuDiem?.daDuDiem)
+  const daTrungTuyen = registrations.some((r) => r.daTiepNhan)
+  const soHoSoDat = registrations.filter((r) => r.trangThai === 'DaDuyet' && !r.daTiepNhan).length
 
   return (
     <div className="flex flex-col gap-6">
@@ -113,7 +121,7 @@ export default function DashboardSinhVienPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                      {selectedDot?.tenDot || 'Đang thực tập'}
+                      {placement.tenDot || selectedDot?.tenDot || 'Đợt thực tập'}
                     </span>
                     {placement.maPhanBo && (
                       <span className="text-xs text-slate-400 font-mono">Mã PB: {placement.maPhanBo}</span>
@@ -180,8 +188,17 @@ export default function DashboardSinhVienPage() {
                   <div className="text-sm font-semibold text-white">{placement.tenCongTy}</div>
                   <div className="text-xs text-blue-200 mt-1">Vị trí: {placement.viTriTuyen || 'Thực tập sinh'}</div>
                   <div className="text-xs text-emerald-300 font-semibold mt-2 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[16px]">verified</span> Trạng thái: {placement.trangThai || 'Đã phân bổ'}
+                    <span className="material-symbols-outlined text-[16px]">verified</span> Trạng thái: {PHAN_BO[placement.trangThai] || placement.trangThai}
                   </div>
+                  {placement.trangThai === 'ChuaNhanViec' && (
+                    <Link
+                      to="/sinh-vien/lich-trinh"
+                      className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">task_alt</span>
+                      Xác nhận nhận quyết định tiếp nhận
+                    </Link>
+                  )}
                 </div>
                 <div className="pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
                   <span>Mã đợt thực tập:</span>
@@ -254,9 +271,11 @@ export default function DashboardSinhVienPage() {
                   {registrations.length} <span className="text-sm font-normal text-slate-400">/ 3</span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  {registrations.some((r) => r.trangThai === 'DaDuyet')
-                    ? 'Đã được duyệt 1 nguyện vọng ✓'
-                    : 'Chưa có nguyện vọng được duyệt'}
+                  {daTrungTuyen
+                    ? 'Đã trúng tuyển ✓'
+                    : soHoSoDat > 0
+                      ? `${soHoSoDat} hồ sơ đạt, chờ phỏng vấn`
+                      : 'Chưa có nguyện vọng được duyệt'}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">Tối đa 3 nguyện vọng/đợt</div>
               </div>
@@ -269,11 +288,15 @@ export default function DashboardSinhVienPage() {
               </div>
               <div className="mt-3">
                 <div className="text-2xl font-extrabold text-emerald-800">
-                  {phieuDiem?.tongDiem != null ? `${Number(phieuDiem.tongDiem).toFixed(2)}` : '—'}
-                  {phieuDiem?.tongDiem != null && <span className="text-sm font-normal text-slate-400">/10</span>}
+                  {phieuDiem?.daDuDiem ? `${Number(phieuDiem.tongDiem).toFixed(2)}` : '—'}
+                  {phieuDiem?.daDuDiem && <span className="text-sm font-normal text-slate-400">/10</span>}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  {phieuDiem?.tongDiem != null ? 'Đã có kết quả đánh giá' : 'Chưa có điểm đánh giá'}
+                  {phieuDiem?.daDuDiem
+                    ? `${phieuDiem.xepLoai} • ${phieuDiem.ketQua}`
+                    : phieuDiem
+                      ? `Đang chấm: GVHD ${phieuDiem.daChamGV ? '✓' : '…'} • Đơn vị TT ${phieuDiem.daChamDN ? '✓' : '…'}`
+                      : 'Chưa có điểm đánh giá'}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
                   {phieuDiem?.ngayCham ? `Ngày chấm: ${new Date(phieuDiem.ngayCham).toLocaleDateString('vi-VN')}` : 'Đánh giá cuối kỳ'}

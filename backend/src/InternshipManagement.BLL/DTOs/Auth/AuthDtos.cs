@@ -11,5 +11,5 @@ public record RegisterRequest(
     string? MaGV = null,
     string? MaDaiDien = null);
 public record LoginResponse(string Token, string MaTaiKhoan, string TenDangNhap, string MaVaiTro, string TenVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? Email, string? SoDienThoai);
-public record AccountProfileDto(string MaTaiKhoan, string TenDangNhap, string MaVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? Email, string? SoDienThoai);
+public record AccountProfileDto(string MaTaiKhoan, string TenDangNhap, string MaVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? Email, string? SoDienThoai, string? HoTen);
 public record UpdateOwnProfileRequest(string? Email, string? SoDienThoai);

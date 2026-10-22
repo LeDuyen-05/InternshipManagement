@@ -102,7 +102,8 @@ public class AuthService
     {
         var account = await _db.TaiKhoans.FindAsync(maTaiKhoan)
             ?? throw new KeyNotFoundException("Không tìm thấy tài khoản.");
-        return ToProfileDto(account);
+        var hoTen = await ResolveHoTenAsync(account);
+        return ToProfileDto(account, hoTen);
     }
 
     public async Task<AccountProfileDto> UpdateProfileAsync(string maTaiKhoan, UpdateOwnProfileRequest request)
@@ -121,10 +122,22 @@ public class AuthService
         account.Email = string.IsNullOrEmpty(email) ? null : email;
         account.SoDienThoai = string.IsNullOrEmpty(phone) ? null : phone;
         await _db.SaveChangesAsync();
-        return ToProfileDto(account);
+        var hoTen = await ResolveHoTenAsync(account);
+        return ToProfileDto(account, hoTen);
     }
 
-    private static AccountProfileDto ToProfileDto(TaiKhoan account) => new(
+    private async Task<string?> ResolveHoTenAsync(TaiKhoan account)
+    {
+        if (!string.IsNullOrEmpty(account.MaGV))
+            return (await _db.GiangViens.FindAsync(account.MaGV))?.HoTen;
+        if (!string.IsNullOrEmpty(account.MaSV))
+            return (await _db.SinhViens.FindAsync(account.MaSV))?.HoTen;
+        if (!string.IsNullOrEmpty(account.MaDaiDien))
+            return (await _db.DaiDienDoanhNghieps.FindAsync(account.MaDaiDien))?.HoTen;
+        return null;
+    }
+
+    private static AccountProfileDto ToProfileDto(TaiKhoan account, string? hoTen) => new(
         account.MaTaiKhoan, account.TenDangNhap, account.MaVaiTro,
-        account.MaSV, account.MaGV, account.MaDaiDien, account.Email, account.SoDienThoai);
+        account.MaSV, account.MaGV, account.MaDaiDien, account.Email, account.SoDienThoai, hoTen);
 }

@@ -1,14 +1,34 @@
 import { useState, useEffect } from 'react'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
+import { phongVanService } from '../../services/phongVanService'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
+import { BAO_CAO, PHAN_BO } from '../../utils/trangThai'
+import { Link } from 'react-router-dom'
+
+// Khung báo cáo tuần theo kế hoạch: công việc – kết quả – khó khăn – minh chứng
+const MAU_BAO_CAO = `1. Công việc đã thực hiện trong tuần:
+-
+
+2. Kết quả đạt được:
+-
+
+3. Khó khăn / vấn đề cần GVHD hỗ trợ:
+-
+
+4. Minh chứng (link tài liệu, mã nguồn, hình ảnh):
+- `
+
+const nopTre = (r) => r.ngayNop && new Date(r.ngayNop).setHours(0, 0, 0, 0) > new Date(r.mocThoiGian).setHours(0, 0, 0, 0)
 
 export default function NopTienDoSVPage() {
   const { maSV } = useIdentity()
   const { selectedDot, isReadOnly } = useDotThucTap()
 
   const [reports, setReports] = useState([])
+  const [placement, setPlacement] = useState(null)
   const [loading, setLoading] = useState(true)
   const [openSlotId, setOpenSlotId] = useState(null)
   const [toast, setToast] = useState(null)
@@ -28,7 +48,11 @@ export default function NopTienDoSVPage() {
     if (!maSV) return
     setLoading(true)
     try {
-      const data = await tienDoThucTapService.getTienDoBySinhVien(maSV)
+      const [data, pb] = await Promise.all([
+        tienDoThucTapService.getTienDoBySinhVien(maSV),
+        phongVanService.getPhanBoThucTap(maSV).catch(() => null),
+      ])
+      setPlacement(pb && (!selectedDot?.maDot || pb.maDot === selectedDot.maDot) ? pb : null)
       const list = Array.isArray(data) ? data : []
       // Lọc theo đợt đang chọn nếu có
       const filtered = selectedDot?.maDot ? list.filter((r) => r.maDot === selectedDot.maDot) : list
@@ -54,17 +78,24 @@ export default function NopTienDoSVPage() {
     return <NoLinkedAccount />
   }
 
+  // Chỉ nộp báo cáo khi đã có quyết định tiếp nhận và đã xác nhận nhận việc (backend cũng kiểm tra)
+  const lyDoChuaNop = !placement
+    ? 'Bạn chưa có quyết định tiếp nhận thực tập trong đợt này nên chưa thể nộp báo cáo tiến độ.'
+    : placement.trangThai === 'ChuaNhanViec'
+      ? `Bạn cần xác nhận nhận quyết định tiếp nhận tại ${placement.tenCongTy} trước khi nộp báo cáo tiến độ.`
+      : null
+
   // Mở modal nộp / sửa báo cáo
   const handleOpenSubmitModal = (slot) => {
     setSelectedSlot(slot)
-    setReportContent(slot.noiDungBaoCao || '')
+    setReportContent(slot.noiDungBaoCao || MAU_BAO_CAO)
     setModalOpen(true)
   }
 
   // Submit báo cáo
   const handleSubmitReport = async (e) => {
     e.preventDefault()
-    if (!reportContent.trim()) {
+    if (!reportContent.trim() || reportContent.trim() === MAU_BAO_CAO.trim()) {
       showToast('Vui lòng nhập nội dung báo cáo!', 'error')
       return
     }
@@ -133,7 +164,7 @@ export default function NopTienDoSVPage() {
       {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed top-20 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all animate-bounce ${
+          className={`fixed top-20 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium transition-all ${
             toast.type === 'error'
               ? 'bg-rose-50 border-rose-200 text-rose-800'
               : 'bg-emerald-50 border-emerald-200 text-emerald-800'
@@ -161,6 +192,23 @@ export default function NopTienDoSVPage() {
           </p>
         </div>
       </div>
+
+      {!loading && lyDoChuaNop && (
+        <div className="p-4 rounded-xl border bg-amber-50 border-amber-200 text-amber-800 text-sm font-medium flex flex-wrap items-center gap-2">
+          <span className="material-symbols-outlined text-[20px]">info</span>
+          <span>{lyDoChuaNop}</span>
+          {placement?.trangThai === 'ChuaNhanViec' && (
+            <Link to="/sinh-vien/lich-trinh" className="ml-auto px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold">
+              Xác nhận nhận việc
+            </Link>
+          )}
+        </div>
+      )}
+      {placement && placement.trangThai !== 'ChuaNhanViec' && (
+        <div className="text-xs text-slate-500 -mt-3">
+          Đơn vị thực tập: <strong className="text-slate-700">{placement.tenCongTy}</strong> • {PHAN_BO[placement.trangThai] || placement.trangThai}
+        </div>
+      )}
 
       {/* Bento Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -266,7 +314,7 @@ export default function NopTienDoSVPage() {
             {reports.map((rep, idx) => {
               const isOpen = openSlotId === rep.maTienDo
               const canSubmitOrEdit =
-                !isReadOnly && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
+                !isReadOnly && !lyDoChuaNop && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
 
               let statusIcon = 'pending'
               let iconColor = 'bg-slate-100 text-slate-500'
@@ -302,6 +350,16 @@ export default function NopTienDoSVPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-sm text-slate-900">Tuần {idx + 1}</span>
                           {getStatusBadge(rep.trangThaiDuyet)}
+                          {nopTre(rep) && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">
+                              Nộp trễ hạn
+                            </span>
+                          )}
+                          {!rep.ngayNop && rep.trangThaiDuyet === 'ChuaNop' && new Date(rep.mocThoiGian) < new Date().setHours(0, 0, 0, 0) && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              Quá hạn
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                           Hạn chót: {new Date(rep.mocThoiGian).toLocaleDateString('vi-VN')}
@@ -395,7 +453,7 @@ export default function NopTienDoSVPage() {
 
       {/* Modal Nộp Báo Cáo */}
       {modalOpen && selectedSlot && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs animate-in fade-in">
+        <ModalOverlay onClose={() => setModalOpen(false)}>
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 flex flex-col gap-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -418,7 +476,7 @@ export default function NopTienDoSVPage() {
                   Hạn chót: <strong>{new Date(selectedSlot.mocThoiGian).toLocaleDateString('vi-VN')}</strong>
                 </span>
                 <span>
-                  Trạng thái hiện tại: <strong>{selectedSlot.trangThaiDuyet}</strong>
+                  Trạng thái hiện tại: <strong>{BAO_CAO[selectedSlot.trangThaiDuyet] || selectedSlot.trangThaiDuyet}</strong>
                 </span>
               </div>
 
@@ -427,7 +485,7 @@ export default function NopTienDoSVPage() {
                   Nội dung công việc & Kết quả đạt được trong tuần:
                 </label>
                 <textarea
-                  rows={6}
+                  rows={12}
                   value={reportContent}
                   onChange={(e) => setReportContent(e.target.value)}
                   placeholder="Mô tả chi tiết: Nhiệm vụ được giao, công nghệ sử dụng, tiến độ hoàn thành, khó khăn gặp phải..."
@@ -455,7 +513,7 @@ export default function NopTienDoSVPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

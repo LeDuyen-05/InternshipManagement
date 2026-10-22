@@ -92,6 +92,7 @@ export default function AppRoutes() {
         <Route path="ung-vien" element={<QuanLyUngVienPage />} />
         <Route path="phong-van" element={<LichPhongVanDNPage />} />
         <Route path="danh-gia" element={<DanhGiaThucTapSinhPage />} />
+        <Route path="thong-bao" element={<ThongBaoPage />} />
       </Route>
       {/* Admin, Faculty & Lecturer Portal Routes (Wrapped with MainLayout & Guard) */}
       <Route element={<Guard><MainLayout /></Guard>}>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 
 export default function QuanLyTinTuyenDungPage() {
   const { activeCompany } = useEnterprise()
@@ -16,31 +17,46 @@ export default function QuanLyTinTuyenDungPage() {
     thoiGian: '',
     soLuongNhan: 0,
     yeuCau: '',
-    trangThai: 'DaDuyet',
   })
 
-  useEffect(() => {
-    async function fetchJobPosting() {
-      if (!activeCompany?.maCongTy) return
-      try {
-        setLoading(true)
-        const res = await doanhNghiepService.getTinTuyenDung(activeCompany.maCongTy)
-        setData(res)
-        setForm({
-          viTriTuyen: res.viTriTuyen || '',
-          thoiGian: res.thoiGian || '',
-          soLuongNhan: res.soLuongNhan || 0,
-          yeuCau: res.yeuCau || '',
-          trangThai: res.trangThai || 'DaDuyet',
-        })
-      } catch (err) {
-        console.error('Lỗi lấy tin tuyển dụng:', err)
-      } finally {
-        setLoading(false)
-      }
+  // Mở form luôn từ dữ liệu đã lưu (bấm Hủy thì bỏ các chỉnh sửa chưa lưu)
+  const moFormChinhSua = () => {
+    setForm({
+      viTriTuyen: data?.viTriTuyen || '',
+      thoiGian: data?.thoiGian || '',
+      soLuongNhan: data?.soLuongNhan || 0,
+      yeuCau: data?.yeuCau || '',
+    })
+    setShowModal(true)
+  }
+
+  const fetchJobPosting = async () => {
+    if (!activeCompany?.maCongTy) return
+    try {
+      setLoading(true)
+      const res = await doanhNghiepService.getTinTuyenDung(activeCompany.maCongTy)
+      setData(res)
+    } catch (err) {
+      console.error('Lỗi lấy tin tuyển dụng:', err)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchJobPosting()
   }, [activeCompany?.maCongTy])
+
+  // Trạng thái tuyển dụng do hệ thống tự xác định: Khoa duyệt công ty + còn/hết chỉ tiêu trong đợt
+  const chiTieu = data?.chiTieu
+  const trangThaiTuyen = chiTieu?.trangThaiTuyen
+  const dangMo = trangThaiTuyen === 'DangTuyen'
+  const nhanTrangThai = {
+    DangTuyen: 'Đang mở nhận hồ sơ',
+    DaDuChiTieu: 'Đã đủ chỉ tiêu – tự động đóng',
+    ChuaDuocDuyet: 'Chờ Khoa phê duyệt',
+    KhongCoDot: 'Chưa có đợt thực tập đang diễn ra',
+  }[trangThaiTuyen] || '—'
 
   const handleSave = async (e) => {
     e.preventDefault()
@@ -52,46 +68,23 @@ export default function QuanLyTinTuyenDungPage() {
         thoiGian: form.thoiGian,
         soLuongNhan: parseInt(form.soLuongNhan, 10),
         yeuCau: form.yeuCau,
-        trangThai: form.trangThai,
       })
-      setData((prev) => ({
-        ...prev,
-        ...form,
-        soLuongNhan: parseInt(form.soLuongNhan, 10),
-      }))
+      await fetchJobPosting()
       setToast({ type: 'success', message: 'Cập nhật tin tuyển dụng thành công!' })
       setShowModal(false)
     } catch (err) {
       console.error('Lỗi lưu tin tuyển dụng:', err)
-      setToast({ type: 'error', message: 'Không thể cập nhật tin tuyển dụng. Vui lòng thử lại.' })
+      setToast({ type: 'error', message: err.response?.data?.message || 'Không thể cập nhật tin tuyển dụng. Vui lòng thử lại.' })
     } finally {
       setSubmitting(false)
       setTimeout(() => setToast(null), 4000)
     }
   }
 
-  const handleToggleStatus = async () => {
-    const newStatus = data?.trangThai === 'TamDong' ? 'DaDuyet' : 'TamDong'
-    try {
-      await doanhNghiepService.luuTinTuyenDung({
-        maCongTy: activeCompany.maCongTy,
-        trangThai: newStatus,
-      })
-      setData((prev) => ({ ...prev, trangThai: newStatus }))
-      setToast({
-        type: 'success',
-        message: newStatus === 'TamDong' ? 'Đã tạm dừng nhận hồ sơ cho vị trí này' : 'Đã mở lại nhận hồ sơ tuyển dụng',
-      })
-    } catch (err) {
-      setToast({ type: 'error', message: 'Lỗi cập nhật trạng thái' })
-    } finally {
-      setTimeout(() => setToast(null), 4000)
-    }
-  }
-
-  // Parse skill tags from yeuCau string
+  // Tách yêu cầu thành thẻ: chỉ ngắt ở dấu phẩy/chấm phẩy/xuống dòng và dấu chấm cuối câu
+  // (giữ nguyên "Node.js", "ASP.NET", "GPA >= 2.5")
   const skillTags = data?.yeuCau
-    ? data.yeuCau.split(/[,;.\n]+/).map((s) => s.trim()).filter((s) => s.length > 1)
+    ? data.yeuCau.split(/[,;\n]+|\.(?=\s|$)/).map((s) => s.trim()).filter((s) => s.length > 1)
     : []
 
   return (
@@ -122,12 +115,12 @@ export default function QuanLyTinTuyenDungPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Quản lý Tin Tuyển Dụng Thực Tập</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Đăng ký và điều chỉnh chỉ tiêu tiếp nhận, tiêu chuẩn năng lực cho đợt thực tập tốt nghiệp HK2 (2026 - 2027)
+            Đăng ký và điều chỉnh chỉ tiêu tiếp nhận, tiêu chuẩn năng lực cho {data?.chiTieu?.tenDot || 'đợt thực tập tốt nghiệp đang diễn ra'}
           </p>
         </div>
         <button
           type="button"
-          onClick={() => setShowModal(true)}
+          onClick={moFormChinhSua}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow-sm transition-all"
         >
           <span className="material-symbols-outlined text-[18px]">edit_note</span>
@@ -140,7 +133,7 @@ export default function QuanLyTinTuyenDungPage() {
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Chỉ tiêu tiếp nhận</div>
           <div className="text-2xl font-black text-indigo-700 mt-2">{data?.soLuongNhan != null ? data.soLuongNhan : 0} <span className="text-xs font-normal text-slate-500">TTS</span></div>
-          <div className="text-[11px] text-slate-400 mt-1">Được Khoa CNTT phê duyệt</div>
+          <div className="text-[11px] text-slate-400 mt-1">{chiTieu?.tenDot || 'Đợt thực tập đang diễn ra'}</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
@@ -159,15 +152,15 @@ export default function QuanLyTinTuyenDungPage() {
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Trạng thái tuyển dụng</div>
           <div className="mt-2">
             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
-              data?.trangThai === 'TamDong'
-                ? 'bg-rose-100 text-rose-800'
-                : 'bg-emerald-100 text-emerald-800'
+              dangMo ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
             }`}>
-              <span className={`w-2 h-2 rounded-full ${data?.trangThai === 'TamDong' ? 'bg-rose-500' : 'bg-emerald-500 animate-pulse'}`}></span>
-              {data?.trangThai === 'TamDong' ? 'Tạm đóng nhận CV' : 'Đang mở nhận CV'}
+              <span className={`w-2 h-2 rounded-full ${dangMo ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
+              {nhanTrangThai}
             </span>
           </div>
-          <div className="text-[11px] text-slate-400 mt-1.5">Hiển thị trên Cổng Sinh viên</div>
+          <div className="text-[11px] text-slate-400 mt-1.5">
+            {chiTieu ? `Đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} — tự đóng khi đủ chỉ tiêu` : 'Hiển thị trên Cổng Sinh viên'}
+          </div>
         </div>
       </div>
 
@@ -199,18 +192,7 @@ export default function QuanLyTinTuyenDungPage() {
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
-              onClick={handleToggleStatus}
-              className={`px-3 py-2 rounded-xl text-xs font-semibold border transition-all ${
-                data?.trangThai === 'TamDong'
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                  : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
-              }`}
-            >
-              {data?.trangThai === 'TamDong' ? 'Mở lại tin tuyển dụng' : 'Tạm đóng tin tuyển'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
+              onClick={moFormChinhSua}
               className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
             >
               Chỉnh sửa
@@ -238,21 +220,8 @@ export default function QuanLyTinTuyenDungPage() {
           </div>
         </div>
 
-        {/* Benefits & Environment */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-          <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
-            <div className="font-bold text-xs text-slate-800 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px] text-emerald-600">redeem</span>
-              <span>Chế độ & Quyền lợi thực tập</span>
-            </div>
-            <ul className="text-xs text-slate-600 space-y-1.5 list-disc list-inside">
-              <li>Hỗ trợ phụ cấp thực tập hàng tháng theo quy định doanh nghiệp</li>
-              <li>Được phân công Mentor Senior hướng dẫn 1-1 trong suốt kỳ thực tập</li>
-              <li>Tham gia trực tiếp vào các dự án sản phẩm thực tế của công ty</li>
-              <li>Cơ hội xét duyệt trở thành Nhân viên chính thức sau khi tốt nghiệp</li>
-            </ul>
-          </div>
-
+        {/* Người phụ trách tiếp nhận (dữ liệu đại diện doanh nghiệp) */}
+        <div className="pt-4 border-t border-slate-100">
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
             <div className="font-bold text-xs text-slate-800 flex items-center gap-2">
               <span className="material-symbols-outlined text-[18px] text-indigo-600">contact_mail</span>
@@ -269,7 +238,7 @@ export default function QuanLyTinTuyenDungPage() {
 
       {/* Modal chỉnh sửa tin tuyển dụng */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <ModalOverlay onClose={() => setShowModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
               <h3 className="font-bold text-slate-800 text-sm">Cập nhật Tin Tuyển Dụng Thực Tập</h3>
@@ -300,23 +269,16 @@ export default function QuanLyTinTuyenDungPage() {
                   <label className="block font-semibold text-slate-700 mb-1">Chỉ tiêu nhận (SV) *</label>
                   <input
                     type="number"
-                    min="1"
+                    min={Math.max(1, chiTieu?.daTiepNhan || 0)}
                     required
                     value={form.soLuongNhan}
                     onChange={(e) => setForm({ ...form, soLuongNhan: e.target.value })}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
                   />
                 </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Trạng thái tin</label>
-                  <select
-                    value={form.trangThai}
-                    onChange={(e) => setForm({ ...form, trangThai: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-600"
-                  >
-                    <option value="DaDuyet">Đang mở nhận hồ sơ</option>
-                    <option value="TamDong">Tạm đóng nhận hồ sơ</option>
-                  </select>
+                <div className="text-[11px] text-slate-500 self-end pb-2">
+                  Trạng thái nhận hồ sơ do hệ thống tự động đóng khi đã tiếp nhận đủ chỉ tiêu
+                  {chiTieu ? ` (hiện đã nhận ${chiTieu.daTiepNhan}).` : '.'} Tăng chỉ tiêu sẽ mở lại đợt tuyển.
                 </div>
               </div>
 
@@ -361,7 +323,7 @@ export default function QuanLyTinTuyenDungPage() {
               </div>
             </form>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   )

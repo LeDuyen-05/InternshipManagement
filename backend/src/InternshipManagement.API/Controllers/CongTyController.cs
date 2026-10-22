@@ -24,6 +24,15 @@ public class CongTyController : ControllerBase
         return Ok(list);
     }
 
+    /// <summary>Các doanh nghiệp sinh viên đang đăng nhập đã tự đề xuất, kèm trạng thái Khoa duyệt.</summary>
+    [HttpGet("de-xuat/cua-toi")]
+    [Authorize(Roles = Roles.SinhVien)]
+    public async Task<IActionResult> GetDeXuatCuaToi()
+    {
+        var maSV = User.MaSV() ?? throw new UnauthorizedAccessException();
+        return Ok(await _service.GetDeXuatCuaSinhVienAsync(maSV));
+    }
+
     [HttpPost("de-xuat")]
     [Authorize(Roles = Roles.SinhVien)]
     public async Task<IActionResult> DeXuatCongTy([FromBody] DeXuatCongTyRequest request)

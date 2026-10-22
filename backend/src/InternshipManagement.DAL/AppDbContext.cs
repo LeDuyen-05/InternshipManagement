@@ -62,6 +62,7 @@ public class AppDbContext : DbContext
             e.ToTable("CONGTY");
             e.HasKey(x => x.MaCongTy);
             e.Property(x => x.ThoiGian).HasMaxLength(100);
+            e.Property(x => x.MaSVDeXuat).HasColumnName("maSVDeXuat").HasMaxLength(20);
         });
 
         modelBuilder.Entity<DaiDienDoanhNghiep>(e =>
@@ -143,6 +144,10 @@ public class AppDbContext : DbContext
             e.Property(x => x.NoiDung).HasColumnName("noiDung");
             e.Property(x => x.NgayTao).HasColumnName("ngayTao");
             e.Property(x => x.MaNguoiGui).HasColumnName("maNguoiGui");
+            e.Property(x => x.DoiTuong).HasColumnName("doiTuong");
+            e.Property(x => x.LoaiThongBao).HasColumnName("loaiThongBao");
+            e.Property(x => x.TepDinhKem).HasColumnName("tepDinhKem");
+            e.Property(x => x.Ghim).HasColumnName("ghim");
         });
 
         modelBuilder.Entity<GoiYCongTy>(e =>

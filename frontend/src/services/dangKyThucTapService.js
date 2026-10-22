@@ -13,6 +13,18 @@ export const dangKyThucTapService = {
     return res.data
   },
 
+  // Các doanh nghiệp sinh viên đã tự đề xuất (kèm trạng thái Khoa thẩm định)
+  getDeXuatCuaToi: async () => {
+    const res = await apiClient.get('/CongTy/de-xuat/cua-toi')
+    return res.data
+  },
+
+  // Điều kiện đăng ký nguyện vọng trong đợt (đã trúng tuyển / đã hoàn thành học phần thì không được)
+  getDieuKien: async (maDot) => {
+    const res = await apiClient.get('/DangKyThucTap/dieu-kien', { params: { maDot } })
+    return res.data
+  },
+
   // Lấy danh sách nguyện vọng của sinh viên
   getDangKyBySinhVien: async (maSV) => {
     const res = await apiClient.get(`/DangKyThucTap/sinhvien/${maSV}`)

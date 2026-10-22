@@ -4,7 +4,6 @@ import { gvHuongDanService } from '../../services/gvHuongDanService'
 
 export default function PhanCongGVHDPage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('phan-cong') // 'phan-cong' | 'lich-su'
   const [sinhViens, setSinhViens] = useState([])
   const [giangViens, setGiangViens] = useState([])
   const [loading, setLoading] = useState(false)
@@ -26,6 +25,8 @@ export default function PhanCongGVHDPage() {
   const [loadingAutoAssign, setLoadingAutoAssign] = useState(false)
   const [autoPreviewData, setAutoPreviewData] = useState(null)
   const [confirmingAuto, setConfirmingAuto] = useState(false)
+  // Các dòng đề xuất: Khoa có thể bỏ chọn hoặc đổi GV trước khi lưu hàng loạt
+  const [autoRows, setAutoRows] = useState([])
 
   // Tải dữ liệu ban đầu
   const loadData = async () => {
@@ -148,6 +149,7 @@ export default function PhanCongGVHDPage() {
       const res = await gvHuongDanService.deXuatPhanCongTuDong()
       if (res.data?.success) {
         setAutoPreviewData(res.data.data)
+        setAutoRows((res.data.data.danhSachDeXuat || []).map((x) => ({ ...x, chon: true })))
         setShowAutoModal(true)
       }
     } catch (err) {
@@ -159,18 +161,19 @@ export default function PhanCongGVHDPage() {
 
   // 2. Chốt lưu phân công tự động vào cơ sở dữ liệu SQL Server
   const handleConfirmAutoAssign = async () => {
-    if (!autoPreviewData || autoPreviewData.danhSachDeXuat.length === 0) return
+    const payload = autoRows.filter((x) => x.chon).map((item) => ({ maGV: item.maGV, maSV: item.maSV }))
+    if (payload.length === 0) return
     try {
       setConfirmingAuto(true)
-      const payload = autoPreviewData.danhSachDeXuat.map((item) => ({
-        maGV: item.maGV,
-        maSV: item.maSV,
-      }))
-
       const res = await gvHuongDanService.xacNhanPhanCongTuDong(payload)
       if (res.data?.success) {
+        const ok = res.data.data?.thanhCong?.length || 0
+        const fail = res.data.data?.khongThanhCong || []
         setShowAutoModal(false)
-        setSuccessMsg(`Đã phân công tự động thành công cho ${payload.length} sinh viên!`)
+        setSuccessMsg(
+          `Đã phân công ${ok} sinh viên.` +
+            (fail.length ? ` Không thực hiện: ${fail.map((f) => `${f.maSV} (${f.lyDo})`).join(', ')}` : '')
+        )
         await loadData()
       }
     } catch (err) {
@@ -370,9 +373,18 @@ export default function PhanCongGVHDPage() {
                         <span className="material-symbols-outlined text-xs text-slate-400">apartment</span>
                         {sv?.tenCongTy || 'Chưa có DN tiếp nhận'}
                       </div>
-                      <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 mt-1 inline-block">
-                        Chưa có GVHD
-                      </span>
+                      {sv.gvGioiThieu?.length > 0 ? (
+                        <span
+                          className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 mt-1 inline-block"
+                          title="Giảng viên đã giới thiệu doanh nghiệp này – được ưu tiên làm GVHD"
+                        >
+                          Ưu tiên GV giới thiệu: {sv.gvGioiThieu.join(', ')}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 mt-1 inline-block">
+                          Chưa có GVHD
+                        </span>
+                      )}
                     </div>
                   </div>
                 )
@@ -563,7 +575,7 @@ export default function PhanCongGVHDPage() {
                     Đề Xuất Phân Công Tự Động (Smart Match & Cân Bằng Tải)
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Hệ thống tự động rà soát chuyên môn và hạn ngạch còn trống của từng giảng viên
+                    Thứ tự ưu tiên: (1) GV đã giới thiệu doanh nghiệp → (2) phù hợp chuyên môn → (3) cân bằng chỉ tiêu. Có thể đổi GV hoặc bỏ chọn từng dòng trước khi lưu.
                   </p>
                 </div>
               </div>
@@ -598,6 +610,14 @@ export default function PhanCongGVHDPage() {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold sticky top-0">
                     <tr>
+                      <th className="py-2.5 px-3">
+                        <input
+                          type="checkbox"
+                          checked={autoRows.length > 0 && autoRows.every((x) => x.chon)}
+                          onChange={(e) => setAutoRows((rows) => rows.map((x) => ({ ...x, chon: e.target.checked })))}
+                          className="rounded text-indigo-600 w-4 h-4"
+                        />
+                      </th>
                       <th className="py-2.5 px-3">Sinh viên</th>
                       <th className="py-2.5 px-3">Đơn vị thực tập</th>
                       <th className="py-2.5 px-3">GVHD đề xuất</th>
@@ -605,8 +625,18 @@ export default function PhanCongGVHDPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {autoPreviewData.danhSachDeXuat.map((item) => (
-                      <tr key={item.maSV} className="hover:bg-slate-50/70">
+                    {autoRows.map((item) => (
+                      <tr key={item.maSV} className={`hover:bg-slate-50/70 ${item.chon ? '' : 'opacity-50'}`}>
+                        <td className="py-2.5 px-3">
+                          <input
+                            type="checkbox"
+                            checked={item.chon}
+                            onChange={(e) =>
+                              setAutoRows((rows) => rows.map((x) => (x.maSV === item.maSV ? { ...x, chon: e.target.checked } : x)))
+                            }
+                            className="rounded text-indigo-600 w-4 h-4"
+                          />
+                        </td>
                         <td className="py-2.5 px-3">
                           <p className="font-bold text-slate-900">{item.hoTenSV}</p>
                           <p className="text-[11px] text-slate-400 font-mono">{item.maSV} • {item.lop}</p>
@@ -615,11 +645,42 @@ export default function PhanCongGVHDPage() {
                           {item.tenCongTy}
                         </td>
                         <td className="py-2.5 px-3">
-                          <p className="font-bold text-indigo-700">{item.hoTenGV}</p>
-                          <p className="text-[11px] text-slate-400">{item.chuyenMonGV}</p>
+                          <select
+                            value={item.maGV}
+                            onChange={(e) => {
+                              const gv = giangViens.find((g) => g.maGV === e.target.value)
+                              setAutoRows((rows) =>
+                                rows.map((x) =>
+                                  x.maSV === item.maSV
+                                    ? { ...x, maGV: gv.maGV, hoTenGV: gv.hoTen, chuyenMonGV: gv.chuyenMon, lyDoGhep: 'Khoa chọn thủ công', mucUuTien: 0 }
+                                    : x
+                                )
+                              )
+                            }}
+                            className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs font-semibold text-indigo-700"
+                          >
+                            {giangViens.map((g) => {
+                              const quota = g.chiTieu ?? g.soLuongSVHD ?? 10
+                              const daDung = g.soLuongHienTai + autoRows.filter((x) => x.chon && x.maGV === g.maGV && x.maSV !== item.maSV).length
+                              return (
+                                <option key={g.maGV} value={g.maGV} disabled={daDung >= quota && g.maGV !== item.maGV}>
+                                  {g.hoTen} ({daDung}/{quota})
+                                </option>
+                              )
+                            })}
+                          </select>
+                          <p className="text-[11px] text-slate-400 mt-0.5">{item.chuyenMonGV}</p>
                         </td>
                         <td className="py-2.5 px-3">
-                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                              item.mucUuTien === 1
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                : item.mucUuTien === 2
+                                ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                : 'bg-slate-50 text-slate-600 border-slate-200'
+                            }`}
+                          >
                             {item.lyDoGhep}
                           </span>
                         </td>
@@ -648,11 +709,11 @@ export default function PhanCongGVHDPage() {
               <button
                 type="button"
                 onClick={handleConfirmAutoAssign}
-                disabled={confirmingAuto || autoPreviewData.danhSachDeXuat.length === 0}
+                disabled={confirmingAuto || !autoRows.some((x) => x.chon)}
                 className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl flex items-center gap-1.5 shadow-sm"
               >
                 {confirmingAuto && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                <span>Xác nhận & Lưu vào CSDL ({autoPreviewData.danhSachDeXuat.length} SV)</span>
+                <span>Xác nhận phân công ({autoRows.filter((x) => x.chon).length} SV)</span>
               </button>
             </div>
           </div>

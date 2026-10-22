@@ -52,15 +52,15 @@ public class HoSoNangLucService : IHoSoNangLucService
         s.DuAnDaThucHien is null ? null : $"Dự án: {s.DuAnDaThucHien}"
     }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
-    public async Task<HoSoNangLucDto> UpdateHoSoAsync(string maSV, UpdateHoSoNangLucRequest request)
+    public async Task<HoSoNangLucDto> UpdateHoSoAsync(string maSV, UpdateHoSoNangLucRequest request, bool laKhoa = false)
     {
         var sv = await _sinhVienRepository.GetByIdAsync(maSV)
             ?? throw new NotFoundException("SinhVien", maSV);
 
-        if (string.IsNullOrWhiteSpace(request.HoTen))
+        if (laKhoa && string.IsNullOrWhiteSpace(request.HoTen))
             throw new ArgumentException("Họ tên sinh viên không được để trống.");
 
-        if (request.Gpa.HasValue && (request.Gpa.Value < 0 || request.Gpa.Value > 4.0))
+        if (laKhoa && request.Gpa.HasValue && (request.Gpa.Value < 0 || request.Gpa.Value > 4.0))
             throw new ArgumentException("Điểm GPA phải nằm trong khoảng từ 0.0 đến 4.0.");
 
         if (!string.IsNullOrWhiteSpace(request.FileCV))
@@ -77,12 +77,17 @@ public class HoSoNangLucService : IHoSoNangLucService
         if (request.KyNang?.Length > 500) throw new ArgumentException("Kỹ năng không được vượt quá 500 ký tự.");
         if (request.DuAnDaThucHien?.Length > 1000) throw new ArgumentException("Dự án đã thực hiện không được vượt quá 1000 ký tự.");
 
-        sv.HoTen = request.HoTen.Trim();
-        if (request.Lop != null) sv.Lop = string.IsNullOrWhiteSpace(request.Lop) ? null : request.Lop.Trim();
-        if (request.KhoaHoc != null) sv.KhoaHoc = string.IsNullOrWhiteSpace(request.KhoaHoc) ? null : request.KhoaHoc.Trim();
-        sv.Gpa = request.Gpa.HasValue ? (decimal)request.Gpa.Value : null;
+        // Họ tên, lớp, khóa, chuyên ngành, GPA là dữ liệu học vụ do Khoa quản lý (doanh nghiệp xét GPA
+        // khi tuyển) → sinh viên gửi lên cũng bị bỏ qua.
+        if (laKhoa)
+        {
+            sv.HoTen = request.HoTen!.Trim();
+            if (request.Lop != null) sv.Lop = string.IsNullOrWhiteSpace(request.Lop) ? null : request.Lop.Trim();
+            if (request.KhoaHoc != null) sv.KhoaHoc = string.IsNullOrWhiteSpace(request.KhoaHoc) ? null : request.KhoaHoc.Trim();
+            sv.Gpa = request.Gpa.HasValue ? (decimal)request.Gpa.Value : null;
+            if (request.ChuyenNganh != null) sv.ChuyenNganh = string.IsNullOrWhiteSpace(request.ChuyenNganh) ? null : request.ChuyenNganh.Trim();
+        }
         if (request.KyNang != null) sv.KyNang = string.IsNullOrWhiteSpace(request.KyNang) ? null : request.KyNang.Trim();
-        if (request.ChuyenNganh != null) sv.ChuyenNganh = string.IsNullOrWhiteSpace(request.ChuyenNganh) ? null : request.ChuyenNganh.Trim();
         if (request.CongNghe != null) sv.CongNghe = string.IsNullOrWhiteSpace(request.CongNghe) ? null : request.CongNghe.Trim();
         if (request.DuAnDaThucHien != null) sv.DuAnDaThucHien = string.IsNullOrWhiteSpace(request.DuAnDaThucHien) ? null : request.DuAnDaThucHien.Trim();
 

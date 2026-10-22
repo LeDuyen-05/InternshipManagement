@@ -20,9 +20,9 @@ public class PhieuChamDiemController : ControllerBase
     }
 
     [HttpGet("tieu-chi")]
-    public async Task<IActionResult> GetDanhSachTieuChi()
+    public async Task<IActionResult> GetDanhSachTieuChi([FromQuery] string? nhom)
     {
-        var result = await _service.GetDanhSachTieuChiAsync();
+        var result = await _service.GetDanhSachTieuChiAsync(nhom);
         return Ok(new { success = true, data = result });
     }
 
@@ -44,6 +44,16 @@ public class PhieuChamDiemController : ControllerBase
     {
         if (!_access.IsLecturer(User, maGV)) return Forbid();
         var result = await _service.GetDanhSachPhieuChamByGiangVienAsync(maGV, maDot);
+        return Ok(new { success = true, data = result });
+    }
+
+    /// <summary>Bảng điểm theo mẫu file chấm điểm của Khoa (Khoa: toàn đợt; GV: SV mình hướng dẫn).</summary>
+    [HttpGet("bang-diem")]
+    [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
+    public async Task<IActionResult> GetBangDiem([FromQuery] string maDot, [FromQuery] string? maGV)
+    {
+        if (!User.IsStaff()) maGV = User.MaGV() ?? throw new UnauthorizedAccessException();
+        var result = await _service.GetBangDiemAsync(maDot, maGV);
         return Ok(new { success = true, data = result });
     }
 

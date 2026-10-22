@@ -141,13 +141,57 @@ public class AdminService
     public Task<List<CongTy>> CompaniesAsync() => _db.CongTys.AsNoTracking().OrderBy(x => x.MaCongTy).ToListAsync();
     public Task<List<DotThucTap>> RoundsAsync() => _db.DotThucTaps.AsNoTracking().OrderByDescending(x => x.ThoiGianBD).ToListAsync();
     public Task<List<VaiTro>> RolesAsync() => _db.VaiTros.AsNoTracking().OrderBy(x => x.MaVaiTro).ToListAsync();
-    public Task<List<TieuChi>> CriteriaAsync() => _db.TieuChis.AsNoTracking().OrderBy(x => x.MaTieuChi).ToListAsync();
-    public Task<List<ThongBao>> NotificationsAsync() => _db.ThongBaos.AsNoTracking().OrderByDescending(x => x.NgayTao).Take(50).ToListAsync();
+    public Task<List<TieuChi>> CriteriaAsync() => _db.TieuChis.AsNoTracking()
+        .OrderBy(x => x.NhomDanhGia == null).ThenBy(x => x.ThuTu).ThenBy(x => x.MaTieuChi).ToListAsync();
+
+    private static string ValidateNhom(string? nhom) => nhom?.Trim().ToUpperInvariant() switch
+    {
+        "GV" => "GV",
+        "DN" => "DN",
+        _ => throw new InvalidOperationException("Nhóm đánh giá chỉ nhận GV (giảng viên chấm) hoặc DN (đơn vị thực tập chấm).")
+    };
+    public Task<List<ThongBao>> NotificationsAsync(string? targetRole = null)
+    {
+        var q = _db.ThongBaos.AsNoTracking();
+        if (!string.IsNullOrEmpty(targetRole) && targetRole is not ("Khoa" or "Admin" or "VT01" or "VT02"))
+        {
+            var r = targetRole.Trim().ToLowerInvariant();
+            if (r is not ("khoa" or "admin" or "vt01" or "vt02"))
+            {
+                string? code = null;
+                if (r.Contains("sinhvien") || r.Contains("sinh vien") || r == "vt04" || r == "sv") code = "SV";
+                else if (r.Contains("giangvien") || r.Contains("giang vien") || r == "vt03" || r == "gv") code = "GV";
+                else if (r.Contains("doanhnghiep") || r.Contains("doanh nghiep") || r == "vt05" || r == "dn") code = "DN";
+
+                if (code != null)
+                {
+                    q = q.Where(x => x.DoiTuong == null || x.DoiTuong == "ALL" || x.DoiTuong == code);
+                }
+            }
+        }
+        return q.OrderByDescending(x => x.Ghim == true).ThenByDescending(x => x.NgayTao).Take(50).ToListAsync();
+    }
+
     public async Task SendNotificationAsync(SendNotificationRequest request, string? senderId)
     {
         if (string.IsNullOrWhiteSpace(request.TieuDe) || string.IsNullOrWhiteSpace(request.NoiDung)) throw new InvalidOperationException("Tiêu đề và nội dung thông báo không được để trống.");
         if (request.TieuDe.Trim().Length > 200) throw new InvalidOperationException("Tiêu đề không được vượt quá 200 ký tự.");
-        _db.ThongBaos.Add(new ThongBao { MaThongBao = $"TB{Guid.NewGuid():N}"[..20], TieuDe = request.TieuDe.Trim(), NoiDung = request.NoiDung.Trim(), NgayTao = DateTime.Now, MaNguoiGui = senderId });
+        var doiTuong = string.IsNullOrWhiteSpace(request.DoiTuong) ? "ALL" : request.DoiTuong.Trim();
+        var loaiThongBao = string.IsNullOrWhiteSpace(request.LoaiThongBao) ? "Chung" : request.LoaiThongBao.Trim();
+        var tepDinhKem = string.IsNullOrWhiteSpace(request.TepDinhKem) ? null : request.TepDinhKem.Trim();
+
+        _db.ThongBaos.Add(new ThongBao
+        {
+            MaThongBao = $"TB{Guid.NewGuid():N}"[..20],
+            TieuDe = request.TieuDe.Trim(),
+            NoiDung = request.NoiDung.Trim(),
+            NgayTao = DateTime.Now,
+            MaNguoiGui = senderId,
+            DoiTuong = doiTuong,
+            LoaiThongBao = loaiThongBao,
+            TepDinhKem = tepDinhKem,
+            Ghim = request.Ghim
+        });
         await _db.SaveChangesAsync();
     }
 
@@ -163,18 +207,20 @@ public class AdminService
     public async Task CreateCriteriaAsync(SaveCriteriaRequest request)
     {
         if (request.DiemToiDa <= 0) throw new InvalidOperationException("Điểm tối đa phải lớn hơn 0.");
-        if ((await _db.TieuChis.SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
+        var nhom = ValidateNhom(request.NhomDanhGia);
+        if ((await _db.TieuChis.Where(x => x.NhomDanhGia != null).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
         if (await _db.TieuChis.AnyAsync(x => x.MaTieuChi == request.MaTieuChi)) throw new InvalidOperationException("Mã tiêu chí đã tồn tại.");
-        _db.TieuChis.Add(new TieuChi { MaTieuChi = request.MaTieuChi, TenTieuChi = request.TenTieuChi, DiemToiDa = (decimal)request.DiemToiDa });
+        _db.TieuChis.Add(new TieuChi { MaTieuChi = request.MaTieuChi, TenTieuChi = request.TenTieuChi, DiemToiDa = (decimal)request.DiemToiDa, NhomDanhGia = nhom, ThuTu = request.ThuTu });
         await _db.SaveChangesAsync();
     }
 
     public async Task UpdateCriteriaAsync(string id, SaveCriteriaRequest request)
     {
         if (request.DiemToiDa <= 0) throw new InvalidOperationException("Điểm tối đa phải lớn hơn 0.");
-        if ((await _db.TieuChis.Where(x => x.MaTieuChi != id).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
+        var nhom = ValidateNhom(request.NhomDanhGia);
+        if ((await _db.TieuChis.Where(x => x.MaTieuChi != id && x.NhomDanhGia != null).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
         var item = await _db.TieuChis.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tiêu chí.");
-        item.TenTieuChi = request.TenTieuChi; item.DiemToiDa = (decimal)request.DiemToiDa;
+        item.TenTieuChi = request.TenTieuChi; item.DiemToiDa = (decimal)request.DiemToiDa; item.NhomDanhGia = nhom; item.ThuTu = request.ThuTu;
         await _db.SaveChangesAsync();
     }
 
@@ -188,7 +234,7 @@ public class AdminService
     public async Task SaveAssessmentAsync(string id, SaveAssessmentRequest request)
     {
         var assessment = await _db.PhieuChamDiems.FirstOrDefaultAsync(x => x.MaPhieu == id) ?? throw new KeyNotFoundException("Không tìm thấy phiếu chấm.");
-        var criteria = await _db.TieuChis.AsNoTracking().ToDictionaryAsync(x => x.MaTieuChi);
+        var criteria = await _db.TieuChis.AsNoTracking().Where(x => x.NhomDanhGia != null).ToDictionaryAsync(x => x.MaTieuChi);
         if (request.ChiTiet.Select(x => x.MaTieuChi).Distinct().Count() != request.ChiTiet.Count) throw new InvalidOperationException("Phiếu có tiêu chí bị lặp.");
         foreach (var score in request.ChiTiet)
         {
@@ -203,7 +249,8 @@ public class AdminService
             if (detail == null) _db.ChiTietChamDiems.Add(new ChiTietChamDiem { MaSo = InternshipManagement.DAL.Common.IdGenerator.New("CT"), MaPhieu = id, MaTieuChi = score.MaTieuChi, DiemCham = (decimal)score.DiemCham });
             else detail.DiemCham = (decimal)score.DiemCham;
         }
-        assessment.TongDiem = (decimal)request.ChiTiet.Sum(x => x.DiemCham);
+        await _db.SaveChangesAsync();
+        assessment.TongDiem = await _db.ChiTietChamDiems.Where(x => x.MaPhieu == id && x.TieuChi.NhomDanhGia != null).SumAsync(x => (decimal?)x.DiemCham) ?? 0;
         assessment.NgayCham = DateTime.Today;
         await _db.SaveChangesAsync();
     }
@@ -217,10 +264,10 @@ public class AdminService
         var students = await _db.SinhViens.AsNoTracking().Where(x => studentIds.Contains(x.MaSV)).ToDictionaryAsync(x => x.MaSV, x => new { x.HoTen, x.Lop });
         var roundIds = assessments.Select(x => x.MaDot).Distinct().ToList();
         var roundNames = await _db.DotThucTaps.AsNoTracking().Where(x => roundIds.Contains(x.MaSo)).ToDictionaryAsync(x => x.MaSo, x => x.TenDot);
-        var criteria = await _db.TieuChis.AsNoTracking().OrderBy(x => x.MaTieuChi).Select(x => new { x.MaTieuChi, x.TenTieuChi, x.DiemToiDa }).ToListAsync();
+        var criteria = await _db.TieuChis.AsNoTracking().Where(x => x.NhomDanhGia != null).OrderBy(x => x.ThuTu).Select(x => new { x.MaTieuChi, x.TenTieuChi, x.DiemToiDa, x.NhomDanhGia }).ToListAsync();
         var assessmentIds = assessments.Select(x => x.MaPhieu).ToList();
         var details = assessmentIds.Count == 0 ? new List<ChiTietChamDiem>() : await _db.ChiTietChamDiems.AsNoTracking().Where(x => assessmentIds.Contains(x.MaPhieu)).ToListAsync();
-        var byCriteria = criteria.Select(c => new { c.MaTieuChi, c.TenTieuChi, c.DiemToiDa, submissions = details.Count(x => x.MaTieuChi == c.MaTieuChi), average = (double)(details.Where(x => x.MaTieuChi == c.MaTieuChi).Select(x => (decimal?)x.DiemCham).Average() ?? 0) }).ToList();
+        var byCriteria = criteria.Select(c => new { c.MaTieuChi, c.TenTieuChi, c.DiemToiDa, c.NhomDanhGia, submissions = details.Count(x => x.MaTieuChi == c.MaTieuChi), average = (double)(details.Where(x => x.MaTieuChi == c.MaTieuChi).Select(x => (decimal?)x.DiemCham).Average() ?? 0) }).ToList();
         var rows = assessments.Select(x => new { x.MaPhieu, MaSinhVien = x.MaSV, sinhVien = students.TryGetValue(x.MaSV, out var s) ? s.HoTen : x.MaSV, lop = students.TryGetValue(x.MaSV, out var sv) ? sv.Lop : "", x.MaDot, dot = roundNames.TryGetValue(x.MaDot, out var name) ? name : x.MaDot, tongDiem = x.TongDiem, x.NgayCham, chiTiet = details.Where(d => d.MaPhieu == x.MaPhieu).Select(d => new { maTieuChi = d.MaTieuChi, diemCham = d.DiemCham }) }).OrderByDescending(x => x.tongDiem).ToList();
         var scored = assessments.Where(x => x.TongDiem.HasValue).Select(x => (double)x.TongDiem!.Value).ToList();
         return new { criteria = byCriteria, assessments = rows, total = assessments.Count, averageScore = scored.Count == 0 ? 0 : Math.Round(scored.Average(), 2), complete = assessments.Count(x => x.TongDiem.HasValue), pending = assessments.Count(x => !x.TongDiem.HasValue), scoreDistribution = new[] { new { label = "Dưới 5", count = scored.Count(x => x < 5) }, new { label = "5–6.9", count = scored.Count(x => x >= 5 && x < 7) }, new { label = "7–8.4", count = scored.Count(x => x >= 7 && x < 8.5) }, new { label = "8.5–10", count = scored.Count(x => x >= 8.5) } } };

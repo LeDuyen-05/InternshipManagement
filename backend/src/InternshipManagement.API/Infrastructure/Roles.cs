@@ -15,6 +15,7 @@ public static class ClaimsPrincipalExtensions
 {
     public static string? MaSV(this ClaimsPrincipal u) => Clean(u.FindFirst("maSV")?.Value);
     public static string? MaGV(this ClaimsPrincipal u) => Clean(u.FindFirst("maGV")?.Value);
+    public static string? MaDaiDien(this ClaimsPrincipal u) => Clean(u.FindFirst("maDaiDien")?.Value);
     public static string? MaTaiKhoan(this ClaimsPrincipal u) =>
         u.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? u.FindFirst("sub")?.Value;
     public static bool IsStaff(this ClaimsPrincipal u) => u.IsInRole(Roles.Khoa);
