@@ -10,6 +10,11 @@ export const thongKeService = {
     })
   },
 
+  // 1b. Lấy danh sách đợt thực tập trực tiếp từ database
+  getDanhSachDotThucTap: () => {
+    return apiClient.get(`${API_ROUTES.THONG_KE}/dot-thuc-tap`)
+  },
+
   // 2. Lấy link tải file CSV từ backend
   getExportCsvUrl: (maDot) => {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'

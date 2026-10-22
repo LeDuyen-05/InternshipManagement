@@ -2,8 +2,8 @@ import apiClient from './api'
 import { API_ROUTES } from '../constants/apiRoutes'
 
 export const phieuChamDiemService = {
-  getDanhSachTieuChi: () => {
-    return apiClient.get(`${API_ROUTES.PHIEU_CHAM_DIEM}/tieu-chi`)
+  getDanhSachTieuChi: (maDot) => {
+    return apiClient.get(`${API_ROUTES.PHIEU_CHAM_DIEM}/tieu-chi`, { params: { maDot } })
   },
 
   getPhieuChamBySinhVien: (maSV, maDot) => {
