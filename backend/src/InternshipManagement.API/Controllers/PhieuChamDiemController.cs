@@ -16,9 +16,11 @@ public class PhieuChamDiemController : ControllerBase
     }
 
     [HttpGet("tieu-chi")]
-    public async Task<IActionResult> GetDanhSachTieuChi()
+    public async Task<IActionResult> GetDanhSachTieuChi([FromQuery] string maDot)
     {
-        var result = await _service.GetDanhSachTieuChiAsync();
+        if (string.IsNullOrWhiteSpace(maDot))
+            return BadRequest(new { success = false, message = "Mã đợt thực tập là bắt buộc." });
+        var result = await _service.GetDanhSachTieuChiAsync(maDot);
         return Ok(new { success = true, data = result });
     }
 

@@ -36,6 +36,14 @@ public class GVHuongDanController : ControllerBase
         return Ok(new { success = true, data = list, message = "Lấy danh sách tải công việc giảng viên thành công" });
     }
 
+    
+    [HttpGet("khoa/tat-ca-phan-cong")]
+    public async Task<IActionResult> GetTatCaPhanCong()
+    {
+        var list = await _service.GetTatCaPhanCongAsync();
+        return Ok(new { success = true, data = list, message = "Lấy danh sách tất cả phân công thành công" });
+    }
+
     [HttpPost("khoa/phan-cong")]
     public async Task<IActionResult> PhanCongDonLe([FromBody] PhanCongDonLeRequest request)
     {
@@ -121,11 +129,18 @@ public class GVHuongDanController : ControllerBase
     [HttpDelete("khoa/huy/{maSo}")]
     public async Task<IActionResult> HuyPhanCong(string maSo)
     {
-        var success = await _service.HuyPhanCongAsync(maSo);
-        if (!success)
-            return NotFound(new { success = false, message = "Không tìm thấy bản ghi phân công" });
+        try
+        {
+            var success = await _service.HuyPhanCongAsync(maSo);
+            if (!success)
+                return NotFound(new { success = false, message = "Không tìm thấy bản ghi phân công" });
 
-        return Ok(new { success = true, message = "Hủy phân công thành công" });
+            return Ok(new { success = true, message = "Hủy phân công thành công" });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = ex.Message });
+        }
     }
 
     [HttpPut("khoa/giang-vien/{maGV}/chi-tieu")]

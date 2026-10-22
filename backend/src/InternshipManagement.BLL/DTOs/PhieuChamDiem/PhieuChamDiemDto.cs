@@ -11,5 +11,8 @@ public record PhieuChamDiemDto(
     decimal? TongDiem,
     DateTime? NgayCham,
     string? XepLoai,
+    string? NhanXetGV,
+    bool DaDoiChieuPhieuDN,
+    string? GhiChuPhieuDN,
     List<ChiTietChamDiemDto> ChiTiets
 );

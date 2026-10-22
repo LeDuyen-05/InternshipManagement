@@ -63,6 +63,14 @@ public class SinhVienDiemCLODto
     public string XepLoai { get; set; } = "Chưa có";
     public string KetQua { get; set; } = "Chưa chấm"; // "Đạt", "Không đạt", "Chưa chấm"
     public DateTime? NgayCham { get; set; }
+    public List<DiemTieuChiSinhVienDto> DiemTheoTieuChi { get; set; } = new();
+}
+
+public class DiemTieuChiSinhVienDto
+{
+    public string MaCLO { get; set; } = default!;
+    public double DiemCham { get; set; }
+    public double DiemToiDa { get; set; }
 }
 
 public class ThongKeBaoCaoResponse
@@ -74,4 +82,17 @@ public class ThongKeBaoCaoResponse
     public List<DiemChiTietCLODto> DiemTheoCLO { get; set; } = new();
     public List<ThongKeTaiGVDto> TaiGiangVien { get; set; } = new();
     public List<SinhVienDiemCLODto> DanhSachBangDiem { get; set; } = new();
+}
+
+public class DotThucTapItemDto
+{
+    public string MaDot { get; set; } = default!;
+    public string TenDot { get; set; } = default!;
+    public string NamHoc { get; set; } = default!;
+    public DateTime ThoiGianBD { get; set; }
+    public DateTime ThoiGianKT { get; set; }
+    public string ThoiGian { get; set; } = default!;
+    public string TrangThai { get; set; } = default!;
+    public string LabelTrangThai { get; set; } = default!;
+    public string? MaRubric { get; set; }
 }

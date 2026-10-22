@@ -111,42 +111,13 @@ public class ThongKeService : IThongKeService
             new() { XepLoai = "Không đạt (D/F)", KhoangDiem = "< 5.0", SoLuong = countF, TiLe = Math.Round((double)countF / totalDiem * 100, 1) },
         };
 
-        // 5. Thống kê theo chuẩn đầu ra CLO (thang điểm 10 quy đổi)
-        var listCLO1 = new List<double>();
-        var listCLO2 = new List<double>();
-        var listCLO3 = new List<double>();
-        var listCLO4 = new List<double>();
-
-        foreach (var p in daChamPhieuList)
-        {
-            foreach (var ct in p.ChiTietChamDiems)
-            {
-                var val = (double)ct.DiemCham;
-                switch (ct.MaTieuChi)
-                {
-                    case "TC02": // CLO 1: Kiến thức (thang 4 -> quy 10)
-                        listCLO1.Add(val > 4 ? val : val * 2.5);
-                        break;
-                    case "TC03": // CLO 2: Kỹ năng (thang 2 -> quy 10)
-                        listCLO2.Add(val > 2 ? val : val * 5.0);
-                        break;
-                    case "TC01": // CLO 3: Tác phong (thang 3 -> quy 10)
-                        listCLO3.Add(val > 3 ? val : (val / 3.0) * 10.0);
-                        break;
-                    case "TC04": // CLO 4: Báo cáo (thang 1 -> quy 10)
-                        listCLO4.Add(val > 1 ? val : val * 10.0);
-                        break;
-                }
-            }
-        }
-
-        response.DiemTheoCLO = new List<DiemChiTietCLODto>
-        {
-            new() { MaCLO = "CLO 1", TenCLO = "Kiến thức chuyên môn & ứng dụng", DiemTrungBinh = listCLO1.Any() ? Math.Round(listCLO1.Average(), 2) : (diemTB > 0 ? Math.Round(diemTB * 0.95, 2) : 0), TrongSo = 0.30 },
-            new() { MaCLO = "CLO 2", TenCLO = "Kỹ năng kỹ thuật & giải quyết vấn đề", DiemTrungBinh = listCLO2.Any() ? Math.Round(listCLO2.Average(), 2) : (diemTB > 0 ? Math.Round(diemTB * 1.02, 2) : 0), TrongSo = 0.35 },
-            new() { MaCLO = "CLO 3", TenCLO = "Tác phong công nghiệp & kỷ luật", DiemTrungBinh = listCLO3.Any() ? Math.Round(listCLO3.Average(), 2) : (diemTB > 0 ? Math.Round(diemTB * 0.98, 2) : 0), TrongSo = 0.20 },
-            new() { MaCLO = "CLO 4", TenCLO = "Báo cáo tổng kết & kỹ năng mềm", DiemTrungBinh = listCLO4.Any() ? Math.Round(listCLO4.Average(), 2) : (diemTB > 0 ? Math.Round(diemTB * 0.92, 2) : 0), TrongSo = 0.15 },
-        };
+        // 5. Thống kê theo đúng các tiêu chí của rubric đã được lưu trong phiếu.
+        var allChiTiets = daChamPhieuList.SelectMany(p => p.ChiTietChamDiems).ToList();
+        var tongDiemToiDa = allChiTiets.GroupBy(c => c.TieuChi.MaTieuChi).Sum(g => (double)g.First().TieuChi.DiemToiDa);
+        response.DiemTheoCLO = allChiTiets.GroupBy(c => new { MaCLO = c.TieuChi.MaCLO, c.TieuChi.TenTieuChi, c.TieuChi.DiemToiDa })
+            .OrderBy(g => g.Key.MaCLO)
+            .Select(g => new DiemChiTietCLODto { MaCLO = g.Key.MaCLO, TenCLO = g.Key.TenTieuChi, DiemToiDa = (double)g.Key.DiemToiDa, DiemTrungBinh = Math.Round(g.Average(x => (double)x.DiemCham), 2), TrongSo = tongDiemToiDa > 0 ? (double)g.Key.DiemToiDa / tongDiemToiDa : 0 })
+            .ToList();
 
         // 6. Tải Giảng viên hướng dẫn
         response.TaiGiangVien = giangViens.Select(gv =>
@@ -218,6 +189,7 @@ public class ThongKeService : IThongKeService
                 XepLoai = xepLoai,
                 KetQua = ketQua,
                 NgayCham = phieu?.NgayCham,
+                DiemTheoTieuChi = phieu?.ChiTietChamDiems.OrderBy(c => c.TieuChi.MaCLO).Select(c => new DiemTieuChiSinhVienDto { MaCLO = c.TieuChi.MaCLO, DiemCham = (double)c.DiemCham, DiemToiDa = (double)c.TieuChi.DiemToiDa }).ToList() ?? new(),
             };
         }).OrderBy(s => s.MaSV).ToList();
 
@@ -271,5 +243,28 @@ public class ThongKeService : IThongKeService
             return $"\"{value.Replace("\"", "\"\"")}\"";
         }
         return value;
+    }
+
+    public async Task<IReadOnlyList<DotThucTapItemDto>> GetDanhSachDotThucTapAsync()
+    {
+        var dots = await _repository.GetAllDotThucTapAsync();
+        return dots.Select(d => new DotThucTapItemDto
+        {
+            MaDot = d.MaSo,
+            TenDot = d.TenDot,
+            NamHoc = d.NamHoc,
+            ThoiGianBD = d.ThoiGianBD,
+            ThoiGianKT = d.ThoiGianKT,
+            ThoiGian = $"{d.ThoiGianBD:dd/MM/yyyy} - {d.ThoiGianKT:dd/MM/yyyy}",
+            TrangThai = d.TrangThai,
+            LabelTrangThai = d.TrangThai switch
+            {
+                "DangDienRa" => "Đang diễn ra",
+                "DaKetThuc" => "Đã kết thúc",
+                "ChuaBatDau" => "Chưa bắt đầu",
+                _ => d.TrangThai
+            },
+            MaRubric = d.MaRubric
+        }).ToList();
     }
 }

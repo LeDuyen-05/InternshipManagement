@@ -7,10 +7,12 @@ namespace InternshipManagement.BLL.Services.GVHuongDan;
 public class GVHuongDanService : IGVHuongDanService
 {
     private readonly IGVHuongDanRepository _repository;
+    private readonly IGioiThieuRepository _gioiThieuRepository;
 
-    public GVHuongDanService(IGVHuongDanRepository repository)
+    public GVHuongDanService(IGVHuongDanRepository repository, IGioiThieuRepository gioiThieuRepository)
     {
         _repository = repository;
+        _gioiThieuRepository = gioiThieuRepository;
     }
 
     public async Task<IReadOnlyList<SVHuongDanDto>> GetDanhSachSVTheoGiangVienAsync(string maGV, string? keyword = null)
@@ -41,6 +43,27 @@ public class GVHuongDanService : IGVHuongDanService
             ChuyenNganh = s.ChuyenNganh,
             Gpa = s.Gpa,
             TenCongTy = s.PhanBoThucTaps.FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa có công ty"
+        }).ToList();
+    }
+
+    
+    public async Task<IReadOnlyList<TatCaPhanCongDto>> GetTatCaPhanCongAsync()
+    {
+        var list = await _repository.GetTatCaPhanCongAsync();
+        return list.Select(g => new TatCaPhanCongDto
+        {
+            MaSo = g.MaSo,
+            MaSV = g.MaSinhVien,
+            HoTenSV = g.SinhVien?.HoTen ?? string.Empty,
+            Lop = g.SinhVien?.Lop,
+            ChuyenNganh = g.SinhVien?.ChuyenNganh,
+            Gpa = g.SinhVien?.Gpa,
+            TenCongTy = g.SinhVien?.PhanBoThucTaps?.FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
+            MaGV = g.MaGiangVien,
+            HoTenGV = g.GiangVien?.HoTen ?? string.Empty,
+            ChuyenMonGV = g.GiangVien?.ChuyenMon,
+            NgayPC = g.NgayPC,
+            TrangThai = g.TrangThai
         }).ToList();
     }
 
@@ -233,32 +256,68 @@ public class GVHuongDanService : IGVHuongDanService
             return result;
         }
 
+        // Lấy danh sách doanh nghiệp do các giảng viên giới thiệu
+        var dsGioiThieu = await _gioiThieuRepository.GetWithDetailsAsync();
+        var gvCongTyList = dsGioiThieu
+            .Where(gt => gt.TrangThaiKetNoi == "DaDuyet" || gt.TrangThaiKetNoi == "DangXem")
+            .Select(gt => new
+            {
+                gt.MaGV,
+                gt.MaCongTy,
+                TenCongTy = gt.CongTy?.TenCongTy?.Trim() ?? string.Empty
+            })
+            .ToList();
+
         // Tạo bản đồ theo dõi số slot còn lại trong quá trình ghép
         var remainingCapacity = gvSlots.ToDictionary(x => x.GiangVien.MaGV, x => x.AvailableSlots);
 
         foreach (var sv in svChuaPhanCong)
         {
-            var tenCongTy = sv.PhanBoThucTaps.FirstOrDefault()?.CongTy?.TenCongTy;
+            var phanBo = sv.PhanBoThucTaps.FirstOrDefault();
+            var maCongTy = phanBo?.MaCongTy;
+            var tenCongTy = phanBo?.CongTy?.TenCongTy;
             string? matchedMaGV = null;
-            string lyDo = "Cân bằng tải ngẫu nhiên";
+            string lyDo = "Cân bằng chỉ tiêu giảng viên";
 
-            // Bước 1: Ưu tiên trùng khớp Chuyên môn ngành học
-            var svMajor = sv.ChuyenNganh ?? sv.Lop ?? string.Empty;
-            var bestMatchGv = gvSlots
-                .Where(x => remainingCapacity[x.GiangVien.MaGV] > 0)
-                .FirstOrDefault(x => !string.IsNullOrEmpty(x.GiangVien.ChuyenMon) &&
-                                     !string.IsNullOrEmpty(svMajor) &&
-                                     (x.GiangVien.ChuyenMon.Contains(svMajor, StringComparison.OrdinalIgnoreCase) ||
-                                      svMajor.Contains(x.GiangVien.ChuyenMon, StringComparison.OrdinalIgnoreCase)));
-
-            if (bestMatchGv != null)
+            // ƯU TIÊN 1: Giảng viên đã giới thiệu công ty mà sinh viên thực tập
+            if (!string.IsNullOrEmpty(maCongTy) || !string.IsNullOrEmpty(tenCongTy))
             {
-                matchedMaGV = bestMatchGv.GiangVien.MaGV;
-                lyDo = $"Phù hợp chuyên môn ({bestMatchGv.GiangVien.ChuyenMon})";
+                var gvGioiThieuMatch = gvSlots
+                    .Where(x => remainingCapacity[x.GiangVien.MaGV] > 0)
+                    .FirstOrDefault(x => gvCongTyList.Any(gt =>
+                        gt.MaGV == x.GiangVien.MaGV &&
+                        ((!string.IsNullOrEmpty(maCongTy) && gt.MaCongTy == maCongTy) ||
+                         (!string.IsNullOrEmpty(tenCongTy) && !string.IsNullOrEmpty(gt.TenCongTy) &&
+                          string.Equals(gt.TenCongTy, tenCongTy, StringComparison.OrdinalIgnoreCase)))));
+
+                if (gvGioiThieuMatch != null)
+                {
+                    matchedMaGV = gvGioiThieuMatch.GiangVien.MaGV;
+                    lyDo = $"Ưu tiên GV đã kết nối & giới thiệu DN ({tenCongTy})";
+                }
             }
-            else
+
+            // ƯU TIÊN 2: Trùng khớp Chuyên môn ngành học
+            if (matchedMaGV == null)
             {
-                // Bước 2: Cân bằng tải - Chọn giảng viên có số slot còn trống nhiều nhất
+                var svMajor = sv.ChuyenNganh ?? sv.Lop ?? string.Empty;
+                var bestMatchGv = gvSlots
+                    .Where(x => remainingCapacity[x.GiangVien.MaGV] > 0)
+                    .FirstOrDefault(x => !string.IsNullOrEmpty(x.GiangVien.ChuyenMon) &&
+                                         !string.IsNullOrEmpty(svMajor) &&
+                                         (x.GiangVien.ChuyenMon.Contains(svMajor, StringComparison.OrdinalIgnoreCase) ||
+                                          svMajor.Contains(x.GiangVien.ChuyenMon, StringComparison.OrdinalIgnoreCase)));
+
+                if (bestMatchGv != null)
+                {
+                    matchedMaGV = bestMatchGv.GiangVien.MaGV;
+                    lyDo = $"Phù hợp chuyên môn ({bestMatchGv.GiangVien.ChuyenMon})";
+                }
+            }
+
+            // ƯU TIÊN 3: Cân bằng tải - Chọn giảng viên có số slot còn trống nhiều nhất
+            if (matchedMaGV == null)
+            {
                 var leastLoaded = gvSlots
                     .Where(x => remainingCapacity[x.GiangVien.MaGV] > 0)
                     .OrderByDescending(x => remainingCapacity[x.GiangVien.MaGV])

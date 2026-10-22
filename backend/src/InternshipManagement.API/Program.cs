@@ -8,6 +8,7 @@ using InternshipManagement.BLL.Services.PhieuChamDiem;
 using InternshipManagement.BLL.Services.ThongKe;
 using InternshipManagement.BLL.Services.GoiYCongTy;
 using InternshipManagement.DAL;
+using InternshipManagement.DAL.Database;
 using InternshipManagement.DAL.Repositories;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,6 +48,12 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await DatabaseSchemaMigrator.ApplyAsync(db);
+}
 
 if (app.Environment.IsDevelopment())
 {

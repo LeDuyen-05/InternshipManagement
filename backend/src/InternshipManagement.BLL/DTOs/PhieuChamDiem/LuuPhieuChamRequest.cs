@@ -10,5 +10,8 @@ public record LuuPhieuChamRequest(
     string MaDot,
     string? MaGVHuongDan,
     decimal? TongDiem,
-    List<ChiTietDiemInput> ChiTiets
+    List<ChiTietDiemInput> ChiTiets,
+    string? NhanXetGV = null,
+    bool DaDoiChieuPhieuDN = false,
+    string? GhiChuPhieuDN = null
 );

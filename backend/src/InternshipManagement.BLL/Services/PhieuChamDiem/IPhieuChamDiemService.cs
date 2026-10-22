@@ -4,7 +4,7 @@ namespace InternshipManagement.BLL.Services.PhieuChamDiem;
 
 public interface IPhieuChamDiemService
 {
-    Task<IReadOnlyList<TieuChiDto>> GetDanhSachTieuChiAsync();
+    Task<IReadOnlyList<TieuChiDto>> GetDanhSachTieuChiAsync(string maDot);
     Task<PhieuChamDiemDto?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot);
     Task<IReadOnlyList<PhieuChamDiemDto>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot);
     Task<PhieuChamDiemDto> LuuPhieuChamDiemAsync(LuuPhieuChamRequest request);

@@ -13,10 +13,10 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         _repo = repo;
     }
 
-    public async Task<IReadOnlyList<TieuChiDto>> GetDanhSachTieuChiAsync()
+    public async Task<IReadOnlyList<TieuChiDto>> GetDanhSachTieuChiAsync(string maDot)
     {
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
-        return tieuChis.Select(t => new TieuChiDto(t.MaTieuChi, t.TenTieuChi, t.DiemToiDa)).ToList();
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(maDot);
+        return tieuChis.Select(t => new TieuChiDto(t.MaTieuChi, t.MaCLO, t.TenTieuChi, t.DiemToiDa)).ToList();
     }
 
     public async Task<PhieuChamDiemDto?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot)
@@ -39,35 +39,35 @@ public class PhieuChamDiemService : IPhieuChamDiemService
             throw new ArgumentException("Mã sinh viên không được để trống", nameof(request.MaSV));
         if (string.IsNullOrWhiteSpace(request.MaDot))
             throw new ArgumentException("Mã đợt thực tập không được để trống", nameof(request.MaDot));
+        if (request.ChiTiets == null || request.ChiTiets.Count == 0)
+            throw new ArgumentException("Chi tiết điểm không được để trống", nameof(request.ChiTiets));
 
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        var dot = await _repo.GetDotThucTapAsync(request.MaDot)
+            ?? throw new ArgumentException("Không tìm thấy đợt thực tập.", nameof(request.MaDot));
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(request.MaDot);
         var tieuChiDict = tieuChis.ToDictionary(t => t.MaTieuChi);
 
-        decimal tongDiem = request.TongDiem ?? 0;
+        if (request.ChiTiets.Count != tieuChis.Count || request.ChiTiets.Select(x => x.MaTieuChi).Distinct().Count() != tieuChis.Count || request.ChiTiets.Any(x => !tieuChiDict.ContainsKey(x.MaTieuChi)))
+            throw new ArgumentException("Phiếu chấm phải có đầy đủ các tiêu chí thuộc rubric của đợt thực tập.");
+
+        if (string.Equals(dot.MaRubric, "CNTT_CLO_V1", StringComparison.OrdinalIgnoreCase) && !request.DaDoiChieuPhieuDN)
+            throw new ArgumentException("Cần xác nhận đã đối chiếu phiếu nhận xét doanh nghiệp trước khi chốt CLO4.1 và CLO4.2.");
+
+        decimal tongDiem = 0;
         var chiTiets = new List<ChiTietChamDiem>();
 
-        if (request.ChiTiets != null && request.ChiTiets.Count > 0)
+        if (request.ChiTiets.Count > 0)
         {
             decimal sum = 0;
             foreach (var ct in request.ChiTiets)
             {
-                if (tieuChiDict.TryGetValue(ct.MaTieuChi, out var tc))
-                {
-                    var diem = Math.Min(ct.DiemCham, tc.DiemToiDa);
-                    diem = Math.Max(diem, 0);
-                    sum += diem;
-
-                    chiTiets.Add(new ChiTietChamDiem
-                    {
-                        MaTieuChi = ct.MaTieuChi,
-                        DiemCham = diem
-                    });
-                }
+                var tc = tieuChiDict[ct.MaTieuChi];
+                if (ct.DiemCham < 0 || ct.DiemCham > tc.DiemToiDa)
+                    throw new ArgumentException($"Điểm cho tiêu chí '{tc.TenTieuChi}' phải từ 0 đến {tc.DiemToiDa}.");
+                sum += ct.DiemCham;
+                chiTiets.Add(new ChiTietChamDiem { MaTieuChi = ct.MaTieuChi, DiemCham = ct.DiemCham });
             }
-            if (request.TongDiem == null || request.TongDiem == 0)
-            {
-                tongDiem = sum;
-            }
+            tongDiem = sum;
         }
 
         var phieu = new DAL.Entities.PhieuChamDiem
@@ -76,7 +76,10 @@ public class PhieuChamDiemService : IPhieuChamDiemService
             MaDot = request.MaDot,
             MaGVHuongDan = request.MaGVHuongDan,
             TongDiem = tongDiem,
-            NgayCham = DateTime.Now
+            NgayCham = DateTime.Now,
+            NhanXetGV = request.NhanXetGV,
+            DaDoiChieuPhieuDN = request.DaDoiChieuPhieuDN,
+            GhiChuPhieuDN = request.GhiChuPhieuDN
         };
 
         var saved = await _repo.LuuPhieuChamDiemAsync(phieu, chiTiets);
@@ -117,6 +120,9 @@ public class PhieuChamDiemService : IPhieuChamDiemService
             p.TongDiem,
             p.NgayCham,
             xepLoai,
+            p.NhanXetGV,
+            p.DaDoiChieuPhieuDN,
+            p.GhiChuPhieuDN,
             chiTietDtos
         );
     }
