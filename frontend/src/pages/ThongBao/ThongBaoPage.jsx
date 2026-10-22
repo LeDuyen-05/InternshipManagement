@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
+import TaoThongBaoModal from './TaoThongBaoModal.jsx'
 
 export default function ThongBaoPage() {
   const location = useLocation()
@@ -109,6 +110,7 @@ export default function ThongBaoPage() {
       subtitle: 'Giám sát phân công GVHD, thẩm định đề xuất doanh nghiệp và điều hành đợt thực tập',
       categories: [
         { key: 'ALL', label: 'Tất cả' },
+        { key: 'DO_KHOA_DANG', label: 'Do Khoa phát hành' },
         { key: 'PHE_DUYET', label: 'Phê duyệt đề xuất' },
         { key: 'PHAN_CONG', label: 'Điều phối & Phân công' },
         { key: 'GIAM_SAT', label: 'Giám sát tiến độ' },
@@ -261,10 +263,63 @@ export default function ThongBaoPage() {
     },
   }
 
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const STORAGE_KEY = 'fit_huit_notifications_store'
+
+  const [customNotifications, setCustomNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+
+  const saveCustomNotifications = (newList) => {
+    setCustomNotifications(newList)
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newList))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleCreateNotification = (newNotif) => {
+    const updated = [newNotif, ...customNotifications]
+    saveCustomNotifications(updated)
+    const targetText =
+      newNotif.doiTuong === 'ALL'
+        ? 'Tất cả (Giảng viên & Sinh viên)'
+        : newNotif.doiTuong === 'GiangVien'
+        ? 'Giảng viên hướng dẫn'
+        : 'Sinh viên thực tập'
+    setToastMessage(`Đã đăng và phát hành thông báo thành công đến: ${targetText}!`)
+    setTimeout(() => setToastMessage(''), 5000)
+  }
+
+  const handleDeleteCustomNotification = (id) => {
+    if (!window.confirm('Bạn có chắc chắn muốn thu hồi và xóa thông báo này không?')) return
+    const updated = customNotifications.filter((n) => n.id !== id)
+    saveCustomNotifications(updated)
+    setToastMessage('Đã thu hồi và xóa thông báo thành công.')
+    setTimeout(() => setToastMessage(''), 4000)
+  }
+
   const roleConfig = databaseByRole[currentRole] || databaseByRole.GiangVien
 
+  // Lọc custom notifications theo vai trò
+  const relevantCustom = customNotifications.filter((n) => {
+    if (currentRole === 'Khoa') return true // Khoa xem được toàn bộ thông báo mình đã tạo
+    if (currentRole === 'GiangVien') return n.doiTuong === 'ALL' || n.doiTuong === 'GiangVien'
+    if (currentRole === 'SinhVien') return n.doiTuong === 'ALL' || n.doiTuong === 'SinhVien'
+    return true
+  })
+
+  // Ghép các thông báo tự tạo lên đầu danh sách
+  const combinedList = [...relevantCustom, ...roleConfig.list]
+
   const handleMarkAllRead = () => {
-    const allIds = new Set(roleConfig.list.map((n) => n.id))
+    const allIds = new Set(combinedList.map((n) => n.id))
     setReadIds(allIds)
     setToastMessage('Đã đánh dấu tất cả thông báo trong hộp thư là đã đọc!')
     setTimeout(() => setToastMessage(''), 4000)
@@ -274,8 +329,14 @@ export default function ThongBaoPage() {
     setReadIds((prev) => new Set([...prev, id]))
   }
 
-  const filtered = roleConfig.list.filter((item) => {
-    const matchCategory = activeCategory === 'ALL' || item.category === activeCategory
+  const filtered = combinedList.filter((item) => {
+    let matchCategory = true
+    if (activeCategory === 'DO_KHOA_DANG') {
+      matchCategory = Boolean(item.isCustomCreated)
+    } else if (activeCategory !== 'ALL') {
+      matchCategory = item.category === activeCategory
+    }
+
     const matchKeyword =
       !keyword.trim() ||
       item.title.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -311,14 +372,28 @@ export default function ThongBaoPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleMarkAllRead}
-          className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer border border-slate-200 shadow-sm"
-        >
-          <span className="material-symbols-outlined text-base text-blue-600">done_all</span>
-          <span>Đánh dấu đã đọc tất cả</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-auto">
+          {/* Nút Tạo thông báo chỉ cho Cán bộ Khoa */}
+          {currentRole === 'Khoa' && (
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-base">add_circle</span>
+              <span>Tạo thông báo mới</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleMarkAllRead}
+            className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition flex items-center gap-1.5 cursor-pointer border border-slate-200 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-base text-blue-600">done_all</span>
+            <span>Đánh dấu đã đọc tất cả</span>
+          </button>
+        </div>
       </div>
 
       {/* Thông báo thành công nếu có */}
@@ -399,6 +474,17 @@ export default function ThongBaoPage() {
                       >
                         {item.categoryLabel}
                       </span>
+                      {item.isCustomCreated && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[13px]">verified</span>
+                          <span>Khoa phát hành</span>
+                        </span>
+                      )}
+                      {item.doiTuong && item.doiTuong !== 'ALL' && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                          {item.doiTuong === 'GiangVien' ? 'Gửi GVHD' : 'Gửi Sinh viên'}
+                        </span>
+                      )}
                       {isUnread && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200 animate-pulse">
                           Chưa đọc
@@ -412,27 +498,39 @@ export default function ThongBaoPage() {
                       {item.title}
                     </h2>
 
-                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed whitespace-pre-line">
                       {item.summary}
                     </p>
 
                     {/* Tệp đính kèm nếu có */}
                     {item.attachment && (
                       <div className="pt-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-700 hover:bg-slate-100 transition">
-                          <span className="material-symbols-outlined text-base text-rose-600">
-                            description
+                        <a
+                          href={item.attachmentUrl || 'https://fit.huit.edu.vn'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          title="Bấm để mở xem trực tuyến trên Google Drive / Cổng Khoa"
+                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50/80 hover:bg-blue-100/90 border border-blue-200 text-xs font-semibold text-blue-700 transition shadow-xs group cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-base text-emerald-600 group-hover:scale-110 transition-transform">
+                            cloud
                           </span>
-                          <span className="font-medium underline">{item.attachment}</span>
-                          <span className="text-slate-400 text-[11px]">({item.attachmentSize})</span>
-                        </div>
+                          <span className="underline font-bold text-slate-800 group-hover:text-blue-700">
+                            {item.attachment}
+                          </span>
+                          <span className="text-[10px] px-2 py-0.5 rounded-md bg-white border border-blue-200 text-blue-700 font-bold flex items-center gap-1 shadow-2xs">
+                            <span>Xem tài liệu</span>
+                            <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+                          </span>
+                        </a>
                       </div>
                     )}
                   </div>
 
-                  {/* Nút hành động nhanh nếu có */}
-                  {item.actionLink && (
-                    <div className="shrink-0 self-start md:self-center">
+                  {/* Nút hành động và nút Xóa thông báo (cho Cán bộ Khoa) */}
+                  <div className="shrink-0 flex items-center gap-2 self-start md:self-center">
+                    {item.actionLink && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -444,14 +542,36 @@ export default function ThongBaoPage() {
                         <span>{item.actionText}</span>
                         <span className="material-symbols-outlined text-sm">arrow_forward</span>
                       </button>
-                    </div>
-                  )}
+                    )}
+
+                    {currentRole === 'Khoa' && item.isCustomCreated && (
+                      <button
+                        type="button"
+                        title="Thu hồi &amp; Xóa thông báo này"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteCustomNotification(item.id)
+                        }}
+                        className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-colors cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )
           })
         )}
       </div>
+
+      {/* Modal Tạo Thông Báo Mới */}
+      <TaoThongBaoModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreated={handleCreateNotification}
+        selectedDot={selectedDot}
+      />
     </div>
   )
 }

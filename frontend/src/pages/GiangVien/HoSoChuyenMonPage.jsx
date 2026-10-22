@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 
 export default function HoSoChuyenMonPage() {
+  const [searchParams] = useSearchParams()
+  const currentMaGV = searchParams.get('gv') || 'GV001'
+
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -15,18 +19,19 @@ export default function HoSoChuyenMonPage() {
 
   useEffect(() => {
     fetchProfile()
-  }, [])
+  }, [currentMaGV])
 
   const fetchProfile = async () => {
     try {
       setLoading(true)
       setError(null)
-      const res = await gvHuongDanService.getProfile('GV001')
+      const res = await gvHuongDanService.getProfile(currentMaGV)
       const data = res.data?.data || res.data
       if (data) {
         setProfile(data)
         setChuyenMon(data.chuyenMon || '')
-        setEmail(data.email || 'gv001@huit.edu.vn')
+        const defaultEmail = currentMaGV === 'GV001' ? 'an.nv@huit.edu.vn' : `${currentMaGV.toLowerCase()}@huit.edu.vn`
+        setEmail(data.email && !data.email.startsWith('gv') ? data.email : defaultEmail)
         setSoDienThoai(data.soDienThoai || '028.3816.1673')
       }
     } catch (err) {
@@ -37,11 +42,17 @@ export default function HoSoChuyenMonPage() {
     }
   }
 
+  // Chuẩn hóa chỉ tiêu định mức và tỷ lệ tải thực tế của Khoa (tối thiểu 10 SV/GV)
+  const quota = Math.max(10, Number(profile?.soLuongSVHD) || 10)
+  const currentCount = profile?.soLuongDangHuongDan || 0
+  const percent = Math.min(100, Math.round((currentCount / quota) * 100))
+  const slotsLeft = Math.max(0, quota - currentCount)
+
   const handleSave = async (e) => {
     e.preventDefault()
     try {
       setSaving(true)
-      await gvHuongDanService.updateProfile('GV001', {
+      await gvHuongDanService.updateProfile(currentMaGV, {
         chuyenMon,
         email,
         soDienThoai,
@@ -95,43 +106,77 @@ export default function HoSoChuyenMonPage() {
       ) : profile && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Cột trái: Thẻ tóm tắt thông tin */}
-          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-            <div className="text-center">
-              <div className="w-24 h-24 rounded-3xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-2xl mx-auto shadow-sm border border-blue-200">
-                {profile.hoTen?.split(' ').pop() || 'GV'}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-5">
+            <div className="space-y-5">
+              <div className="text-center">
+                <div className="w-24 h-24 rounded-3xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-2xl mx-auto shadow-sm border border-blue-200">
+                  {profile.hoTen?.split(' ').pop() || 'GV'}
+                </div>
+                <h2 className="text-lg font-bold text-slate-900 mt-4">{profile.hoTen}</h2>
+                <p className="text-xs font-semibold text-blue-600 mt-0.5">
+                  {profile.hocVi || 'ThS.'} • Mã GV: <span className="font-mono">{profile.maGV}</span>
+                </p>
+                <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                  <span>Tài khoản HUIT SSO đã xác thực</span>
+                </div>
               </div>
-              <h2 className="text-lg font-bold text-slate-900 mt-4">{profile.hoTen}</h2>
-              <p className="text-xs font-semibold text-blue-600 mt-0.5">
-                {profile.hocVi} • Mã GV: <span className="font-mono">{profile.maGV}</span>
-              </p>
-              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span>Tài khoản HUIT SSO đã xác thực</span>
+
+              {/* Thông số phân công & Thanh tải công việc */}
+              <div className="border-t border-slate-100 pt-4 space-y-3 text-xs">
+                <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                  <span className="text-slate-500">Bộ môn</span>
+                  <span className="font-semibold text-slate-800">{profile.boMon || 'Công nghệ phần mềm'}</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                  <span className="text-slate-500">Chỉ tiêu Khoa cấp</span>
+                  <span className="font-bold text-slate-800">{quota} sinh viên</span>
+                </div>
+                <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                  <span className="text-slate-500">Đang hướng dẫn</span>
+                  <span className="font-bold text-blue-600">{currentCount} sinh viên</span>
+                </div>
+                <div className="py-1">
+                  <div className="flex justify-between items-center mb-1.5">
+                    <span className="text-slate-500">Tải hướng dẫn hiện hành</span>
+                    <span className={`font-bold ${percent >= 100 ? 'text-rose-600' : percent >= 75 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      {currentCount}/{quota} ({percent}%)
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        percent >= 100 ? 'bg-rose-500' : percent >= 75 ? 'bg-amber-500' : 'bg-emerald-500'
+                      }`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    {slotsLeft > 0 ? `Còn nhận được tối đa ${slotsLeft} sinh viên` : 'Đã đạt hạn mức chỉ tiêu'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Thông tin văn phòng & Đơn vị */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-slate-400">apartment</span>
+                  <span>Phòng B.304 - Cơ sở chính (140 Lê Trọng Tấn)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-sm text-slate-400">school</span>
+                  <span>Khoa Công nghệ Thông tin - HUIT</span>
+                </div>
               </div>
             </div>
 
-            <div className="border-t border-slate-100 pt-5 space-y-3 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                <span className="text-slate-500">Bộ môn</span>
-                <span className="font-semibold text-slate-800">{profile.boMon}</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                <span className="text-slate-500">Chỉ tiêu Khoa cấp</span>
-                <span className="font-bold text-slate-800">{profile.soLuongSVHD} sinh viên</span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                <span className="text-slate-500">Đang hướng dẫn</span>
-                <span className="font-bold text-blue-600">{profile.soLuongDangHuongDan} sinh viên</span>
-              </div>
-              <div className="flex justify-between items-center py-1">
-                <span className="text-slate-500">Tỷ lệ tải hiện hành</span>
-                <span className="font-bold text-emerald-600">
-                  {profile.soLuongSVHD > 0
-                    ? Math.round((profile.soLuongDangHuongDan / profile.soLuongSVHD) * 100)
-                    : 0}%
-                </span>
-              </div>
-            </div>
+            <Link
+              to={`/giang-vien/sinh-vien?gv=${profile.maGV}`}
+              className="w-full py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border border-blue-200 shadow-2xs mt-2"
+            >
+              <span className="material-symbols-outlined text-sm">group</span>
+              <span>Xem danh sách sinh viên ({currentCount} SV)</span>
+            </Link>
           </div>
 
           {/* Cột phải: Form cập nhật thông tin */}
@@ -195,7 +240,7 @@ export default function HoSoChuyenMonPage() {
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none font-sans"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Thông tin chuyên môn này được lưu trực tiếp vào bảng GIANGVIEN (SQL Server) để Cán bộ Khoa tham khảo khi phân công đề tài.
+                  Thông tin này giúp Cán bộ Khoa phân công sinh viên đúng chuyên ngành và lĩnh vực nghiên cứu.
                 </p>
               </div>
 
@@ -206,7 +251,7 @@ export default function HoSoChuyenMonPage() {
                   className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {saving && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                  <span>Lưu thay đổi vào Database</span>
+                  <span>Lưu thông tin hồ sơ</span>
                 </button>
               </div>
             </form>

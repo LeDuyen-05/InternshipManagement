@@ -8,6 +8,8 @@ export default function TienDoThucTapSVPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const { selectedDot } = useDotThucTap()
+  const currentMaGV = searchParams.get('gv') || 'GV001'
+  const [lecturerInfo, setLecturerInfo] = useState(null)
 
   const [studentList, setStudentList] = useState([])
   const urlMaSV = searchParams.get('sv')
@@ -26,18 +28,25 @@ export default function TienDoThucTapSVPage() {
   const [submitting, setSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
-  // 1. Tải danh sách sinh viên do GV hướng dẫn từ cơ sở dữ liệu thật (GV001)
+  // 1. Tải danh sách sinh viên do GV hướng dẫn từ cơ sở dữ liệu thật theo currentMaGV
   useEffect(() => {
     const fetchStudents = async () => {
       try {
         setLoadingStudents(true)
-        const res = await gvHuongDanService.getSVTheoGiangVien('GV001')
+        const [res, resTai] = await Promise.all([
+          gvHuongDanService.getSVTheoGiangVien(currentMaGV),
+          gvHuongDanService.getGiangVienTai().catch(() => ({ data: { data: [] } })),
+        ])
         const data = res.data?.data || res.data || []
+        const taiList = resTai.data?.data || []
+        const foundGv = taiList.find((g) => g.maGV === currentMaGV)
+        if (foundGv) setLecturerInfo(foundGv)
+
         if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map((item, idx) => ({
+          const mapped = data.map((item) => ({
             maSV: item.sinhVien?.maSV || item.maSV,
             hoTen: item.sinhVien?.hoTen || item.hoTen,
-            lop: item.sinhVien?.lop || item.lop || 'CNTT',
+            lop: item.sinhVien?.lop || item.lop || '—',
             tenCongTy: item.congTy?.tenCongTy || item.tenCongTy || 'Chưa phân bổ công ty',
           }))
           setStudentList(mapped)
@@ -58,7 +67,7 @@ export default function TienDoThucTapSVPage() {
       }
     }
     fetchStudents()
-  }, [])
+  }, [currentMaGV, urlMaSV])
 
   // Đồng bộ selectedMaSV khi URL param thay đổi
   useEffect(() => {
@@ -137,7 +146,6 @@ export default function TienDoThucTapSVPage() {
       case 'DaNop':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
             Chờ GV duyệt
           </span>
         )
@@ -268,7 +276,7 @@ export default function TienDoThucTapSVPage() {
                   <span className="text-slate-500">Đơn vị thực tập tiếp nhận:</span>
                   <strong className="text-slate-800">{currentStudent.tenCongTy}</strong>
                 </div>
-                <span className="text-slate-400">GVHD: ThS. Nguyễn Văn An (GV001)</span>
+                <span className="text-slate-400">GVHD: {lecturerInfo?.hoTen ? `ThS. ${lecturerInfo.hoTen}` : currentMaGV} ({currentMaGV})</span>
               </div>
             )}
           </>
@@ -293,10 +301,10 @@ export default function TienDoThucTapSVPage() {
         <div className="p-4 border-b border-slate-200 bg-slate-50/75 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-              Nhật Ký Báo Cáo Thực Tập (Dữ liệu thực tế từ SQL Server)
+              Nhật Ký Báo Cáo Thực Tập Định Kỳ
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sinh viên nộp báo cáo định kỳ thực tập. Giảng viên phê duyệt trạng thái trực tiếp vào cơ sở dữ liệu.
+              Sinh viên nộp báo cáo định kỳ theo từng tuần. Giảng viên nhận xét và phê duyệt kết quả thực tập.
             </p>
           </div>
         </div>
@@ -304,14 +312,14 @@ export default function TienDoThucTapSVPage() {
         {loading ? (
           <div className="py-16 text-center text-slate-400 text-sm">
             <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            Đang tải dữ liệu tiến độ từ database...
+            Đang tải dữ liệu tiến độ từ hệ thống...
           </div>
         ) : error ? (
           <div className="p-8 text-center text-red-600 text-sm">{error}</div>
         ) : listTienDo.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-xs space-y-2">
             <span className="material-symbols-outlined text-4xl text-slate-300">history_edu</span>
-            <p>Sinh viên này chưa có bản ghi báo cáo tiến độ nào trong bảng TIENDOTHUCTAP của SQL Server.</p>
+            <p>Sinh viên này chưa nộp báo cáo tiến độ nào trong đợt thực tập này.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

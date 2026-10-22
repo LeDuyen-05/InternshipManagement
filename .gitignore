@@ -18,4 +18,6 @@ ml-service/.env
 .DS_Store
 .vscode/
 .idea/
+.vs/
 *.code-workspace
+

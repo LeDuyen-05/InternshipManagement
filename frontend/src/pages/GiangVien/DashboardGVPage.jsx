@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
@@ -18,10 +18,15 @@ import {
 } from 'recharts'
 
 export default function DashboardGVPage() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const currentMaGV = searchParams.get('gv') || 'GV001'
   const { selectedDot } = useDotThucTap()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+
+  // Danh sách giảng viên từ database
+  const [lecturers, setLecturers] = useState([])
 
   // Dữ liệu từ database
   const [students, setStudents] = useState([])
@@ -31,27 +36,35 @@ export default function DashboardGVPage() {
 
   useEffect(() => {
     fetchDashboardData()
-  }, [selectedDot])
+  }, [selectedDot, currentMaGV])
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      // 1. Lấy danh sách SV hướng dẫn của GV001
-      const svRes = await gvHuongDanService.getSVTheoGiangVien('GV001')
+      // 1. Tải danh sách giảng viên từ DB
+      try {
+        const gvRes = await gvHuongDanService.getGiangVienTai()
+        setLecturers(gvRes.data?.data || [])
+      } catch {
+        // bỏ qua lỗi nếu không tải được danh sách GV
+      }
+
+      // 2. Lấy danh sách SV hướng dẫn của currentMaGV từ DB
+      const svRes = await gvHuongDanService.getSVTheoGiangVien(currentMaGV)
       const svList = svRes.data?.data || svRes.data || []
       setStudents(svList)
 
-      // 2. Lấy danh sách báo cáo tuần chờ duyệt từ SQL Server
-      const reportRes = await tienDoThucTapService.getBaoCaoChoDuyet('GV001')
+      // 3. Lấy danh sách báo cáo tuần chờ duyệt từ SQL Server
+      const reportRes = await tienDoThucTapService.getBaoCaoChoDuyet(currentMaGV)
       const reports = reportRes.data?.data || reportRes.data || []
       setPendingReports(reports)
 
-      // 3. Lấy phiếu chấm điểm CLO đã chấm trong đợt này
+      // 4. Lấy phiếu chấm điểm CLO đã chấm trong đợt này
       if (selectedDot?.maDot) {
         try {
-          const gradeRes = await phieuChamDiemService.getDanhSachByGiangVien('GV001', selectedDot.maDot)
+          const gradeRes = await phieuChamDiemService.getDanhSachByGiangVien(currentMaGV, selectedDot.maDot)
           const grades = gradeRes.data?.data || gradeRes.data || []
           setGradedCount(grades.length)
           if (grades.length > 0) {
@@ -72,6 +85,11 @@ export default function DashboardGVPage() {
       setLoading(false)
     }
   }
+
+  // Thông tin chỉ tiêu và tải hướng dẫn thực tế của GV
+  const currentLecturer = lecturers.find((g) => g.maGV === currentMaGV)
+  const currentQuota = Math.max(10, Number(currentLecturer?.soLuongSVHD) || 10)
+  const loadPercent = Math.min(100, Math.round((students.length / currentQuota) * 100))
 
   // Dữ liệu biểu đồ phân loại trạng thái sinh viên
   const pieData = [
@@ -110,18 +128,35 @@ export default function DashboardGVPage() {
           <p className="text-xs text-slate-500 mt-1">
             Theo dõi toàn diện tải hướng dẫn, việc cần xử lý gấp và tiến độ nộp báo cáo thực tập của sinh viên.
           </p>
+
+          {lecturers.length > 0 && (
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-xs font-semibold text-slate-500">Giảng viên xem:</span>
+              <select
+                value={currentMaGV}
+                onChange={(e) => setSearchParams({ gv: e.target.value })}
+                className="p-1.5 px-3 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+              >
+                {lecturers.map((gv) => (
+                  <option key={gv.maGV} value={gv.maGV}>
+                    {gv.hoTen} ({gv.maGV})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
           <Link
-            to="/giang-vien/tien-do"
+            to={`/giang-vien/tien-do?gv=${currentMaGV}`}
             className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm">assignment_turned_in</span>
             <span>Duyệt tiến độ tuần</span>
           </Link>
           <Link
-            to="/giang-vien/cham-diem"
+            to={`/giang-vien/cham-diem?gv=${currentMaGV}`}
             className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm">fact_check</span>
@@ -133,7 +168,7 @@ export default function DashboardGVPage() {
       {loading ? (
         <div className="p-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
           <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          Đang tổng hợp dữ liệu từ SQL Server...
+          Đang tổng hợp dữ liệu điều hành...
         </div>
       ) : error ? (
         <div className="p-8 text-center text-red-600 bg-white rounded-2xl border border-red-200 text-sm">
@@ -148,10 +183,10 @@ export default function DashboardGVPage() {
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sinh viên phụ trách</p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-black text-slate-900">{students.length}</span>
-                  <span className="text-xs font-semibold text-slate-400">/ 1 chỉ tiêu</span>
+                  <span className="text-xs font-semibold text-slate-400">/ {currentQuota} chỉ tiêu</span>
                 </div>
                 <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                  100% tải đăng ký
+                  {loadPercent}% chỉ tiêu hướng dẫn
                 </span>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
@@ -199,13 +234,25 @@ export default function DashboardGVPage() {
 
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">GPA CLO trung bình</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Điểm CLO trung bình</p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-black text-indigo-600">{avgScore > 0 ? avgScore : '—'}</span>
                   <span className="text-xs font-semibold text-slate-400">/ 10.0</span>
                 </div>
-                <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  Chuẩn ABET FIT
+                <span className={`inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                  gradedCount > 0
+                    ? Number(avgScore) >= 8.5
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : Number(avgScore) >= 6.5
+                      ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                }`}>
+                  {gradedCount > 0
+                    ? Number(avgScore) >= 6.5
+                      ? 'Đạt chuẩn CLO Khoa'
+                      : 'Cần cải thiện'
+                    : 'Chờ hoàn tất chấm'}
                 </span>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">

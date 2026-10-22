@@ -122,17 +122,10 @@ export default function DanhSachSVHuongDanPage() {
 
         {/* Thông tin tài khoản Giảng viên và nút làm mới */}
         <div className="flex items-center gap-3">
-          {urlMaGV ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-              <span className="material-symbols-outlined text-base text-amber-600">visibility</span>
-              <span>Đang xem danh sách: {lecturerInfo?.hoTen || currentMaGV}</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>GV: {lecturerInfo?.hoTen || 'ThS. Nguyễn Văn An'} ({currentMaGV})</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold shadow-xs">
+            <span className="material-symbols-outlined text-base text-blue-600">account_circle</span>
+            <span>GVHD: {lecturerInfo?.hoTen ? `ThS. ${lecturerInfo.hoTen}` : currentMaGV} ({currentMaGV})</span>
+          </div>
 
           <button
             onClick={handleExportExcel}
@@ -162,7 +155,7 @@ export default function DanhSachSVHuongDanPage() {
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-bold text-slate-900">{totalSV}</span>
               <span className="text-xs font-medium text-slate-400">
-                / {lecturerInfo?.soLuongSVHD ?? 10} chỉ tiêu
+                / {Math.max(10, Number(lecturerInfo?.soLuongSVHD) || 10)} chỉ tiêu
               </span>
             </div>
           </div>
@@ -207,7 +200,15 @@ export default function DanhSachSVHuongDanPage() {
               <span className="text-2xl font-bold text-amber-600">{avgGpa}</span>
               <span className="text-xs font-medium text-slate-400">/ 4.00</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu từ bảng SINHVIEN (SQL Server)</p>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              {Number(avgGpa) >= 3.6
+                ? '⭐ Học lực Xuất sắc'
+                : Number(avgGpa) >= 3.2
+                ? '⭐ Học lực Giỏi'
+                : Number(avgGpa) >= 2.5
+                ? 'Học lực Khá'
+                : 'Cần theo dõi sát'}
+            </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <span className="material-symbols-outlined">stars</span>
@@ -363,17 +364,14 @@ export default function DanhSachSVHuongDanPage() {
                       <td className="py-3.5 px-4">
                         {isChuaPhanBo ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200" title="Sinh viên chưa có đơn vị thực tập tiếp nhận">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Chờ tiếp nhận DN
                           </span>
                         ) : sv.trangThai === 'DangHuongDan' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             Đang hướng dẫn
                           </span>
                         ) : sv.trangThai === 'HoanThanh' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                             Hoàn thành
                           </span>
                         ) : (
@@ -411,7 +409,7 @@ export default function DanhSachSVHuongDanPage() {
                             </button>
                           ) : (
                             <Link
-                              to={`/giang-vien/tien-do?sv=${sv.maSV}`}
+                              to={`/giang-vien/tien-do?sv=${sv.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                               className="px-2.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                               title="Xem tiến độ báo cáo tuần của sinh viên này"
                             >
@@ -432,7 +430,7 @@ export default function DanhSachSVHuongDanPage() {
                             </button>
                           ) : (
                             <Link
-                              to={`/giang-vien/cham-diem?sv=${sv.maSV}`}
+                              to={`/giang-vien/cham-diem?sv=${sv.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                               className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                               title="Đánh giá và chấm điểm CLO cho sinh viên này"
                             >
@@ -511,14 +509,14 @@ export default function DanhSachSVHuongDanPage() {
                 Đóng
               </button>
               <Link
-                to={`/giang-vien/tien-do?sv=${selectedSV.maSV}`}
+                to={`/giang-vien/tien-do?sv=${selectedSV.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                 className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-sm">trending_up</span>
                 Vào duyệt tiến độ
               </Link>
               <Link
-                to={`/giang-vien/cham-diem?sv=${selectedSV.maSV}`}
+                to={`/giang-vien/cham-diem?sv=${selectedSV.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                 className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 <span className="material-symbols-outlined text-sm">fact_check</span>
