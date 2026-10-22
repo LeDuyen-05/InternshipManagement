@@ -67,7 +67,8 @@ CREATE TABLE DOTTHUCTAP (
     namHoc              DATETIME        NULL,
     thoiGianBD          DATETIME        NULL,
     thoiGianKT          DATETIME        NULL,
-    trangThai           BIT             NOT NULL DEFAULT 0
+    trangThai           BIT             NOT NULL DEFAULT 0,
+    maRubric            NVARCHAR(40)    NOT NULL DEFAULT 'CNTT_CLO_V1'
 );
 GO
 
@@ -143,7 +144,10 @@ CREATE TABLE PHIEUCHAMDIEM (
     maDoanhNghiep       NVARCHAR(20)    NOT NULL,   -- FK -> HUONGDANDOANHNGHIEP
     maDot               NVARCHAR(20)    NOT NULL,
     tongDiem            FLOAT           NULL,
-    ngayCham            DATETIME        NULL
+    ngayCham            DATETIME        NULL,
+    nhanXetGV           NVARCHAR(MAX)   NULL,
+    daDoiChieuPhieuDN   BIT             NOT NULL DEFAULT 0,
+    ghiChuPhieuDN       NVARCHAR(500)   NULL
 );
 GO
 
@@ -151,7 +155,9 @@ GO
 CREATE TABLE TIEUCHI (
     maTieuChi           NVARCHAR(20)    NOT NULL PRIMARY KEY,
     tenTieuChi          NVARCHAR(150)   NOT NULL,
-    diemToiDa           FLOAT           NOT NULL
+    diemToiDa           FLOAT           NOT NULL,
+    maRubric            NVARCHAR(40)    NOT NULL DEFAULT 'CNTT_CLO_V1',
+    maCLO               NVARCHAR(20)    NOT NULL
 );
 GO
 

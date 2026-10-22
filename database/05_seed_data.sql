@@ -14,13 +14,13 @@ VALUES
 GO
 
 INSERT INTO GIANGVIEN (maGV, hoTen, chuyenMon, soLuongSVHD)
-VALUES ('GV001', N'Nguyễn Văn Lễ', N'Công nghệ phần mềm', 0);
+VALUES ('GV001', N'Nguyễn Văn Lễ', N'Công nghệ phần mềm', 10);
 GO
 
 INSERT INTO CONGTY (maCongTy, tenCongTy, viTriTuyen, thoiGian, soLuongNhan, yeuCau, trangThai)
 VALUES ('CT001', N'Công ty ABC Software', N'Thực tập sinh Backend', GETDATE(), 2, N'Biết C# hoặc Java', N'DaDuyet');
 GO
 
-INSERT INTO DOTTHUCTAP (maSo, tenDot, namHoc, thoiGianBD, thoiGianKT, trangThai)
-VALUES ('DOT001', N'Đợt thực tập HK1', '2026-01-01', '2026-08-17', '2026-11-08', 1);
+INSERT INTO DOTTHUCTAP (maSo, tenDot, namHoc, thoiGianBD, thoiGianKT, trangThai, maRubric)
+VALUES ('DOT001', N'Đợt thực tập HK1', '2026-01-01', '2026-08-17', '2026-11-08', 1, 'CNTT_CLO_V1');
 GO
