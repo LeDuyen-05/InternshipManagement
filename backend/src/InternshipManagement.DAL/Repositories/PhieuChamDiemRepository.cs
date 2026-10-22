@@ -7,6 +7,17 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 {
     public PhieuChamDiemRepository(AppDbContext context) : base(context) { }
 
+    public async Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync(string maDot)
+    {
+        var rubric = await Context.DotThucTaps.Where(d => d.MaSo == maDot)
+            .Select(d => d.MaRubric).FirstOrDefaultAsync() ?? "LEGACY_4TC";
+        return await Context.TieuChis
+            .AsNoTracking()
+            .Where(t => t.NhomDanhGia != null && t.MaRubric == rubric)
+            .OrderBy(t => t.MaCLO).ThenBy(t => t.ThuTu).ThenBy(t => t.MaTieuChi)
+            .ToListAsync();
+    }
+
     public async Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync()
     {
         return await Context.TieuChis
@@ -15,6 +26,9 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             .OrderBy(t => t.ThuTu).ThenBy(t => t.MaTieuChi)
             .ToListAsync();
     }
+
+    public Task<DotThucTap?> GetDotThucTapAsync(string maDot) =>
+        Context.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == maDot);
 
     public async Task<PhieuChamDiem?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot)
     {
@@ -29,9 +43,6 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 
     public Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV) =>
         Context.GVHuongDans.AsNoTracking().FirstOrDefaultAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
-
-    public Task<DotThucTap?> GetDotThucTapAsync(string maDot) =>
-        Context.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == maDot);
 
     public async Task<IReadOnlyList<PhieuChamDiem>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot)
     {
@@ -68,6 +79,8 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             if (!string.IsNullOrWhiteSpace(phieu.MaDaiDien)) existing.MaDaiDien = phieu.MaDaiDien;
             if (phieu.NhanXetGV != null) existing.NhanXetGV = phieu.NhanXetGV;
             if (phieu.NhanXetDN != null) existing.NhanXetDN = phieu.NhanXetDN;
+            existing.DaDoiChieuPhieuDN = phieu.DaDoiChieuPhieuDN;
+            if (phieu.GhiChuPhieuDN != null) existing.GhiChuPhieuDN = phieu.GhiChuPhieuDN;
 
             // Chi tiết của bộ tiêu chí cũ không còn hiệu lực được loại bỏ khi phiếu được chấm lại.
             var legacy = existing.ChiTietChamDiems.Where(c => !activeIds.Contains(c.MaTieuChi)).ToList();

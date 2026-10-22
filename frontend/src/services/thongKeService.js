@@ -10,6 +10,11 @@ export const thongKeService = {
     })
   },
 
+  // 1b. Lấy danh sách đợt thực tập trực tiếp từ database
+  getDanhSachDotThucTap: () => {
+    return apiClient.get(`${API_ROUTES.THONG_KE}/dot-thuc-tap`)
+  },
+
   // 2. Lấy link tải file CSV từ backend
   getExportCsvUrl: (maDot) => {
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'
@@ -32,10 +37,10 @@ export const thongKeService = {
       Lớp: sv.lop || '-',
       'Doanh nghiệp tiếp nhận': sv.tenCongTy || '-',
       'Giảng viên hướng dẫn': sv.tenGVHD || '-',
-      'CLO1 (/2.0)': sv.diemCLO1 != null ? sv.diemCLO1.toFixed(2) : '-',
-      'CLO2 (/1.0)': sv.diemCLO2 != null ? sv.diemCLO2.toFixed(2) : '-',
-      'CLO3 (/2.0)': sv.diemCLO3 != null ? sv.diemCLO3.toFixed(2) : '-',
-      'CLO4 - Đơn vị thực tập (/5.0)': sv.diemCLO4 != null ? sv.diemCLO4.toFixed(2) : '-',
+      'CLO 1 - Kiến thức (30%)': sv.diemCLO1 != null ? sv.diemCLO1.toFixed(2) : '-',
+      'CLO 2 - Kỹ năng (35%)': sv.diemCLO2 != null ? sv.diemCLO2.toFixed(2) : '-',
+      'CLO 3 - Tác phong (20%)': sv.diemCLO3 != null ? sv.diemCLO3.toFixed(2) : '-',
+      'CLO 4 - Báo cáo (15%)': sv.diemCLO4 != null ? sv.diemCLO4.toFixed(2) : '-',
       'Điểm tổng kết': sv.tongDiem != null ? sv.tongDiem.toFixed(2) : '-',
       'Xếp loại': sv.xepLoai,
       'Kết quả': sv.ketQua,

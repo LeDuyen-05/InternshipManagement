@@ -19,6 +19,8 @@ public class PhieuChamDiemConfiguration : IEntityTypeConfiguration<PhieuChamDiem
         builder.Property(x => x.MaDaiDien).HasColumnName("maHuongDanDN").HasMaxLength(20);
         builder.Property(x => x.MaGVHuongDan).HasColumnName("maGVHuongDan").HasMaxLength(20);
         builder.Property(x => x.NhanXetGV).HasColumnName("nhanXetGV").HasMaxLength(1000);
+        builder.Property(x => x.DaDoiChieuPhieuDN).HasColumnName("daDoiChieuPhieuDN");
+        builder.Property(x => x.GhiChuPhieuDN).HasColumnName("ghiChuPhieuDN").HasMaxLength(1000);
         builder.Property(x => x.NhanXetDN).HasColumnName("nhanXetDN").HasMaxLength(1000);
 
         builder.HasOne(x => x.DotThucTap)

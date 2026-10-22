@@ -50,5 +50,10 @@ scratch/
 
 # OS Files
 .DS_Store
+.vscode/
+.idea/
+.vs/
+*.code-workspace
+
 Thumbs.db
 Desktop.ini

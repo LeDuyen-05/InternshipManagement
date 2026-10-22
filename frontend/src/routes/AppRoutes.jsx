@@ -110,8 +110,9 @@ export default function AppRoutes() {
         <Route path="/khoa/phan-bo" element={<Guard roles={['VT02']}><PhanBoGVHDPage /></Guard>} />
         <Route path="/khoa/theo-doi" element={<Guard roles={['VT02']}><KhoaOperationsPage mode="progress" /></Guard>} />
         <Route path="/khoa/han-bao-cao" element={<Guard roles={['VT02']}><KhoaDeadlinesPage /></Guard>} />
-        <Route path="/khoa/thong-ke" element={<Guard roles={['VT02']}><ThongKeBaoCaoPage /></Guard>} />
+        <Route path="/khoa/thong-ke" element={<Navigate to="/khoa/thong-ke-clo" replace />} />
         <Route path="/khoa/thong-ke-clo" element={<Guard roles={['VT02']}><ThongKeCLOPage /></Guard>} />
+        <Route path="/khoa/bao-cao-tien-do" element={<Guard roles={['VT02']}><ThongKeBaoCaoPage /></Guard>} />
         <Route path="/khoa/hoi-dong" element={<Guard roles={['VT02']}><KhoaCommitteePage /></Guard>} />
         <Route path="/khoa/tieu-chi" element={<Guard roles={['VT02']}><KhoaCriteriaPage /></Guard>} />
         <Route path="/khoa/duyet-gioi-thieu" element={<Guard roles={['VT02']}><DuyetGioiThieuPage /></Guard>} />

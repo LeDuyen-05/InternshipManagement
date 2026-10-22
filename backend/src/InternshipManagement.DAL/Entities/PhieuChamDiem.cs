@@ -10,6 +10,8 @@ public class PhieuChamDiem
     public string? MaDaiDien { get; set; }
     public string? MaGVHuongDan { get; set; }
     public string? NhanXetGV { get; set; }
+    public bool DaDoiChieuPhieuDN { get; set; }
+    public string? GhiChuPhieuDN { get; set; }
     public string? NhanXetDN { get; set; }
 
     public DotThucTap? DotThucTap { get; set; }

@@ -85,17 +85,17 @@ public class ThongKeService : IThongKeService
             TiLeDatCLO = tiLeDatCLO,
         };
 
-        // 4. Phân bố xếp loại điểm (quy đổi điểm chữ theo ThangDiem)
+        // 4. Phân bố xếp loại điểm (quy đổi điểm chữ theo Bảng 3 ThangDiem)
         var nhomXepLoai = new (string Chu, string Ten, string Khoang)[]
         {
             ("A", "Giỏi (A)", "8.5 - 10.0"),
-            ("B+", "Khá giỏi (B+)", "8.0 - 8.4"),
+            ("B+", "Khá (B+)", "8.0 - 8.4"),
             ("B", "Khá (B)", "7.0 - 7.9"),
-            ("C+", "Trung bình khá (C+)", "6.5 - 6.9"),
+            ("C+", "Trung bình (C+)", "6.5 - 6.9"),
             ("C", "Trung bình (C)", "5.5 - 6.4"),
             ("D+", "Trung bình yếu (D+)", "5.0 - 5.4"),
-            ("D", "Yếu (D)", "4.0 - 4.9"),
-            ("F", "Kém - Không đạt (F)", "< 4.0"),
+            ("D", "Trung bình yếu (D)", "4.0 - 4.9"),
+            ("F", "Kém (F)", "< 4.0"),
         };
         var totalDiem = Math.Max(1, daChamCount);
         response.PhanBoDiem = nhomXepLoai.Select(n =>
@@ -130,6 +130,13 @@ public class ThongKeService : IThongKeService
                 TrongSo = Math.Round(toiDa / 10.0, 2),
             };
         }).ToList();
+        // 5. Thống kê theo đúng các tiêu chí của rubric đã được lưu trong phiếu.
+        var allChiTiets = daChamPhieuList.SelectMany(p => p.ChiTietChamDiems).ToList();
+        var tongDiemToiDa = allChiTiets.GroupBy(c => c.TieuChi.MaTieuChi).Sum(g => (double)g.First().TieuChi.DiemToiDa);
+        response.DiemTheoCLO = allChiTiets.GroupBy(c => new { MaCLO = c.TieuChi.MaCLO, c.TieuChi.TenTieuChi, c.TieuChi.DiemToiDa })
+            .OrderBy(g => g.Key.MaCLO)
+            .Select(g => new DiemChiTietCLODto { MaCLO = g.Key.MaCLO, TenCLO = g.Key.TenTieuChi, DiemToiDa = (double)g.Key.DiemToiDa, DiemTrungBinh = Math.Round(g.Average(x => (double)x.DiemCham), 2), TrongSo = tongDiemToiDa > 0 ? (double)g.Key.DiemToiDa / tongDiemToiDa : 0 })
+            .ToList();
 
         // 6. Tải Giảng viên hướng dẫn
         response.TaiGiangVien = giangViens.Select(gv =>
@@ -189,6 +196,7 @@ public class ThongKeService : IThongKeService
                 XepLoai = xepLoai,
                 KetQua = ketQua,
                 NgayCham = phieu?.NgayCham,
+                DiemTheoTieuChi = phieu?.ChiTietChamDiems.OrderBy(c => c.TieuChi.MaCLO).Select(c => new DiemTieuChiSinhVienDto { MaCLO = c.TieuChi.MaCLO, DiemCham = (double)c.DiemCham, DiemToiDa = (double)c.TieuChi.DiemToiDa }).ToList() ?? new(),
             };
         }).OrderBy(s => s.MaSV).ToList();
 
@@ -256,5 +264,28 @@ public class ThongKeService : IThongKeService
             return $"\"{value.Replace("\"", "\"\"")}\"";
         }
         return value;
+    }
+
+    public async Task<IReadOnlyList<DotThucTapItemDto>> GetDanhSachDotThucTapAsync()
+    {
+        var dots = await _repository.GetAllDotThucTapAsync();
+        return dots.Select(d => new DotThucTapItemDto
+        {
+            MaDot = d.MaSo,
+            TenDot = d.TenDot,
+            NamHoc = d.NamHoc,
+            ThoiGianBD = d.ThoiGianBD,
+            ThoiGianKT = d.ThoiGianKT,
+            ThoiGian = $"{d.ThoiGianBD:dd/MM/yyyy} - {d.ThoiGianKT:dd/MM/yyyy}",
+            TrangThai = d.TrangThai,
+            LabelTrangThai = d.TrangThai switch
+            {
+                "DangDienRa" => "Đang diễn ra",
+                "DaKetThuc" => "Đã kết thúc",
+                "ChuaBatDau" => "Chưa bắt đầu",
+                _ => d.TrangThai
+            },
+            MaRubric = d.MaRubric
+        }).ToList();
     }
 }

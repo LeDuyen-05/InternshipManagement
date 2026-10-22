@@ -7,8 +7,10 @@ public record BangDiemNguon(SinhVien SinhVien, string? TenCongTy, string? MaGV, 
 
 public interface IPhieuChamDiemRepository : IRepository<PhieuChamDiem>
 {
+    Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync(string maDot);
     /// <summary>Chỉ trả về tiêu chí đang sử dụng (có nhóm đánh giá GV/DN), sắp theo thứ tự.</summary>
     Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync();
+    Task<DotThucTap?> GetDotThucTapAsync(string maDot);
     Task<PhieuChamDiem?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot);
     Task<IReadOnlyList<PhieuChamDiem>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot);
 
@@ -19,6 +21,5 @@ public interface IPhieuChamDiemRepository : IRepository<PhieuChamDiem>
     /// </summary>
     Task<PhieuChamDiem> LuuPhieuChamDiemAsync(PhieuChamDiem phieu, IEnumerable<ChiTietChamDiem> chiTiets);
     Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV);
-    Task<DotThucTap?> GetDotThucTapAsync(string maDot);
     Task<IReadOnlyList<BangDiemNguon>> GetBangDiemNguonAsync(string maDot, string? maGV);
 }

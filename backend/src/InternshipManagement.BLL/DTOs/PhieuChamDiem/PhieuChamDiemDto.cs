@@ -21,5 +21,7 @@ public record PhieuChamDiemDto(
     string? DiemChu = null,
     string? KetQua = null,
     string? NhanXetGV = null,
-    string? NhanXetDN = null
+    string? NhanXetDN = null,
+    bool DaDoiChieuPhieuDN = false,
+    string? GhiChuPhieuDN = null
 );

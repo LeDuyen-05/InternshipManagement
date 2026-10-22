@@ -28,6 +28,21 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         return await query.OrderByDescending(g => g.NgayPC).ToListAsync();
     }
 
+    
+    public async Task<IReadOnlyList<GVHuongDan>> GetTatCaPhanCongAsync()
+    {
+        return await DbSet
+            .AsNoTracking()
+            .Include(g => g.GiangVien)
+            .Include(g => g.SinhVien)
+                .ThenInclude(s => s.PhanBoThucTaps)
+                    .ThenInclude(pb => pb.CongTy)
+            .Where(g => g.TrangThai == "DangHuongDan")
+            .OrderBy(g => g.GiangVien.HoTen)
+            .ThenBy(g => g.SinhVien.MaSV)
+            .ToListAsync();
+    }
+
     public async Task<IReadOnlyList<SinhVien>> GetDanhSachSVChuaPhanCongAsync(string? keyword = null)
     {
         var query = Context.SinhViens

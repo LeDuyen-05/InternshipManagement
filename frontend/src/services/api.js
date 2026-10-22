@@ -16,7 +16,9 @@ apiClient.interceptors.response.use(r => r, (err) => {
   if (err.response?.status === 401 && !url.includes('/auth/login')) {
     localStorage.removeItem('internship_token')
     localStorage.removeItem('internship_user')
-    window.location.assign('/auth')
+    if (window.location.pathname !== '/auth' && window.location.pathname !== '/auth/') {
+      window.location.assign('/auth')
+    }
   }
   return Promise.reject(err)
 })

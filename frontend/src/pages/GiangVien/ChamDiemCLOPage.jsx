@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, Fragment } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -6,585 +6,533 @@ import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import RubricCLOModal from '../../components/giang-vien/RubricCLOModal.jsx'
 import PhieuDiemPdfModal from '../../components/giang-vien/PhieuDiemPdfModal.jsx'
-import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
-import { xuatBangDiemTheoMauKhoa } from '../../utils/bangDiemExcel.js'
+
+// Điểm DN từ phiếu nhận xét (thang 10):
+// Tốt: 9 hoặc 10 | Khá: 7 hoặc 8 | Trung bình: 5 hoặc 6 | Yếu: dưới 5
+const DN_SCORE_OPTIONS = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+
+/**
+ * Quy đổi điểm DN (thang 10) sang CLO4.x theo trọng số
+ * CLO4.1 max = 2đ  =>  clo41 = (diemDN / 10) * 2
+ * CLO4.2 max = 3đ  =>  clo42 = (diemDN / 10) * 3
+ */
+function convertDNScore(rawScore, maxCLO) {
+  return Math.round((Number(rawScore) / 10) * maxCLO * 100) / 100
+}
+
+const emptyScores = (criteria) => Object.fromEntries(criteria.map((c) => [c.maTieuChi, 0]))
+
 
 export default function ChamDiemCLOPage() {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const { selectedDot, isReadOnly } = useDotThucTap()
-  const { user, maGV, role } = useIdentity()
+  const [searchParams] = useSearchParams()
+  const { selectedDot } = useDotThucTap()
+  const { maGV: identityMaGV, role } = useIdentity() || {}
   const isStaff = role === 'VT01' || role === 'VT02'
+  const maGV = isStaff && searchParams.get('gv') ? searchParams.get('gv') : (identityMaGV || 'GV001')
 
-  const [studentList, setStudentList] = useState([])
-  const [selectedMaSV, setSelectedMaSV] = useState('')
+  // Danh sách giảng viên từ Database
+  const [lecturers, setLecturers] = useState([])
+
+  // Danh sách sinh viên thuộc giảng viên được chọn
+  const [students, setStudents] = useState([])
+  const [maSV, setMaSV] = useState('')
   const [criteria, setCriteria] = useState([])
-  const [loadingStudents, setLoadingStudents] = useState(true)
-  const [loadingGrade, setLoadingGrade] = useState(false)
-  const [error, setError] = useState(null)
-  const [submitting, setSubmitting] = useState(false)
-  const [savedSuccess, setSavedSuccess] = useState('')
-  const [lecturerName, setLecturerName] = useState(user?.hoTen || user?.tenDangNhap || '')
-
-  const [showRubricModal, setShowRubricModal] = useState(false)
-  const [showPdfModal, setShowPdfModal] = useState(false)
-
-  // Điểm từng tiêu chí theo maTieuChi (khởi tạo rỗng)
   const [scores, setScores] = useState({})
+
+  // Điểm thô từ phiếu DN (thang 10) - người dùng chọn từ phiếu giấy
+  const [dnChuyenCan, setDnChuyenCan] = useState('')   // => CLO4.1
+  const [dnChuyenMon, setDnChuyenMon] = useState('')   // => CLO4.2
+
   const [generalReview, setGeneralReview] = useState('')
-  const [confirmIntegrity, setConfirmIntegrity] = useState(false)
-  // Đơn vị thực tập đã chấm Phiếu nhận xét trên hệ thống → GV chỉ xem, không sửa CLO4.x
-  const [dnLocked, setDnLocked] = useState(false)
-  const [exporting, setExporting] = useState(false)
+  const [enterpriseConfirmed, setEnterpriseConfirmed] = useState(false)
+  const [enterpriseNote, setEnterpriseNote] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [showRubric, setShowRubric] = useState(false)
+  const [showPrint, setShowPrint] = useState(false)
 
-  const criteriaGV = criteria.filter((c) => c.nhomDanhGia !== 'DN')
-  const criteriaDN = criteria.filter((c) => c.nhomDanhGia === 'DN')
-  const tongNhom = (list) => list.reduce((sum, c) => sum + (parseFloat(scores[c.maTieuChi]) || 0), 0)
-  const daNhap = (c) => scores[c.maTieuChi] !== undefined && scores[c.maTieuChi] !== ''
 
-  const handleExportBangDiem = async () => {
-    if (!selectedDot?.maDot) return
-    try {
-      setExporting(true)
-      const res = await phieuChamDiemService.getBangDiem(selectedDot.maDot, maGV)
-      xuatBangDiemTheoMauKhoa(res.data?.data, `DiemTTTN_${selectedDot.maDot}_${maGV || 'Khoa'}.xlsx`)
-    } catch (err) {
-      setError('Không thể xuất bảng điểm: ' + (err.response?.data?.message || err.message))
-    } finally {
-      setExporting(false)
-    }
-  }
 
-  // Lấy thông tin giảng viên thật
+  // 1. Tải danh sách giảng viên từ DB
   useEffect(() => {
-    gvHuongDanService
-      .getGiangVienTai()
-      .then((res) => {
-        if (res.data?.hoTen) setLecturerName(res.data.hoTen)
-      })
-      .catch(() => {})
-  }, [])
-
-  // Tải danh mục Tiêu chí CLO từ API
-  useEffect(() => {
-    const fetchTieuChi = async () => {
+    async function loadLecturers() {
       try {
-        const res = await phieuChamDiemService.getDanhSachTieuChi()
+        const res = await gvHuongDanService.getGiangVienTai()
         const data = res.data?.data || res.data || []
-        if (Array.isArray(data)) {
-          setCriteria(data)
-        }
+        setLecturers(data)
       } catch (err) {
-        console.warn('Không thể tải danh mục tiêu chí:', err)
+        console.error('Lỗi tải danh sách giảng viên:', err)
       }
     }
-    fetchTieuChi()
+    loadLecturers()
   }, [])
 
-  // Lấy danh sách SV thực tế theo giảng viên
+  // 2. Tải danh sách sinh viên theo giảng viên được chọn từ DB
   useEffect(() => {
-    if (!maGV && !isStaff) return
-    const fetchStudents = async () => {
+    const loadStudents = async () => {
+      if (!maGV) return
       try {
-        setLoadingStudents(true)
-        setError(null)
-        const targetGV = maGV || ''
-        const res = await gvHuongDanService.getSVTheoGiangVien(targetGV)
+        setLoading(true)
+        const res = await gvHuongDanService.getSVTheoGiangVien(maGV)
         const data = res.data?.data || res.data || []
-        if (Array.isArray(data) && data.length > 0) {
-          const mapped = data.map((item) => ({
-            maSV: item.sinhVien?.maSV || item.maSV,
-            hoTen: item.sinhVien?.hoTen || item.hoTen,
-            lop: item.sinhVien?.lop || item.lop || '—',
-            tenCongTy: item.congTy?.tenCongTy || item.tenCongTy || '—',
-            gpaHienTai: item.sinhVien?.gpa ?? item.gpa ?? '—',
-          }))
-          setStudentList(mapped)
-          const requestedMaSV = searchParams.get('sv')
-          const requestedStudentIsAssigned = mapped.some((student) => student.maSV === requestedMaSV)
-          const nextMaSV = requestedStudentIsAssigned ? requestedMaSV : mapped[0].maSV
-          setSelectedMaSV(nextMaSV)
-          if (nextMaSV !== requestedMaSV) {
-            setSearchParams({ sv: nextMaSV }, { replace: true })
-          }
+        const mapped = data.map((x) => ({
+          maSV: x.sinhVien?.maSV || x.maSV,
+          hoTen: x.sinhVien?.hoTen || x.hoTen,
+          lop: x.sinhVien?.lop || x.lop || '—',
+          chuyenNganh: x.sinhVien?.chuyenNganh || x.chuyenNganh || 'Công nghệ thông tin',
+          tenCongTy: x.congTy?.tenCongTy || x.tenCongTy || 'Chưa phân bổ',
+        }))
+        setStudents(mapped)
+
+        // Kiểm tra nếu có param ?sv= trên URL
+        const paramSV = searchParams.get('sv')
+        if (paramSV && mapped.some((s) => s.maSV === paramSV)) {
+          setMaSV(paramSV)
+        } else if (mapped.length > 0) {
+          setMaSV(mapped[0].maSV)
         } else {
-          setStudentList([])
-          setSelectedMaSV('')
+          setMaSV('')
         }
-      } catch (err) {
-        setError('Không thể tải danh sách sinh viên: ' + (err.response?.data?.message || err.message))
+      } catch (error) {
+        setMessage(`Không tải được danh sách sinh viên: ${error.response?.data?.message || error.message}`)
       } finally {
-        setLoadingStudents(false)
+        setLoading(false)
       }
     }
-    fetchStudents()
-  }, [maGV, isStaff, searchParams, setSearchParams])
+    loadStudents()
+  }, [maGV, searchParams])
 
-  // Lấy điểm đã chấm của sinh viên từ database
+  // 3. Tải rubric tiêu chí theo đợt từ DB
   useEffect(() => {
-    if (!selectedMaSV || !selectedDot?.maDot) {
-      setScores({})
-      setGeneralReview('')
-      return
-    }
-
-    const fetchExistingGrade = async () => {
+    if (!selectedDot?.maDot) return
+    const loadCriteria = async () => {
       try {
-        setLoadingGrade(true)
-        setScores({})
-        setGeneralReview('')
-        setDnLocked(false)
-        const res = await phieuChamDiemService.getPhieuChamBySinhVien(selectedMaSV, selectedDot.maDot)
-        if (res.data?.success && res.data.data) {
-          const p = res.data.data
-          const loaded = {}
-          ;(p.chiTiets || []).forEach((ct) => {
-            loaded[ct.maTieuChi] = Number(ct.diemCham)
-          })
-          setScores(loaded)
-          setGeneralReview(p.nhanXetGV || '')
-          setDnLocked(!!p.doanhNghiepChamTrenHeThong)
+        const res = await phieuChamDiemService.getDanhSachTieuChi(selectedDot.maDot)
+        const data = res.data?.data || res.data || []
+        setCriteria(data)
+        setScores(emptyScores(data))
+      } catch (error) {
+        setMessage(`Không tải được rubric: ${error.response?.data?.message || error.message}`)
+      }
+    }
+    loadCriteria()
+  }, [selectedDot?.maDot])
+
+  // 4. Khi chọn sinh viên khác: nạp điểm đã lưu từ DB
+  useEffect(() => {
+    if (!maSV || !selectedDot?.maDot || !criteria.length) return
+    const loadGrade = async () => {
+      setScores(emptyScores(criteria))
+      setGeneralReview('')
+      setEnterpriseConfirmed(false)
+      setEnterpriseNote('')
+      setDnChuyenCan('')
+      setDnChuyenMon('')
+      try {
+        const res = await phieuChamDiemService.getPhieuChamBySinhVien(maSV, selectedDot.maDot)
+        const p = res.data?.data || res.data
+        if (!p?.chiTiets) return
+
+        const loadedScores = Object.fromEntries(
+          criteria.map((c) => [
+            c.maTieuChi,
+            Number(p.chiTiets.find((x) => x.maTieuChi === c.maTieuChi)?.diemCham || 0),
+          ])
+        )
+        setScores(loadedScores)
+
+        // Phục hồi điểm DN thô từ CLO4.1 / CLO4.2 đã lưu
+        if (clo41) {
+          const saved41 = loadedScores[clo41.maTieuChi] || 0
+          const raw41 = Math.round((saved41 / Number(clo41.diemToiDa)) * 10)
+          setDnChuyenCan(String(raw41))
         }
+        if (clo42) {
+          const saved42 = loadedScores[clo42.maTieuChi] || 0
+          const raw42 = Math.round((saved42 / Number(clo42.diemToiDa)) * 10)
+          setDnChuyenMon(String(raw42))
+        }
+
+        setGeneralReview(p.nhanXetGV || '')
+        setEnterpriseConfirmed(Boolean(p.daDoiChieuPhieuDN))
+        setEnterpriseNote(p.ghiChuPhieuDN || '')
       } catch {
-        // Chưa có phiếu chấm: giữ form rỗng
-        setScores({})
-        setGeneralReview('')
-        setDnLocked(false)
-      } finally {
-        setLoadingGrade(false)
+        /* Chưa có phiếu — bình thường */
       }
     }
-    fetchExistingGrade()
-  }, [selectedMaSV, selectedDot?.maDot])
+    loadGrade()
+  }, [maSV, selectedDot?.maDot, criteria]) // eslint-disable-line
 
-  // Tính tổng điểm trực tiếp từ tổng các tiêu chí
-  const totalScore = useMemo(() => {
-    if (!criteria.length) return '0.00'
-    const total = criteria.reduce((sum, c) => {
-      const val = parseFloat(scores[c.maTieuChi])
-      return sum + (isNaN(val) ? 0 : val)
-    }, 0)
-    return Math.min(10, Math.max(0, total)).toFixed(2)
-  }, [criteria, scores])
+  // Tìm tiêu chí CLO4.1 và CLO4.2
+  const clo41 = criteria.find((c) => c.maCLO === 'CLO4.1')
+  const clo42 = criteria.find((c) => c.maCLO === 'CLO4.2')
+  const needsEnterpriseSheet = Boolean(clo41 || clo42)
 
-  // Xếp loại theo thang điểm 10
-  const gradeInfo = useMemo(() => {
-    const num = parseFloat(totalScore)
-    const hasAnyScore = Object.values(scores).some((v) => v !== '' && v !== null && v !== undefined && Number(v) > 0)
-    if (!hasAnyScore && num === 0) {
-      return { letter: '-', rank: 'Chưa chấm', passed: false, color: 'text-slate-600 bg-slate-50 border-slate-200' }
-    }
-    if (num >= 8.5) return { letter: 'A', rank: 'Giỏi', passed: true, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
-    if (num >= 8.0) return { letter: 'B+', rank: 'Khá giỏi', passed: true, color: 'text-blue-700 bg-blue-50 border-blue-200' }
-    if (num >= 7.0) return { letter: 'B', rank: 'Khá', passed: true, color: 'text-cyan-700 bg-cyan-50 border-cyan-200' }
-    if (num >= 6.5) return { letter: 'C+', rank: 'Trung bình khá', passed: true, color: 'text-amber-700 bg-amber-50 border-amber-200' }
-    if (num >= 5.5) return { letter: 'C', rank: 'Trung bình', passed: true, color: 'text-amber-700 bg-amber-50 border-amber-200' }
-    if (num >= 5.0) return { letter: 'D+', rank: 'Trung bình yếu', passed: true, color: 'text-orange-700 bg-orange-50 border-orange-200' }
-    if (num >= 4.0) return { letter: 'D', rank: 'Yếu', passed: true, color: 'text-orange-700 bg-orange-50 border-orange-200' }
-    return { letter: 'F', rank: 'Không đạt', passed: false, color: 'text-rose-700 bg-rose-50 border-rose-200' }
-  }, [totalScore, scores])
-  const duDiemThanhPhan = criteria.length > 0 && criteria.every(daNhap)
+  // Criteria không phải CLO4.1/CLO4.2 — GV nhập trực tiếp
+  const manualCriteria = criteria.filter((c) => c.maCLO !== 'CLO4.1' && c.maCLO !== 'CLO4.2')
 
-  if (!maGV && !isStaff) {
-    return <NoLinkedAccount />
-  }
+  // Khi thay đổi điểm DN → tự động cập nhật CLO4.1 / CLO4.2 trong scores
+  useEffect(() => {
+    if (!clo41 || dnChuyenCan === '') return
+    const converted = convertDNScore(dnChuyenCan, Number(clo41.diemToiDa))
+    setScores((prev) => ({ ...prev, [clo41.maTieuChi]: converted }))
+  }, [dnChuyenCan, clo41?.maTieuChi]) // eslint-disable-line
 
-  const currentStudent = studentList.find((s) => s.maSV === selectedMaSV) || studentList[0] || null
+  useEffect(() => {
+    if (!clo42 || dnChuyenMon === '') return
+    const converted = convertDNScore(dnChuyenMon, Number(clo42.diemToiDa))
+    setScores((prev) => ({ ...prev, [clo42.maTieuChi]: converted }))
+  }, [dnChuyenMon, clo42?.maTieuChi]) // eslint-disable-line
 
-  const handleScoreChange = (maTieuChi, value, maxVal) => {
-    if (value === '') {
-      setScores((prev) => ({ ...prev, [maTieuChi]: '' }))
-      return
-    }
-    let num = parseFloat(value)
-    if (isNaN(num)) num = 0
-    if (num < 0) num = 0
-    if (num > maxVal) num = maxVal
-    setScores((prev) => ({ ...prev, [maTieuChi]: num }))
-  }
+  const student = students.find((x) => x.maSV === maSV)
+  const currentLecturer = lecturers.find((l) => l.maGV === maGV)
+  const lecturerDisplayName = currentLecturer?.hoTen ? `ThS. ${currentLecturer.hoTen}` : 'Giảng viên hướng dẫn'
 
-  // Lưu điểm chính thức vào server
-  const handleSave = async () => {
-    if (!currentStudent || !selectedDot?.maDot) return
-    if (isReadOnly) {
-      alert('Đợt thực tập đã kết thúc hoặc ở chế độ chỉ đọc.')
-      return
-    }
-    if (!confirmIntegrity) {
-      alert('Vui lòng xác nhận tính chính xác và khách quan trước khi lưu điểm!')
-      return
-    }
+  const total = useMemo(
+    () => criteria.reduce((sum, c) => sum + Number(scores[c.maTieuChi] || 0), 0),
+    [criteria, scores]
+  )
 
-    // Phần giảng viên chấm phải nhập đủ; phần đơn vị thực tập có thể nhập sau
-    const thieu = criteriaGV.filter((c) => !daNhap(c))
-    if (thieu.length > 0) {
-      alert(`Vui lòng nhập đủ điểm phần giảng viên: ${thieu.map((c) => c.maTieuChi).join(', ')}.`)
-      return
-    }
-    for (const c of criteria) {
-      const val = Number(scores[c.maTieuChi] ?? 0)
-      if (val < 0 || val > c.diemToiDa) {
-        alert(`Điểm cho tiêu chí "${c.tenTieuChi}" phải từ 0 đến ${c.diemToiDa}.`)
-        return
-      }
-    }
-    const guiDiem = [...criteriaGV, ...(dnLocked ? [] : criteriaDN.filter(daNhap))]
+  const grade =
+    total >= 8.5 ? 'Xuất sắc' : total >= 7 ? 'Khá' : total >= 5 ? 'Đạt' : 'Chưa đạt'
 
+  const changeScore = (c, value) =>
+    setScores((old) => ({
+      ...old,
+      [c.maTieuChi]: Math.min(Number(c.diemToiDa), Math.max(0, Number(value) || 0)),
+    }))
+
+  const save = async () => {
+    if (!student || !selectedDot?.maDot) return
+    if (needsEnterpriseSheet && !enterpriseConfirmed)
+      return alert('Cần xác nhận đã đối chiếu phiếu nhận xét doanh nghiệp trước khi lưu CLO4.1 và CLO4.2.')
+    if (needsEnterpriseSheet && (dnChuyenCan === '' || dnChuyenMon === ''))
+      return alert('Vui lòng nhập điểm chuyên cần và chuyên môn từ phiếu nhận xét doanh nghiệp.')
     try {
-      setSubmitting(true)
-      setError(null)
+      setSaving(true)
       await phieuChamDiemService.chamDiem({
-        maSV: currentStudent.maSV,
+        maSV: student.maSV,
         maDot: selectedDot.maDot,
-        chiTiets: guiDiem.map((c) => ({
-          maTieuChi: c.maTieuChi,
-          diemCham: Number(scores[c.maTieuChi] ?? 0),
-        })),
-        nhanXet: generalReview,
+        maGVHuongDan: maGV, // Lưu đúng mã giảng viên đang chọn
+        tongDiem: total,
+        chiTiets: criteria.map((c) => ({ maTieuChi: c.maTieuChi, diemCham: Number(scores[c.maTieuChi] || 0) })),
+        nhanXetGV: generalReview,
+        daDoiChieuPhieuDN: enterpriseConfirmed,
+        ghiChuPhieuDN: enterpriseNote,
       })
-
-      setSavedSuccess(`Đã lưu điểm thành công cho sinh viên ${currentStudent.hoTen} (${totalScore}/10).`)
-    } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Không thể lưu điểm vào hệ thống.')
+      setMessage(`Đã lưu phiếu chấm của ${student.hoTen}: ${total.toFixed(2)}/10.`)
+    } catch (error) {
+      alert(`Không thể lưu phiếu chấm: ${error.response?.data?.message || error.message}`)
     } finally {
-      setSubmitting(false)
+      setSaving(false)
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* 1. Header Trang */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      {/* Header */}
+      <header className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-            <span>{selectedDot?.namHoc || 'Năm học'}</span>
-            <span>•</span>
-            <span className="text-blue-600 font-bold">Chuẩn đánh giá học phần Thực tập</span>
+          <p className="text-xs font-bold uppercase text-blue-600">{selectedDot?.tenDot || 'Chọn đợt thực tập'}</p>
+          <h1 className="text-xl font-bold text-slate-900">Đánh giá thực tập theo rubric CNTT</h1>
+          <p className="text-sm text-slate-500">CLO1–CLO3 do GV nhập trực tiếp. CLO4.1 &amp; CLO4.2 lấy từ phiếu nhận xét Doanh nghiệp.</p>
+        </div>
+        <button onClick={() => setShowRubric(true)} className="px-4 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-sm font-bold">
+          Xem rubric
+        </button>
+      </header>
+
+      {message && <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm">{message}</div>}
+
+      {/* Chọn Giảng viên & Sinh viên & Tổng điểm */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Giảng viên hướng dẫn (Cố định theo tài khoản đăng nhập) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200">
+          <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Giảng viên hướng dẫn</label>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-sm">
+            {currentLecturer?.hoTen || 'ThS. Nguyễn Văn An'} ({maGV})
           </div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            Đánh Giá & Chấm Điểm Thực Tập
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-              {selectedDot?.tenDot || 'Đợt thực tập'}
-            </span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Đánh giá theo từng tiêu chí quy định bởi Khoa Công nghệ Thông tin.
+          <p className="mt-3 text-xs text-slate-500">
+            Chuyên môn: <b>{currentLecturer?.chuyenMon || 'Công nghệ phần mềm'}</b>
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Bộ chọn Sinh viên thuộc Giảng viên */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200">
+          <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Sinh viên hướng dẫn</label>
+          {loading ? (
+            <div className="p-3 text-xs text-slate-400 bg-slate-50 rounded-xl">Đang tải sinh viên...</div>
+          ) : students.length > 0 ? (
+            <select
+              value={maSV}
+              onChange={(e) => setMaSV(e.target.value)}
+              className="w-full border rounded-xl p-3 font-semibold text-slate-800 bg-white"
+            >
+              {students.map((s) => (
+                <option key={s.maSV} value={s.maSV}>
+                  {s.hoTen} ({s.maSV}) — {s.lop}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="p-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl">
+              Chưa có sinh viên nào phân công cho giảng viên này.
+            </div>
+          )}
+          <p className="mt-3 text-sm text-slate-600">Doanh nghiệp: <b>{student?.tenCongTy || '-'}</b></p>
+        </div>
+
+        {/* Tổng điểm */}
+        <div className="bg-blue-700 text-white p-5 rounded-2xl flex flex-col justify-between">
+          <div>
+            <p className="text-sm text-blue-100">Tổng điểm toàn diện (thang 10)</p>
+            <p className="text-5xl font-black mt-2">{total.toFixed(2)}</p>
+          </div>
+          <p className="mt-3 text-sm">Xếp loại: <b>{grade}</b></p>
+        </div>
+      </section>
+
+      {/* CLO1 – CLO3: GV nhập trực tiếp */}
+      <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="p-5 border-b">
+          <h2 className="font-bold">CLO1 – CLO3: Điểm do Giảng viên chấm</h2>
+          <p className="text-xs text-slate-500 mt-1">Nhập điểm từng tiêu chí không vượt quá mức tối đa.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left">
+              <tr>
+                <th className="p-3">CLO</th>
+                <th className="p-3">Tiêu chí</th>
+                <th className="p-3 text-center">Tối đa</th>
+                <th className="p-3 text-center">Điểm GV chấm</th>
+              </tr>
+            </thead>
+            <tbody>
+              {manualCriteria.map((c) => (
+                <tr key={c.maTieuChi} className="border-t">
+                  <td className="p-3 font-bold text-blue-700">{c.maCLO || c.maTieuChi}</td>
+                  <td className="p-3">{c.tenTieuChi}</td>
+                  <td className="p-3 text-center">{Number(c.diemToiDa).toFixed(2)}</td>
+                  <td className="p-3 text-center">
+                    <input
+                      type="number"
+                      min="0"
+                      max={c.diemToiDa}
+                      step="0.05"
+                      value={scores[c.maTieuChi] ?? 0}
+                      onChange={(e) => changeScore(c, e.target.value)}
+                      className="w-24 text-center border rounded-lg p-2"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* CLO4.1 & CLO4.2: Lấy từ Phiếu nhận xét DN */}
+      {needsEnterpriseSheet && (
+        <section className="bg-white rounded-2xl border border-amber-300 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-amber-200 bg-amber-50 flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <h2 className="font-bold text-amber-900">CLO4: Điểm từ Phiếu nhận xét Doanh nghiệp (5.00 điểm)</h2>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Chọn điểm đánh giá từ phiếu doanh nghiệp (thang 10) → Hệ thống tự động quy đổi:
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-amber-800 bg-amber-100 px-3 py-1 rounded-full">
+              CLO = (Điểm DN / 10) × Tối đa
+            </span>
+          </div>
+
+          <div className="p-5 grid md:grid-cols-2 gap-6">
+            {/* CLO4.1 - Chuyên cần */}
+            {clo41 && (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">CLO4.1 — Điểm chuyên cần, phong cách</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Ý thức, trách nhiệm, kỷ luật (Phiếu nhận xét DN)</p>
+                </div>
+
+                {/* Bảng chọn theo phiếu giấy */}
+                <div className="border rounded-xl overflow-hidden text-sm">
+                  <div className="bg-slate-50 px-3 py-1.5 font-semibold text-slate-600 text-xs uppercase">
+                    Thang điểm 10 trên phiếu
+                  </div>
+                  {[
+                    { label: 'Tốt', values: [10, 9] },
+                    { label: 'Khá', values: [8, 7] },
+                    { label: 'Trung bình', values: [6, 5] },
+                    { label: 'Yếu (< 5)', values: [4, 3, 2, 1, 0] },
+                  ].map(({ label, values }) => (
+                    <div key={label} className="flex items-center border-t px-3 py-2 gap-3">
+                      <span className="w-24 text-xs text-slate-500 font-medium">{label}:</span>
+                      <div className="flex gap-2 flex-wrap">
+                        {values.map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setDnChuyenCan(String(v))}
+                            className={`w-9 h-9 rounded-lg border text-sm font-bold transition-all ${
+                              dnChuyenCan === String(v)
+                                ? 'bg-amber-500 border-amber-600 text-white shadow-sm'
+                                : 'border-slate-300 text-slate-600 hover:border-amber-400'
+                            }`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Kết quả quy đổi */}
+                <div className={`rounded-xl px-4 py-3 flex items-center justify-between text-sm font-semibold ${dnChuyenCan !== '' ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50 border border-slate-200'}`}>
+                  <span className="text-slate-600">CLO4.1 quy đổi:</span>
+                  <span className={`text-lg font-black ${dnChuyenCan !== '' ? 'text-amber-700' : 'text-slate-400'}`}>
+                    {dnChuyenCan !== ''
+                      ? `${convertDNScore(dnChuyenCan, Number(clo41.diemToiDa)).toFixed(2)} / ${Number(clo41.diemToiDa).toFixed(2)}`
+                      : '— / ' + Number(clo41.diemToiDa).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* CLO4.2 - Chuyên môn */}
+            {clo42 && (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-bold text-slate-800">CLO4.2 — Điểm chuyên môn</p>
+                  <p className="text-xs text-slate-500 mt-0.5">Khả năng vận dụng kiến thức thực tiễn (Phiếu nhận xét DN)</p>
+                </div>
+
+                <div className="border rounded-xl overflow-hidden text-sm">
+                  <div className="bg-slate-50 px-3 py-1.5 font-semibold text-slate-600 text-xs uppercase">
+                    Thang điểm 10 trên phiếu
+                  </div>
+                  {[
+                    { label: 'Tốt', values: [10, 9] },
+                    { label: 'Khá', values: [8, 7] },
+                    { label: 'Trung bình', values: [6, 5] },
+                    { label: 'Yếu (< 5)', values: [4, 3, 2, 1, 0] },
+                  ].map(({ label, values }) => (
+                    <div key={label} className="flex items-center border-t px-3 py-2 gap-3">
+                      <span className="w-24 text-xs text-slate-500 font-medium">{label}:</span>
+                      <div className="flex gap-2 flex-wrap">
+                        {values.map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setDnChuyenMon(String(v))}
+                            className={`w-9 h-9 rounded-lg border text-sm font-bold transition-all ${
+                              dnChuyenMon === String(v)
+                                ? 'bg-blue-600 border-blue-700 text-white shadow-sm'
+                                : 'border-slate-300 text-slate-600 hover:border-blue-400'
+                            }`}
+                          >
+                            {v}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className={`rounded-xl px-4 py-3 flex items-center justify-between text-sm font-semibold ${dnChuyenMon !== '' ? 'bg-blue-50 border border-blue-200' : 'bg-slate-50 border border-slate-200'}`}>
+                  <span className="text-slate-600">CLO4.2 quy đổi:</span>
+                  <span className={`text-lg font-black ${dnChuyenMon !== '' ? 'text-blue-700' : 'text-slate-400'}`}>
+                    {dnChuyenMon !== ''
+                      ? `${convertDNScore(dnChuyenMon, Number(clo42.diemToiDa)).toFixed(2)} / ${Number(clo42.diemToiDa).toFixed(2)}`
+                      : '— / ' + Number(clo42.diemToiDa).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Xác nhận đối chiếu phiếu */}
+          <div className="px-5 pb-5 pt-2 border-t border-amber-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <label className="flex gap-2 items-center text-sm font-semibold text-amber-950 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={enterpriseConfirmed}
+                onChange={(e) => setEnterpriseConfirmed(e.target.checked)}
+                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+              />
+              Đã đối chiếu phiếu nhận xét gốc của doanh nghiệp
+            </label>
+            <input
+              value={enterpriseNote}
+              onChange={(e) => setEnterpriseNote(e.target.value)}
+              className="border border-amber-200 rounded-lg px-3 py-1.5 text-xs md:w-80 bg-white placeholder:text-slate-400"
+              placeholder="Ghi chú nguồn phiếu (số phiếu, ngày nhận...)"
+            />
+          </div>
+        </section>
+      )}
+
+      {/* Nhận xét GV + Nút lưu */}
+      <section className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+        <div>
+          <label className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+            <span className="material-symbols-outlined text-base text-blue-600">rate_review</span>
+            Nhận xét của giảng viên hướng dẫn
+          </label>
+
+          <textarea
+            value={generalReview}
+            onChange={(e) => setGeneralReview(e.target.value)}
+            rows="3"
+            className="w-full border border-slate-300 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-normal placeholder:text-slate-400"
+            placeholder="Nhận xét tổng quát về tinh thần thái độ, ý thức kỷ luật và mức độ hoàn thành nhiệm vụ thực tập của sinh viên..."
+          />
+        </div>
+
+        <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
           <button
             type="button"
-            onClick={() => setShowRubricModal(true)}
-            className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1.5 border border-blue-200 shadow-sm transition-all cursor-pointer"
+            onClick={() => setShowPrint(true)}
+            className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-sm font-bold text-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <span className="material-symbols-outlined text-base text-blue-600">menu_book</span>
-            <span>Hướng dẫn Rubric</span>
+            <span className="material-symbols-outlined text-base">print</span>
+            <span>Xem & In phiếu điểm PDF</span>
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !criteria.length}
+            className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-sm font-bold disabled:opacity-50 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+          >
+            {saving ? (
+              <span className="material-symbols-outlined text-base animate-spin">sync</span>
+            ) : (
+              <span className="material-symbols-outlined text-base">save</span>
+            )}
+            <span>{saving ? 'Đang lưu...' : 'Lưu phiếu chấm'}</span>
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* Thông báo lỗi nếu có */}
-      {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs sm:text-sm flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-rose-600">error</span>
-            <span className="font-semibold">{error}</span>
-          </div>
-          <button onClick={() => setError(null)} className="text-rose-600 hover:text-rose-800 cursor-pointer">
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-      )}
-
-      {/* Thông báo thành công nếu có */}
-      {savedSuccess && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-emerald-600">check_circle</span>
-            <span className="font-semibold">{savedSuccess}</span>
-          </div>
-          <button onClick={() => setSavedSuccess('')} className="text-emerald-600 hover:text-emerald-800 cursor-pointer">
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </div>
-      )}
-
-      {loadingStudents ? (
-        <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center text-slate-400 text-xs">
-          Đang tải danh sách sinh viên hướng dẫn...
-        </div>
-      ) : studentList.length === 0 ? (
-        <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-2">
-          <span className="material-symbols-outlined text-4xl text-slate-300">school</span>
-          <p className="text-sm font-semibold text-slate-700">Chưa có sinh viên nào được phân công hướng dẫn.</p>
-          <p className="text-xs text-slate-400">Danh sách sinh viên phân công sẽ được cập nhật từ Văn phòng Khoa.</p>
-        </div>
-      ) : (
-        <>
-          {/* 2. Bộ chọn sinh viên & Thẻ tóm tắt thông tin */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-            {/* Bộ chọn sinh viên */}
-            <div className="xl:col-span-6 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Sinh viên hướng dẫn ({studentList.length} SV)
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                    <span className="material-symbols-outlined text-[14px]">edit_note</span>
-                    Chấm điểm
-                  </span>
-                </div>
-
-                <div className="relative">
-                  <select
-                    value={selectedMaSV}
-                    onChange={(e) => setSelectedMaSV(e.target.value)}
-                    className="w-full h-11 pl-3 pr-10 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
-                  >
-                    {studentList.map((s) => (
-                      <option key={s.maSV} value={s.maSV}>
-                        {s.hoTen} ({s.maSV}) - {s.lop}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {currentStudent && (
-                <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100 text-xs">
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="text-slate-400">Đơn vị thực tập</span>
-                    <p className="font-bold text-slate-800 mt-0.5 truncate" title={currentStudent.tenCongTy}>
-                      {currentStudent.tenCongTy}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                    <span className="text-slate-400">Điểm GPA tích lũy</span>
-                    <p className="font-bold text-emerald-600 mt-0.5">{currentStudent.gpaHienTai}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Tổng quan cấu trúc điểm học phần */}
-            <div className="xl:col-span-6 bg-gradient-to-br from-blue-700 to-indigo-800 text-white rounded-2xl p-6 shadow-md flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between text-xs text-blue-200 uppercase font-semibold">
-                  <span>Tổng hợp điểm đánh giá</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white font-bold">Thang điểm 10</span>
-                </div>
-
-                <div className="mt-3 flex items-baseline gap-2">
-                  <span className="text-5xl font-black font-mono tracking-tight">{totalScore}</span>
-                  <span className="text-xl text-blue-200 font-semibold">/ 10</span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-white text-blue-800 shadow-sm">
-                    <span className="material-symbols-outlined text-sm">military_tech</span>
-                    Điểm chữ: {gradeInfo.letter} ({gradeInfo.rank})
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
-                    <span className="material-symbols-outlined text-sm">check_circle</span>
-                    {!duDiemThanhPhan ? 'Chưa đủ điểm thành phần' : gradeInfo.passed ? 'Đạt' : 'Không đạt'}
-                  </span>
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div className="px-3 py-2 rounded-xl bg-white/10">
-                    GVHD chấm: <b>{tongNhom(criteriaGV).toFixed(2)}</b> / {criteriaGV.reduce((a, c) => a + Number(c.diemToiDa), 0).toFixed(1)}
-                  </div>
-                  <div className="px-3 py-2 rounded-xl bg-white/10">
-                    Đơn vị thực tập: <b>{tongNhom(criteriaDN).toFixed(2)}</b> / {criteriaDN.reduce((a, c) => a + Number(c.diemToiDa), 0).toFixed(1)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 mt-4 border-t border-white/10 text-xs text-blue-200 flex justify-between items-center">
-                <span>Trạng thái:</span>
-                <span className="font-bold text-white">
-                  {loadingGrade ? 'Đang tải dữ liệu...' : Object.keys(scores).length > 0 ? 'Đã nhập điểm' : 'Chưa nhập điểm'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Bảng Nhập Điểm Tiêu Chí */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-200 bg-slate-50/75 flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-                  Chi Tiết Tiêu Chí Đánh Giá Thực Tập
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Nhập điểm thành phần cho từng tiêu chí đánh giá. Điểm tối đa mỗi tiêu chí được quy định bởi Khoa.
-                </p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
-                    <th className="py-3 px-4 w-28">Mã tiêu chí</th>
-                    <th className="py-3 px-4 min-w-[280px]">Nội dung tiêu chí đánh giá</th>
-                    <th className="py-3 px-4 w-32 text-center">Điểm tối đa</th>
-                    <th className="py-3 px-4 w-44 text-center">Điểm chấm</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
-                  {criteria.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-slate-400">
-                        Chưa có tiêu chí đánh giá được cấu hình.
-                      </td>
-                    </tr>
-                  ) : (
-                    criteria.map((c, idx) => {
-                      const currentVal = scores[c.maTieuChi] ?? ''
-                      const isDN = c.nhomDanhGia === 'DN'
-                      const locked = isReadOnly || (isDN && dnLocked)
-                      const batDauNhom = idx === 0 || criteria[idx - 1].nhomDanhGia !== c.nhomDanhGia
-                      return (
-                        <Fragment key={c.maTieuChi}>
-                        {batDauNhom && (
-                          <tr className={isDN ? 'bg-indigo-50/70' : 'bg-blue-50/70'}>
-                            <td colSpan={4} className="py-2.5 px-4 text-xs font-bold text-slate-700">
-                              {isDN
-                                ? dnLocked
-                                  ? 'Phần B – Đơn vị thực tập đánh giá (Phiếu nhận xét) · Doanh nghiệp đã chấm trên hệ thống'
-                                  : 'Phần B – Đơn vị thực tập đánh giá (Phiếu nhận xét) · Doanh nghiệp chưa chấm trên hệ thống, GVHD nhập từ Phiếu nhận xét bản giấy'
-                                : 'Phần A – Giảng viên hướng dẫn chấm'}
-                            </td>
-                          </tr>
-                        )}
-                        <tr className="hover:bg-slate-50/70 transition-colors">
-                          <td className="py-4 px-4 align-top">
-                            <span className="inline-flex items-center gap-1 font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-mono">
-                              {c.maTieuChi}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 align-top">
-                            <p className="font-bold text-slate-900 text-sm">{c.tenTieuChi}</p>
-                          </td>
-                          <td className="py-4 px-4 align-top text-center font-bold text-slate-700 font-mono text-sm">
-                            {c.diemToiDa} đ
-                          </td>
-                          <td className="py-4 px-4 align-top text-center">
-                            <div className="inline-flex items-center gap-1.5">
-                              <input
-                                type="number"
-                                step="0.25"
-                                min="0"
-                                max={c.diemToiDa}
-                                value={currentVal}
-                                disabled={locked}
-                                onChange={(e) => handleScoreChange(c.maTieuChi, e.target.value, c.diemToiDa)}
-                                placeholder="0"
-                                className="w-24 px-3 py-1.5 rounded-xl border border-slate-200 text-center font-bold text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm disabled:bg-slate-100"
-                              />
-                              <span className="text-slate-400 font-medium">/ {c.diemToiDa}</span>
-                            </div>
-                          </td>
-                        </tr>
-                        </Fragment>
-                      )
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Điều khoản cam kết & Toolbar */}
-            <div className="p-6 bg-slate-50/50 border-t border-slate-200 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">
-                  Ghi chú đánh giá của Giảng viên hướng dẫn (tùy chọn):
-                </label>
-                <textarea
-                  rows={3}
-                  value={generalReview}
-                  onChange={(e) => setGeneralReview(e.target.value)}
-                  placeholder="Nhập ghi chú cho sinh viên..."
-                  className="w-full p-3 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none shadow-sm"
-                />
-              </div>
-
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="confirm-integrity"
-                  checked={confirmIntegrity}
-                  onChange={(e) => setConfirmIntegrity(e.target.checked)}
-                  disabled={isReadOnly}
-                  className="rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                />
-                <label htmlFor="confirm-integrity" className="text-xs text-slate-600 cursor-pointer select-none">
-                  Tôi xác nhận điểm số phản ánh khách quan, minh bạch quá trình thực tập của sinh viên.
-                </label>
-              </div>
-
-              {/* Toolbar nút hành động */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={handleExportBangDiem}
-                  disabled={exporting}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
-                  title="Xuất file Excel theo mẫu chấm điểm của Khoa (CLO1.1 → CLO4.2)"
-                >
-                  <span className="material-symbols-outlined text-base text-emerald-600">table_view</span>
-                  {exporting ? 'Đang xuất...' : 'Xuất file chấm điểm (mẫu Khoa)'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPdfModal(true)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-base text-rose-600">picture_as_pdf</span>
-                  Xem & Xuất phiếu điểm PDF
-                </button>
-
-                <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={submitting || !confirmIntegrity || isReadOnly}
-                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold transition-all shadow-sm hover:shadow cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
-                  >
-                    {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                    <span>Lưu điểm</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* MODAL 1: Rubric CLO */}
-      <RubricCLOModal
-        isOpen={showRubricModal}
-        onClose={() => setShowRubricModal(false)}
+      <RubricCLOModal isOpen={showRubric} onClose={() => setShowRubric(false)} criteria={criteria} />
+      <PhieuDiemPdfModal
+        isOpen={showPrint}
+        onClose={() => setShowPrint(false)}
+        currentStudent={student}
+        selectedDot={selectedDot}
         criteria={criteria}
+        scores={scores}
+        total={total}
+        generalReview={generalReview}
+        enterpriseConfirmed={enterpriseConfirmed}
+        enterpriseNote={enterpriseNote}
+        dnChuyenCan={dnChuyenCan}
+        dnChuyenMon={dnChuyenMon}
+        lecturerName={lecturerDisplayName}
       />
-
-      {/* MODAL 2: Xem trước Phiếu điểm PDF */}
-      {currentStudent && (
-        <PhieuDiemPdfModal
-          isOpen={showPdfModal}
-          onClose={() => setShowPdfModal(false)}
-          currentStudent={currentStudent}
-          selectedDot={selectedDot}
-          criteria={criteria}
-          scores={scores}
-          totalScore={totalScore}
-          gradeInfo={gradeInfo}
-          generalReview={generalReview}
-          lecturerName={lecturerName}
-        />
-      )}
     </div>
   )
 }

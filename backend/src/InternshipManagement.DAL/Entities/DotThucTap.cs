@@ -8,6 +8,7 @@ public class DotThucTap
     public DateTime ThoiGianBD { get; set; }
     public DateTime ThoiGianKT { get; set; }
     public string TrangThai { get; set; } = "ChuaBatDau";
+    public string MaRubric { get; set; } = "CNTT_CLO_V1";
 
     public ICollection<DangKyThucTap> DangKyThucTaps { get; set; } = new List<DangKyThucTap>();
     public ICollection<PhanBoThucTap> PhanBoThucTaps { get; set; } = new List<PhanBoThucTap>();

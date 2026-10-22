@@ -1,4 +1,4 @@
-using InternshipManagement.API.Infrastructure;
+﻿﻿using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.DTOs.Admin;
 using InternshipManagement.BLL.Services.Admin;
 using Microsoft.AspNetCore.Authorization;
@@ -24,6 +24,13 @@ public class AdminController(AdminService service) : ControllerBase
     {
         await service.UpdateAccountAsync(id, r, User.IsInRole(Infrastructure.Roles.QuanTriVien), User.MaTaiKhoan());
         return Ok();
+    }
+
+    [HttpPost("accounts/{id}/reset-password")]
+    public async Task<IActionResult> ResetPassword(string id, [FromBody] ResetPasswordRequest? r)
+    {
+        var newPass = await service.ResetPasswordAsync(id, r, User.IsInRole(Infrastructure.Roles.QuanTriVien), User.MaTaiKhoan());
+        return Ok(new { message = "Đã đặt lại mật khẩu cho tài khoản thành công.", matKhauMoi = newPass });
     }
 
     [HttpGet("roles")]

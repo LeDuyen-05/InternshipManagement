@@ -20,9 +20,9 @@ public class PhieuChamDiemController : ControllerBase
     }
 
     [HttpGet("tieu-chi")]
-    public async Task<IActionResult> GetDanhSachTieuChi([FromQuery] string? nhom)
+    public async Task<IActionResult> GetDanhSachTieuChi([FromQuery] string? maDot, [FromQuery] string? nhom)
     {
-        var result = await _service.GetDanhSachTieuChiAsync(nhom);
+        var result = await _service.GetDanhSachTieuChiAsync(maDot, nhom);
         return Ok(new { success = true, data = result });
     }
 

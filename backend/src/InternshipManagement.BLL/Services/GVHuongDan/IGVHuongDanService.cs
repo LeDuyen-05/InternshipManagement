@@ -6,6 +6,7 @@ namespace InternshipManagement.BLL.Services.GVHuongDan;
 public interface IGVHuongDanService
 {
     Task<IReadOnlyList<SVHuongDanDto>> GetDanhSachSVTheoGiangVienAsync(string maGV, string? keyword = null);
+    Task<IReadOnlyList<TatCaPhanCongDto>> GetTatCaPhanCongAsync();
     Task<IReadOnlyList<SVChuaPhanCongDto>> GetDanhSachSVChuaPhanCongAsync(string? keyword = null);
     Task<IReadOnlyList<GiangVienTaiDto>> GetDanhSachGiangVienKemTaiAsync();
     Task<SVHuongDanDto> PhanCongDonLeAsync(PhanCongDonLeRequest request);

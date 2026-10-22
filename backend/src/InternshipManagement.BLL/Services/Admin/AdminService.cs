@@ -1,4 +1,4 @@
-using InternshipManagement.BLL.DTOs.Admin;
+﻿﻿using InternshipManagement.BLL.DTOs.Admin;
 using InternshipManagement.DAL;
 using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +26,7 @@ public class AdminService
 
     public async Task CreateAccountAsync(CreateAccountRequest r, bool callerIsAdmin = true, string? callerAccountId = null)
     {
-        if (string.IsNullOrWhiteSpace(r.MatKhau) || r.MatKhau.Length < 6)
-            throw new ArgumentException("Mật khẩu tối thiểu 6 ký tự.");
+        if (string.IsNullOrWhiteSpace(r.MatKhau) || r.MatKhau.Length < 6) throw new ArgumentException("Mật khẩu tối thiểu 6 ký tự.");
 
         if (!callerIsAdmin && (r.MaVaiTro is "VT01" or "VT02"))
             throw new UnauthorizedAccessException("Bạn không có quyền tạo tài khoản Quản trị hoặc Khoa.");
@@ -134,6 +133,23 @@ public class AdminService
         x.MaGV = req.MaVaiTro == "VT03" ? req.MaGV : null;
         x.MaDaiDien = req.MaVaiTro == "VT05" ? req.MaDaiDien : null;
         await _db.SaveChangesAsync();
+    }
+
+    public async Task<string> ResetPasswordAsync(string id, ResetPasswordRequest? req, bool callerIsAdmin = true, string? callerAccountId = null)
+    {
+        var x = await _db.TaiKhoans.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+
+        if (!callerIsAdmin && (x.MaVaiTro is "VT01" or "VT02"))
+            throw new UnauthorizedAccessException("Bạn không có quyền đặt lại mật khẩu cho tài khoản Quản trị hoặc Khoa.");
+
+        var newPass = string.IsNullOrWhiteSpace(req?.MatKhauMoi) ? "123456" : req.MatKhauMoi.Trim();
+        if (newPass.Length < 6)
+            throw new ArgumentException("Mật khẩu tối thiểu 6 ký tự.");
+
+        x.MatKhau = _passwords.Hash(newPass);
+        await _db.SaveChangesAsync();
+
+        return newPass;
     }
 
     public Task<List<InternshipManagement.DAL.Entities.SinhVien>> StudentsAsync()=> _db.SinhViens.AsNoTracking().OrderBy(x => x.MaSV).ToListAsync();

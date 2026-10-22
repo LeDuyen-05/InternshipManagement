@@ -3,13 +3,14 @@ import { gioiThieuService } from '../../services/gioiThieuService'
 import { useIdentity } from '../../hooks/useIdentity'
 
 export default function GioiThieuCongTyPage() {
-  const { maGV } = useIdentity()
+  const { maGV } = useIdentity() || {}
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
 
-  const currentMaGV = maGV
+  // Giả lập tài khoản giảng viên hiện tại
+  const currentMaGV = maGV || 'GV001'
 
   // Form đề xuất công ty
   const [tenCongTy, setTenCongTy] = useState('')
@@ -28,13 +29,7 @@ export default function GioiThieuCongTyPage() {
     try {
       setLoading(true)
       setError(null)
-      if (!currentMaGV) {
-        setList([])
-        setError('Không xác định được mã giảng viên của tài khoản đang đăng nhập.')
-        return
-      }
-
-      const res = await gioiThieuService.getByGiangVien(currentMaGV)
+      const res = await gioiThieuService.getAll()
       if (res.data?.success) {
         setList(res.data.data || [])
       } else {
@@ -49,7 +44,7 @@ export default function GioiThieuCongTyPage() {
 
   useEffect(() => {
     loadData()
-  }, [currentMaGV])
+  }, [])
 
   // Hàm bóc tách thông minh từ văn bản JD
   const parseJdText = (text) => {
@@ -58,14 +53,14 @@ export default function GioiThieuCongTyPage() {
     setParsingJd(true)
     try {
       // 1. Tìm tên công ty (tìm các dòng có từ "Công ty", "Company", "Tập đoàn")
-      const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,.]+)/i)
+      const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,\.]+)/i)
       if (companyMatch) {
         setTenCongTy(companyMatch[0].trim())
       }
 
       // 2. Tìm vị trí tuyển dụng (tìm các từ Intern, Developer, Kỹ sư, Lập trình viên)
       const positionMatch = text.match(/(?:Vị trí|Position|Tuyển dụng|Tuyển)\s*:\s*([^\n\r]+)/i) ||
-                            text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,.]+)/i)
+                            text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,\.]+)/i)
       if (positionMatch) {
         setViTriTuyen(positionMatch[1]?.trim() || positionMatch[0]?.trim())
       }
@@ -126,6 +121,7 @@ export default function GioiThieuCongTyPage() {
       setSuccessMsg('')
 
       const res = await gioiThieuService.deXuatMoi({
+        maGV: currentMaGV,
         tenCongTy: tenCongTy.trim(),
         viTriTuyen: viTriTuyen.trim(),
         soLuongNhan: Number(soLuongNhan) || 1,
@@ -174,21 +170,18 @@ export default function GioiThieuCongTyPage() {
       case 'DaDuyet':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             Đã duyệt
           </span>
         )
       case 'TuChoi':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
             Từ chối
           </span>
         )
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
             Chờ duyệt
           </span>
         )
@@ -415,7 +408,7 @@ export default function GioiThieuCongTyPage() {
                         </td>
                         <td className="py-3 px-3 text-right">
                           {/* Giảng viên chỉ được hủy đề xuất của mình khi chưa duyệt */}
-                          {item.maGV?.toUpperCase() === currentMaGV?.toUpperCase() && item.trangThaiKetNoi === 'DangXem' ? (
+                          {item.trangThaiKetNoi !== 'DaDuyet' ? (
                             <button
                               type="button"
                               onClick={() => handleDelete(item.maSo)}

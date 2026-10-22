@@ -18,3 +18,4 @@ public record SaveAssessmentRequest(List<ScoreCriterionRequest> ChiTiet);
 public record SendNotificationRequest(string TieuDe, string NoiDung, string? DoiTuong = "ALL", string? LoaiThongBao = "Chung", string? TepDinhKem = null, bool Ghim = false);
 public record ReportApprovalRequest(string TrangThai, string? NhanXet = null);
 public record GenerateReportSlotsRequest(string MaDot, int SoTuan = 10, DateTime? NgayBatDau = null);
+public record ResetPasswordRequest(string? MatKhauMoi = null);

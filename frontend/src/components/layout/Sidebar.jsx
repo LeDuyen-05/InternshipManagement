@@ -49,7 +49,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         { path: '/khoa/phan-bo', label: 'Phân bổ nhanh theo công ty', icon: 'swap_horiz' },
         { path: '/khoa/dang-ky', label: 'Duyệt đăng ký thực tập', icon: 'how_to_reg' },
         { path: '/khoa/theo-doi', label: 'Theo dõi tiến độ toàn khoa', icon: 'trending_up' },
-        { path: '/khoa/thong-ke', label: 'Báo cáo thống kê CLO', icon: 'bar_chart' },
+        { path: '/khoa/thong-ke-clo', label: 'Báo cáo thống kê CLO', icon: 'bar_chart' },
         { path: '/khoa/hoi-dong', label: 'Hội đồng & Phản biện', icon: 'groups' },
       ],
       tienIch: [

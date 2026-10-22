@@ -4,63 +4,48 @@ import * as XLSX from 'xlsx'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
-import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 
 export default function DanhSachSVHuongDanPage() {
   const [searchParams] = useSearchParams()
   const { selectedDot, isReadOnly } = useDotThucTap()
-  const { user, role, maGV } = useIdentity()
+  const { maGV: identityMaGV, role } = useIdentity() || {}
+  const isStaff = role === 'VT01' || role === 'VT02'
 
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [keyword, setKeyword] = useState('')
-  const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [selectedSV, setSelectedSV] = useState(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [lecturerInfo, setLecturerInfo] = useState(null)
 
+  // Nếu Cán bộ Khoa bấm nút "Xem DS" từ trang Phân công sang thì có param ?gv=...
+  // Nếu là Giảng viên thì luôn luôn là tài khoản của chính mình
   const urlMaGV = searchParams.get('gv')
-  const isStaff = role === 'VT01' || role === 'VT02'
-  const targetMaGV = isStaff && urlMaGV ? urlMaGV : maGV
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedKeyword(keyword)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [keyword])
-
-  useEffect(() => {
-    if (!targetMaGV) return
-    let active = true
-    gvHuongDanService.getGiangVienTai()
-      .then((resGvTai) => {
-        if (!active) return
-        const rawGvTai = resGvTai?.data?.data ?? resGvTai?.data ?? []
-        if (Array.isArray(rawGvTai)) {
-          const found = rawGvTai.find(
-            (g) => g?.maGV?.toUpperCase() === targetMaGV?.toString().toUpperCase()
-          )
-          if (found) setLecturerInfo(found)
-        }
-      })
-      .catch(() => {})
-    return () => { active = false }
-  }, [targetMaGV])
+  const currentMaGV = isStaff && urlMaGV ? urlMaGV : (identityMaGV || 'GV001')
 
   const loadData = async () => {
-    if (!targetMaGV) return
     try {
       setLoading(true)
       setError(null)
-      const resSv = await gvHuongDanService.getSVTheoGiangVien(targetMaGV, debouncedKeyword)
-      const rawSvList = resSv?.data?.data ?? resSv?.data ?? []
-      setList(Array.isArray(rawSvList) ? rawSvList : [])
+      const [resSv, resGvTai] = await Promise.all([
+        gvHuongDanService.getSVTheoGiangVien(currentMaGV, keyword),
+        gvHuongDanService.getGiangVienTai(),
+      ])
+
+      if (resSv.data?.success) {
+        setList(resSv.data.data || [])
+      } else {
+        setList(resSv.data || [])
+      }
+
+      if (resGvTai.data?.success) {
+        const found = resGvTai.data.data?.find((g) => g.maGV === currentMaGV)
+        if (found) setLecturerInfo(found)
+      }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Không thể tải danh sách sinh viên')
-      setList([])
     } finally {
       setLoading(false)
     }
@@ -68,26 +53,20 @@ export default function DanhSachSVHuongDanPage() {
 
   useEffect(() => {
     loadData()
-  }, [targetMaGV, debouncedKeyword, selectedDot])
+  }, [currentMaGV, keyword, selectedDot])
 
-  if (!targetMaGV) {
-    return <NoLinkedAccount />
-  }
-
-  // Lọc dữ liệu hiển thị theo tab trạng thái an toàn tuyệt đối
-  const safeList = Array.isArray(list) ? list : []
-  const filteredList = safeList.filter((item) => {
-    if (!item) return false
+  // Lọc dữ liệu hiển thị theo tab trạng thái
+  const filteredList = list.filter((item) => {
     if (statusFilter === 'ALL') return true
     return item.trangThai === statusFilter
   })
 
   // Tính toán thống kê KPI
-  const totalSV = safeList.length
-  const dangHuongDanCount = safeList.filter((s) => s?.trangThai === 'DangHuongDan').length
-  const hoanThanhCount = safeList.filter((s) => s?.trangThai === 'HoanThanh').length
+  const totalSV = list.length
+  const dangHuongDanCount = list.filter((s) => s.trangThai === 'DangHuongDan').length
+  const hoanThanhCount = list.filter((s) => s.trangThai === 'HoanThanh').length
   const avgGpa = totalSV > 0
-    ? (safeList.reduce((acc, cur) => acc + (Number(cur?.gpa) || 0), 0) / totalSV).toFixed(2)
+    ? (list.reduce((acc, cur) => acc + (cur.gpa || 0), 0) / totalSV).toFixed(2)
     : '0.00'
   // Xuất danh sách sinh viên ra file Excel
   const handleExportExcel = () => {
@@ -123,7 +102,7 @@ export default function DanhSachSVHuongDanPage() {
     ]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'SinhVienHuongDan')
-    XLSX.writeFile(wb, `DS_SinhVien_GV_${targetMaGV}_${selectedDot?.maDot || 'FIT'}.xlsx`)
+    XLSX.writeFile(wb, `DS_SinhVien_GV_${currentMaGV}_${selectedDot?.maDot || 'FIT'}.xlsx`)
   }
 
   return (
@@ -138,7 +117,7 @@ export default function DanhSachSVHuongDanPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-900">Sinh Viên Hướng Dẫn</h1>
               <p className="text-sm text-slate-500">
-                Theo dõi tiến độ, phân công thực tập và đánh giá CLO trong <strong>{selectedDot?.tenDot || 'Đợt Thực Tập Hiện Hành'}</strong>
+                Theo dõi tiến độ, phân công thực tập và đánh giá CLO trong <strong>{selectedDot.tenDot}</strong>
               </p>
             </div>
           </div>
@@ -146,17 +125,10 @@ export default function DanhSachSVHuongDanPage() {
 
         {/* Thông tin tài khoản Giảng viên và nút làm mới */}
         <div className="flex items-center gap-3">
-          {urlMaGV ? (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-              <span className="material-symbols-outlined text-base text-amber-600">visibility</span>
-              <span>Đang xem danh sách: {lecturerInfo?.hoTen || targetMaGV}</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span>GV: {lecturerInfo?.hoTen || user?.tenDangNhap || targetMaGV} ({targetMaGV})</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold shadow-xs">
+            <span className="material-symbols-outlined text-base text-blue-600">account_circle</span>
+            <span>GVHD: {lecturerInfo?.hoTen ? `ThS. ${lecturerInfo.hoTen}` : currentMaGV} ({currentMaGV})</span>
+          </div>
 
           <button
             onClick={handleExportExcel}
@@ -186,7 +158,7 @@ export default function DanhSachSVHuongDanPage() {
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-bold text-slate-900">{totalSV}</span>
               <span className="text-xs font-medium text-slate-400">
-                / {lecturerInfo?.chiTieu ?? lecturerInfo?.soLuongSVHD ?? '—'} chỉ tiêu
+                / {Math.max(10, Number(lecturerInfo?.soLuongSVHD) || 10)} chỉ tiêu
               </span>
             </div>
           </div>
@@ -231,7 +203,15 @@ export default function DanhSachSVHuongDanPage() {
               <span className="text-2xl font-bold text-amber-600">{avgGpa}</span>
               <span className="text-xs font-medium text-slate-400">/ 4.00</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">Dữ liệu từ bảng SINHVIEN (SQL Server)</p>
+            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+              {Number(avgGpa) >= 3.6
+                ? '⭐ Học lực Xuất sắc'
+                : Number(avgGpa) >= 3.2
+                ? '⭐ Học lực Giỏi'
+                : Number(avgGpa) >= 2.5
+                ? 'Học lực Khá'
+                : 'Cần theo dõi sát'}
+            </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <span className="material-symbols-outlined">stars</span>
@@ -330,9 +310,9 @@ export default function DanhSachSVHuongDanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredList.map((sv, idx) => {
-                  const isChuaPhanBo = !sv?.tenCongTy || sv.tenCongTy.toString().trim().toLowerCase() === 'chưa phân bổ'
-                  const dateFormatted = sv?.ngayPC
+                {filteredList.map((sv) => {
+                  const isChuaPhanBo = !sv.tenCongTy || sv.tenCongTy.trim().toLowerCase() === 'chưa phân bổ'
+                  const dateFormatted = sv.ngayPC
                     ? new Date(sv.ngayPC).toLocaleDateString('vi-VN', {
                         day: '2-digit',
                         month: '2-digit',
@@ -341,20 +321,20 @@ export default function DanhSachSVHuongDanPage() {
                     : '---'
 
                   return (
-                    <tr key={sv?.maSo || sv?.maSV || idx} className="hover:bg-slate-50/80 transition-colors">
+                    <tr key={sv.maSo} className="hover:bg-slate-50/80 transition-colors">
                       {/* Cột Sinh viên */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
                           <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">
-                            {sv?.hoTen ? sv.hoTen.slice(0, 2).toUpperCase() : 'SV'}
+                            {sv.hoTen ? sv.hoTen.slice(0, 2).toUpperCase() : 'SV'}
                           </div>
                           <div>
-                            <div className="font-semibold text-slate-900">{sv?.hoTen || 'Sinh viên'}</div>
+                            <div className="font-semibold text-slate-900">{sv.hoTen}</div>
                             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-                              <span>{sv?.maSV}</span>
-                              {sv?.gpa != null && (
+                              <span>{sv.maSV}</span>
+                              {sv.gpa && (
                                 <span>
-                                  GPA: <strong className="text-slate-600">{Number(sv.gpa).toFixed(2)}</strong>
+                                  • GPA: <strong className="text-slate-600">{Number(sv.gpa).toFixed(2)}</strong>
                                 </span>
                               )}
                             </div>
@@ -387,17 +367,14 @@ export default function DanhSachSVHuongDanPage() {
                       <td className="py-3.5 px-4">
                         {isChuaPhanBo ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200" title="Sinh viên chưa có đơn vị thực tập tiếp nhận">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
                             Chờ tiếp nhận DN
                           </span>
                         ) : sv.trangThai === 'DangHuongDan' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             Đang hướng dẫn
                           </span>
                         ) : sv.trangThai === 'HoanThanh' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
                             Hoàn thành
                           </span>
                         ) : (
@@ -435,7 +412,7 @@ export default function DanhSachSVHuongDanPage() {
                             </button>
                           ) : (
                             <Link
-                              to={`/giang-vien/tien-do?sv=${sv.maSV}`}
+                              to={`/giang-vien/tien-do?sv=${sv.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                               className="px-2.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                               title="Xem tiến độ báo cáo tuần của sinh viên này"
                             >
@@ -456,7 +433,7 @@ export default function DanhSachSVHuongDanPage() {
                             </button>
                           ) : (
                             <Link
-                              to={`/giang-vien/cham-diem?sv=${sv.maSV}`}
+                              to={`/giang-vien/cham-diem?sv=${sv.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                               className="px-2.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors flex items-center gap-1 shadow-sm"
                               title="Đánh giá và chấm điểm CLO cho sinh viên này"
                             >
@@ -521,9 +498,9 @@ export default function DanhSachSVHuongDanPage() {
                 <span className="material-symbols-outlined text-base">domain</span>
                 Đơn vị thực tập
               </div>
-              <p className="text-sm font-bold text-slate-800">{selectedSV?.tenCongTy || 'Chưa cập nhật'}</p>
+              <p className="text-sm font-bold text-slate-800">{selectedSV.tenCongTy}</p>
               <p className="text-xs text-slate-500">
-                Ngày phân công: {selectedSV?.ngayPC ? new Date(selectedSV.ngayPC).toLocaleDateString('vi-VN') : '---'}
+                Ngày phân công: {new Date(selectedSV.ngayPC).toLocaleDateString('vi-VN')}
               </p>
             </div>
 
@@ -535,14 +512,14 @@ export default function DanhSachSVHuongDanPage() {
                 Đóng
               </button>
               <Link
-                to={`/giang-vien/tien-do?sv=${selectedSV.maSV}`}
+                to={`/giang-vien/tien-do?sv=${selectedSV.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                 className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-sm">trending_up</span>
                 Vào duyệt tiến độ
               </Link>
               <Link
-                to={`/giang-vien/cham-diem?sv=${selectedSV.maSV}`}
+                to={`/giang-vien/cham-diem?sv=${selectedSV.maSV}${urlMaGV ? '&gv=' + urlMaGV : ''}`}
                 className="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center gap-1.5 shadow-sm"
               >
                 <span className="material-symbols-outlined text-sm">fact_check</span>

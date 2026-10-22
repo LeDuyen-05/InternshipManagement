@@ -102,6 +102,11 @@ var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(connectionString, app.Logger);
 await LegacyPasswordMigrator.RunAsync(app.Services);
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await DatabaseSchemaMigrator.ApplyAsync(db);
+}
 
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }

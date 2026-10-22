@@ -14,9 +14,20 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         _repo = repo;
     }
 
-    public async Task<IReadOnlyList<TieuChiDto>> GetDanhSachTieuChiAsync(string? nhomDanhGia = null)
+    public async Task<IReadOnlyList<TieuChiDto>> GetDanhSachTieuChiAsync(string? maDot = null, string? nhomDanhGia = null)
     {
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        IReadOnlyList<TieuChi> tieuChis;
+        if (!string.IsNullOrWhiteSpace(maDot))
+        {
+            tieuChis = await _repo.GetDanhSachTieuChiAsync(maDot);
+            if (tieuChis == null || tieuChis.Count == 0)
+                tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        }
+        else
+        {
+            tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        }
+
         return tieuChis
             .Where(t => string.IsNullOrWhiteSpace(nhomDanhGia) || string.Equals(t.NhomDanhGia, nhomDanhGia, StringComparison.OrdinalIgnoreCase))
             .Select(ToDto)
@@ -28,14 +39,16 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         var entity = await _repo.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
         if (entity == null) return null;
 
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(maDot);
+        if (tieuChis == null || tieuChis.Count == 0) tieuChis = await _repo.GetDanhSachTieuChiAsync();
         return MapToDto(entity, tieuChis);
     }
 
     public async Task<IReadOnlyList<PhieuChamDiemDto>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot)
     {
         var entities = await _repo.GetDanhSachPhieuChamByGiangVienAsync(maGV, maDot);
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(maDot);
+        if (tieuChis == null || tieuChis.Count == 0) tieuChis = await _repo.GetDanhSachTieuChiAsync();
         return entities.Select(e => MapToDto(e, tieuChis)).ToList();
     }
 
@@ -61,9 +74,23 @@ public class PhieuChamDiemService : IPhieuChamDiemService
                 throw new UnauthorizedAccessException("Giảng viên không phụ trách hướng dẫn sinh viên này.");
         }
 
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        var dot = await _repo.GetDotThucTapAsync(request.MaDot);
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(request.MaDot);
+        if (tieuChis == null || tieuChis.Count == 0)
+            tieuChis = await _repo.GetDanhSachTieuChiAsync();
+
+        var tieuChiDict = tieuChis.ToDictionary(t => t.MaTieuChi);
+
         var existing = await _repo.GetPhieuChamBySinhVienAndDotAsync(request.MaSV, request.MaDot);
         var dnDaChamTrenHeThong = !string.IsNullOrWhiteSpace(existing?.MaDaiDien);
+
+        // Chỉ bắt buộc đối chiếu phiếu DN khi DN chưa chấm trên hệ thống và GV tự nhập thay CLO4.x
+        if (dot != null && string.Equals(dot.MaRubric, "CNTT_CLO_V1", StringComparison.OrdinalIgnoreCase) && !dnDaChamTrenHeThong)
+        {
+            var coChamDN = request.ChiTiets.Any(c => tieuChiDict.TryGetValue(c.MaTieuChi, out var tc) && tc.NhomDanhGia == ThangDiem.NhomDoanhNghiep);
+            if (coChamDN && !request.DaDoiChieuPhieuDN)
+                throw new ArgumentException("Cần xác nhận đã đối chiếu phiếu nhận xét doanh nghiệp trước khi chốt CLO4.1 và CLO4.2.");
+        }
 
         var chiTiets = new List<ChiTietChamDiem>();
         foreach (var (input, tc) in ValidateChiTiets(request.ChiTiets, tieuChis))
@@ -83,10 +110,12 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         {
             MaSV = request.MaSV,
             MaDot = request.MaDot,
-            MaGVHuongDan = gvhd?.MaSo,
+            MaGVHuongDan = gvhd?.MaSo ?? request.MaGVHuongDan,
             TongDiem = TinhTongSauKhiGop(existing, chiTiets, tieuChis),
             NgayCham = DateTime.Now,
-            NhanXetGV = request.NhanXet?.Trim()
+            NhanXetGV = request.NhanXetGV?.Trim() ?? request.NhanXet?.Trim(),
+            DaDoiChieuPhieuDN = request.DaDoiChieuPhieuDN,
+            GhiChuPhieuDN = request.GhiChuPhieuDN?.Trim()
         };
 
         var saved = await _repo.LuuPhieuChamDiemAsync(phieu, chiTiets);
@@ -98,39 +127,44 @@ public class PhieuChamDiemService : IPhieuChamDiemService
     public async Task<PhieuChamDiemDto> LuuDiemDoanhNghiepAsync(string maSV, string maDot, string maDaiDien,
         IReadOnlyList<ChiTietDiemInput> chiTietInputs, string? nhanXet, bool isStaff = false)
     {
+        if (string.IsNullOrWhiteSpace(maSV))
+            throw new ArgumentException("Mã sinh viên không được để trống.", nameof(maSV));
+        if (string.IsNullOrWhiteSpace(maDot))
+            throw new ArgumentException("Mã đợt thực tập không được để trống.", nameof(maDot));
         if (string.IsNullOrWhiteSpace(maDaiDien))
-            throw new ArgumentException("Thiếu người đại diện doanh nghiệp chấm điểm.");
+            throw new ArgumentException("Mã đại diện doanh nghiệp không được để trống.", nameof(maDaiDien));
         if (chiTietInputs == null || chiTietInputs.Count == 0)
-            throw new ArgumentException("Chi tiết điểm không được để trống.");
+            throw new ArgumentException("Chi tiết điểm không được để trống.", nameof(chiTietInputs));
 
         await EnsureDotChoPhepChamAsync(maDot, isStaff);
 
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
-        var tieuChiDN = tieuChis.Where(t => t.NhomDanhGia == ThangDiem.NhomDoanhNghiep).ToList();
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(maDot);
+        if (tieuChis == null || tieuChis.Count == 0) tieuChis = await _repo.GetDanhSachTieuChiAsync();
 
+        var dnTieuChis = tieuChis.Where(t => t.NhomDanhGia == ThangDiem.NhomDoanhNghiep).ToList();
+        var dnIds = dnTieuChis.Select(t => t.MaTieuChi).ToHashSet();
+
+        if (chiTietInputs.Any(c => !dnIds.Contains(c.MaTieuChi)))
+            throw new ArgumentException("Đơn vị thực tập chỉ được chấm các tiêu chí thuộc nhóm Đơn vị thực tập (CLO4.x).");
+
+        if (dnIds.Any(id => !chiTietInputs.Any(c => c.MaTieuChi == id)))
+            throw new ArgumentException("Phiếu nhận xét doanh nghiệp phải chấm đủ tất cả các tiêu chí nhóm Đơn vị thực tập.");
+
+        var existing = await _repo.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
         var chiTiets = new List<ChiTietChamDiem>();
-        foreach (var (input, tc) in ValidateChiTiets(chiTietInputs, tieuChis))
+        foreach (var (input, tc) in ValidateChiTiets(chiTietInputs, dnTieuChis))
         {
-            if (tc.NhomDanhGia != ThangDiem.NhomDoanhNghiep)
-                throw new ArgumentException($"Doanh nghiệp chỉ chấm các tiêu chí của Phiếu nhận xét, không chấm {tc.MaTieuChi}.");
             chiTiets.Add(new ChiTietChamDiem { MaTieuChi = tc.MaTieuChi, DiemCham = input.DiemCham });
         }
 
-        var thieu = tieuChiDN.Where(t => chiTiets.All(c => c.MaTieuChi != t.MaTieuChi)).Select(t => t.MaTieuChi).ToList();
-        if (thieu.Count > 0)
-            throw new ArgumentException($"Vui lòng chấm đủ các tiêu chí: {string.Join(", ", thieu)}.");
-
-        var gvhd = await _repo.GetActiveAssignmentAsync(maSV);
-        var existing = await _repo.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
         var phieu = new DAL.Entities.PhieuChamDiem
         {
             MaSV = maSV,
             MaDot = maDot,
-            MaGVHuongDan = gvhd?.MaSo,
             MaDaiDien = maDaiDien,
             TongDiem = TinhTongSauKhiGop(existing, chiTiets, tieuChis),
             NgayCham = DateTime.Now,
-            NhanXetDN = nhanXet?.Trim() ?? string.Empty
+            NhanXetDN = nhanXet?.Trim()
         };
 
         var saved = await _repo.LuuPhieuChamDiemAsync(phieu, chiTiets);
@@ -138,13 +172,14 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         return MapToDto(reloaded ?? saved, tieuChis);
     }
 
-    public async Task<BangDiemResponse> GetBangDiemAsync(string maDot, string? maGV = null)
+        public async Task<BangDiemResponse> GetBangDiemAsync(string maDot, string? maGV = null)
     {
         if (string.IsNullOrWhiteSpace(maDot))
             throw new ArgumentException("Mã đợt thực tập không được để trống.");
 
         var dot = await _repo.GetDotThucTapAsync(maDot);
-        var tieuChis = await _repo.GetDanhSachTieuChiAsync();
+        var tieuChis = await _repo.GetDanhSachTieuChiAsync(maDot);
+        if (tieuChis == null || tieuChis.Count == 0) tieuChis = await _repo.GetDanhSachTieuChiAsync();
         var nguon = await _repo.GetBangDiemNguonAsync(maDot, maGV);
 
         var rows = nguon.Select((x, i) =>
@@ -166,41 +201,59 @@ public class PhieuChamDiemService : IPhieuChamDiemService
     private async Task EnsureDotChoPhepChamAsync(string maDot, bool isStaff)
     {
         var dot = await _repo.GetDotThucTapAsync(maDot)
-            ?? throw new KeyNotFoundException($"Không tìm thấy đợt thực tập {maDot}.");
+            ?? throw new KeyNotFoundException($"Không tìm thấy đợt thực tập có mã {maDot}.");
+
+        if (string.Equals(dot.TrangThai, "ChuaBatDau", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Đợt thực tập chưa bắt đầu, không thể chấm điểm.");
+
         if (string.Equals(dot.TrangThai, "DaKetThuc", StringComparison.OrdinalIgnoreCase) && !isStaff)
-            throw new InvalidOperationException("Đợt thực tập đã kết thúc, không thể chấm hoặc sửa điểm.");
+            throw new InvalidOperationException("Đợt thực tập đã kết thúc. Chỉ cán bộ Khoa mới có quyền cập nhật điểm.");
     }
 
     private static IEnumerable<(ChiTietDiemInput Input, TieuChi TieuChi)> ValidateChiTiets(
         IEnumerable<ChiTietDiemInput> inputs, IReadOnlyList<TieuChi> tieuChis)
     {
-        var dict = tieuChis.ToDictionary(t => t.MaTieuChi, StringComparer.OrdinalIgnoreCase);
+        var dict = tieuChis.ToDictionary(t => t.MaTieuChi);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var result = new List<(ChiTietDiemInput, TieuChi)>();
-        foreach (var ct in inputs)
+
+        foreach (var item in inputs)
         {
-            if (string.IsNullOrWhiteSpace(ct.MaTieuChi) || !dict.TryGetValue(ct.MaTieuChi, out var tc))
-                throw new ArgumentException($"Tiêu chí {ct.MaTieuChi} không tồn tại hoặc không còn được sử dụng.");
-            if (!seen.Add(tc.MaTieuChi))
-                throw new ArgumentException($"Trùng lặp tiêu chí chấm điểm: {tc.MaTieuChi}.");
-            if (ct.DiemCham < 0 || ct.DiemCham > tc.DiemToiDa)
-                throw new ArgumentException($"Điểm cho tiêu chí '{tc.TenTieuChi}' phải từ 0 đến {tc.DiemToiDa}. Điểm gửi lên: {ct.DiemCham}.");
-            result.Add((ct, tc));
+            if (string.IsNullOrWhiteSpace(item.MaTieuChi))
+                throw new ArgumentException("Mã tiêu chí không được để trống.");
+
+            if (!dict.TryGetValue(item.MaTieuChi, out var tc))
+                throw new KeyNotFoundException($"Không tìm thấy tiêu chí có mã {item.MaTieuChi}.");
+
+            if (!seen.Add(item.MaTieuChi))
+                throw new ArgumentException($"Tiêu chí {item.MaTieuChi} bị lặp trong danh sách chấm điểm.");
+
+            if (item.DiemCham < 0)
+                throw new ArgumentException(
+                    $"Điểm tiêu chí {tc.TenTieuChi} không được âm ({item.DiemCham}).");
+
+            if (item.DiemCham > tc.DiemToiDa)
+                throw new ArgumentException(
+                    $"Điểm tiêu chí {tc.TenTieuChi} ({item.DiemCham}) vượt quá điểm tối đa ({tc.DiemToiDa}).");
+
+            yield return (item, tc);
         }
-        return result;
     }
 
-    private static decimal TinhTongSauKhiGop(DAL.Entities.PhieuChamDiem? existing, List<ChiTietChamDiem> moi, IReadOnlyList<TieuChi> tieuChis)
+    private static decimal TinhTongSauKhiGop(DAL.Entities.PhieuChamDiem? existing,
+        IEnumerable<ChiTietChamDiem> newChiTiets, IReadOnlyList<TieuChi> tieuChis)
     {
-        var active = tieuChis.Select(t => t.MaTieuChi).ToHashSet();
-        var gop = (existing?.ChiTietChamDiems ?? new List<ChiTietChamDiem>())
-            .Where(c => active.Contains(c.MaTieuChi))
-            .ToDictionary(c => c.MaTieuChi, c => c.DiemCham);
-        foreach (var c in moi) gop[c.MaTieuChi] = c.DiemCham;
-        return gop.Values.Sum();
+        var activeIds = tieuChis.Select(t => t.MaTieuChi).ToHashSet();
+        var map = existing?.ChiTietChamDiems
+            .Where(c => activeIds.Contains(c.MaTieuChi))
+            .ToDictionary(c => c.MaTieuChi, c => c.DiemCham)
+            ?? new Dictionary<string, decimal>();
+
+        foreach (var item in newChiTiets)
+            map[item.MaTieuChi] = item.DiemCham;
+
+        return map.Values.Sum();
     }
 
-    /// <summary>Tách "Trần Thành Danh" → ("Trần Thành", "Danh") theo cột "Họ và" / "Tên" của file Khoa.</summary>
     internal static (string HoLot, string Ten) TachHoTen(string? hoTen)
     {
         var parts = (hoTen ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -208,7 +261,7 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         return (string.Join(' ', parts[..^1]), parts[^1]);
     }
 
-    private static TieuChiDto ToDto(TieuChi t) => new(t.MaTieuChi, t.TenTieuChi, t.DiemToiDa, t.NhomDanhGia, t.ThuTu);
+    private static TieuChiDto ToDto(TieuChi t) => new(t.MaTieuChi, t.MaCLO ?? t.MaTieuChi, t.TenTieuChi, t.DiemToiDa, t.NhomDanhGia, t.ThuTu);
 
     private static PhieuChamDiemDto MapToDto(DAL.Entities.PhieuChamDiem p, IReadOnlyList<TieuChi> tieuChis)
     {
@@ -235,17 +288,17 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         var (diemChu, xepLoai, dat) = ThangDiem.QuyDoi(tong);
 
         return new PhieuChamDiemDto(
-            p.MaPhieu,
-            p.MaSV,
-            p.SinhVien?.HoTen,
-            p.SinhVien?.Lop,
-            p.MaDot,
-            p.DotThucTap?.TenDot,
-            p.MaGVHuongDan,
-            p.TongDiem,
-            p.NgayCham,
-            daDu ? $"{xepLoai} ({diemChu})" : "Chưa đủ điểm thành phần",
-            chiTietDtos,
+            MaPhieu: p.MaPhieu,
+            MaSV: p.MaSV,
+            HoTenSV: p.SinhVien?.HoTen,
+            Lop: p.SinhVien?.Lop,
+            MaDot: p.MaDot,
+            TenDot: p.DotThucTap?.TenDot,
+            MaGVHuongDan: p.MaGVHuongDan,
+            TongDiem: p.TongDiem,
+            NgayCham: p.NgayCham,
+            XepLoai: daDu ? $"{xepLoai} ({diemChu})" : "Chưa đủ điểm thành phần",
+            ChiTiets: chiTietDtos,
             DiemGV: chiTietDtos.Where(c => c.NhomDanhGia == ThangDiem.NhomGiangVien).Sum(c => c.DiemCham),
             DiemDN: chiTietDtos.Where(c => c.NhomDanhGia == ThangDiem.NhomDoanhNghiep).Sum(c => c.DiemCham),
             DaChamGV: daChamGV,
@@ -255,6 +308,9 @@ public class PhieuChamDiemService : IPhieuChamDiemService
             DiemChu: daDu ? diemChu : null,
             KetQua: daDu ? (dat ? "Đạt" : "Không đạt") : "Chưa đủ điểm",
             NhanXetGV: p.NhanXetGV,
-            NhanXetDN: p.NhanXetDN);
+            NhanXetDN: p.NhanXetDN,
+            DaDoiChieuPhieuDN: p.DaDoiChieuPhieuDN,
+            GhiChuPhieuDN: p.GhiChuPhieuDN
+        );
     }
 }

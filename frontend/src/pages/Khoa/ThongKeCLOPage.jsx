@@ -140,21 +140,21 @@ export default function ThongKeCLOPage() {
         </div>
 
         {/* Nút hành động Xuất Báo Cáo */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={loadData}
             title="Làm mới dữ liệu"
-            className="p-2.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl border border-slate-200 transition-colors cursor-pointer"
+            className="p-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl border border-slate-200 transition-colors cursor-pointer"
           >
-            <span className="material-symbols-outlined text-xl">refresh</span>
+            <span className="material-symbols-outlined text-lg">refresh</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportCsv}
             disabled={loading || !data}
-            className="px-3.5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-base text-slate-500">csv</span>
             <span>Tải CSV</span>
@@ -164,21 +164,21 @@ export default function ThongKeCLOPage() {
             type="button"
             onClick={handleExportExcel}
             disabled={loading || !data}
-            className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-sm hover:shadow transition-all cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs hover:shadow transition-all cursor-pointer disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-base">table_chart</span>
-            <span>Xuất Excel (.xlsx)</span>
+            <span>Xuất Excel</span>
           </button>
 
           <button
             type="button"
             onClick={handleExportMauKhoa}
             disabled={loading || !selectedDot?.maDot}
-            className="px-4 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            className="px-3.5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
             title="File chấm điểm theo mẫu của Khoa: 11 tiêu chí CLO, tổng điểm, GVHD, tên công ty"
           >
             <span className="material-symbols-outlined text-base">grading</span>
-            <span>File chấm điểm (mẫu Khoa)</span>
+            <span>Mẫu chấm Khoa</span>
           </button>
         </div>
       </div>
@@ -327,15 +327,20 @@ export default function ThongKeCLOPage() {
                 )}
               </div>
 
-              {/* Bảng tóm tắt số lượng */}
-              <div className="grid grid-cols-5 gap-2 pt-2 border-t border-slate-100 text-center">
-                {data.phanBoDiem?.map((item, idx) => (
-                  <div key={idx} className="p-2 rounded-xl bg-slate-50">
-                    <p className="text-[10px] text-slate-500 font-semibold truncate">{item.xepLoai.split(' ')[0]}</p>
-                    <p className="text-sm font-bold text-slate-800 mt-0.5">{item.soLuong}</p>
-                    <p className="text-[10px] text-slate-400">{item.tiLe}%</p>
-                  </div>
-                ))}
+              {/* Bảng tóm tắt số lượng theo phân hạng điểm */}
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-2 border-t border-slate-100 text-center">
+                {data.phanBoDiem?.map((item, idx) => {
+                  const letter = item.xepLoai.match(/\((.*?)\)/)?.[1] || item.xepLoai.slice(0, 3)
+                  return (
+                    <div key={idx} className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[11px] font-bold text-slate-700" title={item.xepLoai}>
+                        {letter}
+                      </p>
+                      <p className="text-sm font-black text-slate-900 mt-0.5">{item.soLuong}</p>
+                      <p className="text-[10px] text-slate-400 font-medium">{item.tiLe}%</p>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
@@ -352,35 +357,48 @@ export default function ThongKeCLOPage() {
               </div>
 
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.diemTheoCLO || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="maCLO" tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#64748b' }} />
-                    <Tooltip
-                      formatter={(val, name, item) => [
-                        `${val}/10 (Trọng số ${Math.round(item.payload.trongSo * 100)}%)`,
-                        item.payload.tenCLO,
-                      ]}
-                    />
-                    <Bar dataKey="diemTrungBinh" name="Điểm trung bình" fill="#4f46e5" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                {data.diemTheoCLO && data.diemTheoCLO.length > 0 && data.diemTheoCLO.some((d) => d.diemTrungBinh > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data.diemTheoCLO} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                      <XAxis dataKey="maCLO" tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#64748b' }} />
+                      <Tooltip
+                        formatter={(val, name, item) => [
+                          `${val}/10 (Trọng số ${Math.round(item.payload.trongSo * 100)}%)`,
+                          item.payload.tenCLO,
+                        ]}
+                      />
+                      <Bar dataKey="diemTrungBinh" name="Điểm trung bình" fill="#4f46e5" radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 text-xs gap-2">
+                    <span className="material-symbols-outlined text-3xl">sentiment_dissatisfied</span>
+                    <span>Chưa có đủ dữ liệu điểm chuẩn đầu ra CLO để vẽ biểu đồ</span>
+                  </div>
+                )}
               </div>
 
               {/* Danh sách tiêu chí CLO giải thích */}
-              <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                {data.diemTheoCLO?.map((clo) => (
-                  <div key={clo.maCLO} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 font-medium">
-                      <strong>{clo.maCLO}:</strong> {clo.tenCLO} ({Math.round(clo.trongSo * 100)}%)
-                    </span>
-                    <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
-                      {clo.diemTrungBinh}/10
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {data.diemTheoCLO && data.diemTheoCLO.length > 0 ? (
+                <div className="space-y-1.5 pt-2 border-t border-slate-100 max-h-48 overflow-y-auto">
+                  {data.diemTheoCLO.map((clo) => (
+                    <div key={clo.maCLO} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 font-medium">
+                        <strong>{clo.maCLO}:</strong> {clo.tenCLO} ({Math.round(clo.trongSo * 100)}%)
+                      </span>
+                      <span className="font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded">
+                        {clo.diemTrungBinh}/10
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-slate-100 text-center text-slate-400 text-xs py-2 italic">
+                  Dữ liệu điểm theo chuẩn đầu ra CLO sẽ tự động hiển thị khi giảng viên hoàn tất chấm điểm.
+                </div>
+              )}
             </div>
           </div>
 

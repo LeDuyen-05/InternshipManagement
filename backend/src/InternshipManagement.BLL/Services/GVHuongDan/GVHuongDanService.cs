@@ -30,6 +30,26 @@ public class GVHuongDanService : IGVHuongDanService
         }).ToList();
     }
 
+    public async Task<IReadOnlyList<TatCaPhanCongDto>> GetTatCaPhanCongAsync()
+    {
+        var list = await _repository.GetTatCaPhanCongAsync();
+        return list.Select(g => new TatCaPhanCongDto
+        {
+            MaSo = g.MaSo,
+            MaSV = g.MaSinhVien,
+            HoTenSV = g.SinhVien?.HoTen ?? string.Empty,
+            Lop = g.SinhVien?.Lop,
+            ChuyenNganh = g.SinhVien?.ChuyenNganh,
+            Gpa = g.SinhVien?.Gpa,
+            TenCongTy = g.SinhVien?.PhanBoThucTaps?.FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
+            MaGV = g.MaGiangVien,
+            HoTenGV = g.GiangVien?.HoTen ?? string.Empty,
+            ChuyenMonGV = g.GiangVien?.ChuyenMon,
+            NgayPC = g.NgayPC,
+            TrangThai = g.TrangThai
+        }).ToList();
+    }
+
     public async Task<IReadOnlyList<SVChuaPhanCongDto>> GetDanhSachSVChuaPhanCongAsync(string? keyword = null)
     {
         var list = await _repository.GetDanhSachSVChuaPhanCongAsync(keyword);
@@ -73,24 +93,23 @@ public class GVHuongDanService : IGVHuongDanService
             if (string.IsNullOrWhiteSpace(request.MaGV) || string.IsNullOrWhiteSpace(request.MaSV))
                 throw new ArgumentException("Mã giảng viên và mã sinh viên không được để trống.");
 
-        var gv = await _repository.GetGiangVienByIdAsync(request.MaGV);
-        if (gv == null)
-            throw new KeyNotFoundException($"Không tìm thấy giảng viên có mã {request.MaGV}.");
+            var gv = await _repository.GetGiangVienByIdAsync(request.MaGV);
+            if (gv == null)
+                throw new KeyNotFoundException($"Không tìm thấy giảng viên có mã {request.MaGV}.");
 
-        if (!await _repository.SinhVienTonTaiAsync(request.MaSV))
-            throw new KeyNotFoundException($"Không tìm thấy sinh viên có mã {request.MaSV}.");
+            if (!await _repository.SinhVienTonTaiAsync(request.MaSV))
+                throw new KeyNotFoundException($"Không tìm thấy sinh viên có mã {request.MaSV}.");
 
-        var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGV);
-        var quota = gv.ChiTieuHD;
-        if (count >= quota)
-            throw new InvalidOperationException($"Giảng viên {gv.HoTen} đã đạt hạn ngạch tối đa ({count}/{quota} SV).");
+            var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGV);
+            var quota = gv.ChiTieuHD;
+            if (count >= quota)
+                throw new InvalidOperationException($"Giảng viên {gv.HoTen} đã đạt hạn ngạch tối đa ({count}/{quota} SV).");
 
-        var daCo = await _repository.SinhVienDaCoGVHDAsync(request.MaSV);
-        if (daCo)
-            throw new InvalidOperationException($"Sinh viên {request.MaSV} đã được phân công Giảng viên hướng dẫn.");
+            var daCo = await _repository.SinhVienDaCoGVHDAsync(request.MaSV);
+            if (daCo)
+                throw new InvalidOperationException($"Sinh viên {request.MaSV} đã được phân công Giảng viên hướng dẫn.");
 
-        var record = await _repository.PhanCongAsync(request.MaGV, request.MaSV);
-
+            var record = await _repository.PhanCongAsync(request.MaGV, request.MaSV);
             return ToDto(record);
         });
     }
@@ -102,47 +121,64 @@ public class GVHuongDanService : IGVHuongDanService
             if (string.IsNullOrWhiteSpace(request.MaGV))
                 throw new ArgumentException("Mã giảng viên không được để trống.");
 
-        var gv = await _repository.GetGiangVienByIdAsync(request.MaGV);
-        if (gv == null)
-            throw new KeyNotFoundException($"Không tìm thấy giảng viên có mã {request.MaGV}.");
+            var gv = await _repository.GetGiangVienByIdAsync(request.MaGV);
+            if (gv == null)
+                throw new KeyNotFoundException($"Không tìm thấy giảng viên có mã {request.MaGV}.");
 
-        var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGV);
-        var quota = gv.ChiTieuHD;
-        var slotsLeft = quota - count;
+            var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGV);
+            var quota = gv.ChiTieuHD;
+            var slotsLeft = quota - count;
 
-        if (slotsLeft <= 0)
-            throw new InvalidOperationException($"Giảng viên {gv.HoTen} đã đủ số lượng hướng dẫn tối đa.");
-
-        var result = new PhanCongHangLoatResult();
-
-        foreach (var maSV in request.DanhSachMaSV.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct())
-        {
             if (slotsLeft <= 0)
+                throw new InvalidOperationException($"Giảng viên {gv.HoTen} đã đủ số lượng hướng dẫn tối đa.");
+
+            var result = new PhanCongHangLoatResult();
+
+            foreach (var maSV in request.DanhSachMaSV)
             {
-                result.KhongThanhCong.Add(new PhanCongKhongThanhCongDto { MaSV = maSV, LyDo = "Giảng viên đã đủ chỉ tiêu hướng dẫn." });
-                continue;
+                if (result.ThanhCong.Count >= slotsLeft)
+                {
+                    result.KhongThanhCong.Add(new PhanCongKhongThanhCongDto
+                    {
+                        MaSV = maSV,
+                        LyDo = $"Vượt quá chỉ tiêu còn lại của giảng viên ({slotsLeft} chỗ)."
+                    });
+                    continue;
+                }
+
+                if (!await _repository.SinhVienTonTaiAsync(maSV))
+                {
+                    result.KhongThanhCong.Add(new PhanCongKhongThanhCongDto
+                    {
+                        MaSV = maSV,
+                        LyDo = "Không tìm thấy sinh viên."
+                    });
+                    continue;
+                }
+
+                if (await _repository.SinhVienDaCoGVHDAsync(maSV))
+                {
+                    result.KhongThanhCong.Add(new PhanCongKhongThanhCongDto
+                    {
+                        MaSV = maSV,
+                        LyDo = "Sinh viên đã có giảng viên hướng dẫn."
+                    });
+                    continue;
+                }
+
+                var record = await _repository.PhanCongAsync(request.MaGV, maSV);
+                result.ThanhCong.Add(ToDto(record));
             }
-
-            if (!await _repository.SinhVienTonTaiAsync(maSV))
-            {
-                result.KhongThanhCong.Add(new PhanCongKhongThanhCongDto { MaSV = maSV, LyDo = "Không tìm thấy sinh viên." });
-                continue;
-            }
-
-            var daCo = await _repository.SinhVienDaCoGVHDAsync(maSV);
-            if (daCo)
-            {
-                result.KhongThanhCong.Add(new PhanCongKhongThanhCongDto { MaSV = maSV, LyDo = "Sinh viên đã có giảng viên hướng dẫn." });
-                continue;
-            }
-
-            var record = await _repository.PhanCongAsync(request.MaGV, maSV);
-            result.ThanhCong.Add(ToDto(record));
-
-            slotsLeft--;
-        }
 
             return result;
+        });
+    }
+
+    public async Task<bool> HuyPhanCongAsync(string maSo)
+    {
+        return await _repository.ExecuteInTransactionAsync(async () =>
+        {
+            return await _repository.HuyPhanCongAsync(maSo);
         });
     }
 
@@ -150,40 +186,26 @@ public class GVHuongDanService : IGVHuongDanService
     {
         return await _repository.ExecuteInTransactionAsync(async () =>
         {
-        var phanCong = await _repository.GetChiTietPhanCongAsync(request.MaSo);
-        if (phanCong == null)
-            return false;
-        if (phanCong.TrangThai != "DangHuongDan")
-            throw new InvalidOperationException("Chỉ có thể đổi giảng viên cho phân công đang hoạt động.");
+            var gvMoi = await _repository.GetGiangVienByIdAsync(request.MaGVMoi);
+            if (gvMoi == null)
+                throw new KeyNotFoundException($"Không tìm thấy giảng viên mới {request.MaGVMoi}.");
 
-        var gvMoi = await _repository.GetGiangVienByIdAsync(request.MaGVMoi);
-        if (gvMoi == null)
-            throw new KeyNotFoundException($"Không tìm thấy giảng viên mới {request.MaGVMoi}.");
+            var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGVMoi);
+            if (count >= gvMoi.ChiTieuHD)
+                throw new InvalidOperationException($"Giảng viên {gvMoi.HoTen} đã đạt hạn ngạch tối đa.");
 
-        var count = await _repository.CountSVHienTaiByGiangVienAsync(request.MaGVMoi);
-        var quota = gvMoi.ChiTieuHD;
-        if (count >= quota)
-            throw new InvalidOperationException($"Giảng viên mới {gvMoi.HoTen} đã đạt quota tối đa.");
-
-        return await _repository.DoiGiangVienAsync(request.MaSo, request.MaGVMoi);
+            return await _repository.DoiGiangVienAsync(request.MaSo, request.MaGVMoi);
         });
-    }
-
-    public async Task<bool> HuyPhanCongAsync(string maSo)
-    {
-        return await _repository.HuyPhanCongAsync(maSo);
     }
 
     public async Task<bool> CapNhatChiTieuAsync(string maGV, int soLuongMoi)
     {
-        if (soLuongMoi < 0)
-            throw new ArgumentException("Chỉ tiêu hướng dẫn không được nhỏ hơn 0.");
-
-        var countHienTai = await _repository.CountSVHienTaiByGiangVienAsync(maGV);
-        if (soLuongMoi < countHienTai)
-            throw new InvalidOperationException($"Chỉ tiêu mới ({soLuongMoi}) không được nhỏ hơn số sinh viên hiện đang hướng dẫn ({countHienTai}).");
-
-        return await _repository.CapNhatChiTieuAsync(maGV, soLuongMoi);
+        return await _repository.ExecuteInTransactionAsync(async () =>
+        {
+            if (soLuongMoi < 0)
+                throw new ArgumentException("Chỉ tiêu hướng dẫn không được âm.");
+            return await _repository.CapNhatChiTieuAsync(maGV, soLuongMoi);
+        });
     }
 
     public async Task<GiangVienProfileDto?> GetProfileAsync(string maGV)
@@ -213,13 +235,6 @@ public class GVHuongDanService : IGVHuongDanService
         return await _repository.UpdateGiangVienChuyenMonAsync(maGV, request.ChuyenMon);
     }
 
-    /// <summary>
-    /// Đề xuất phân công tự động, mỗi SV xét lần lượt 3 mức ưu tiên:
-    /// (1) Giảng viên đã giới thiệu doanh nghiệp nơi SV thực tập (GIOITHIEU đã được Khoa duyệt);
-    /// (2) Giảng viên có chuyên môn trùng lĩnh vực của SV;
-    /// (3) Cân bằng tải — giảng viên còn nhiều chỉ tiêu trống nhất.
-    /// Không vượt chỉ tiêu hướng dẫn của bất kỳ giảng viên nào.
-    /// </summary>
     public async Task<TuDongPhanCongResult> DeXuatPhanCongTuDongAsync()
     {
         var svChuaPhanCong = await _repository.GetDanhSachSVChuaPhanCongAsync();
@@ -234,7 +249,6 @@ public class GVHuongDanService : IGVHuongDanService
         var gvTheoMa = dsGiangVien.ToDictionary(gv => gv.MaGV);
         var linhVucGV = dsGiangVien.ToDictionary(gv => gv.MaGV, gv => LinhVuc(gv.ChuyenMon));
 
-        // SV có công ty do GV giới thiệu được xếp trước để dùng đúng chỉ tiêu của GV giới thiệu
         var thuTu = svChuaPhanCong
             .Select(sv =>
             {
@@ -323,10 +337,6 @@ public class GVHuongDanService : IGVHuongDanService
         return result;
     }
 
-    /// <summary>
-    /// Lưu danh sách phân công nhiều SV một lần (từ đề xuất tự động; Khoa có thể đổi GV từng dòng trước khi lưu).
-    /// Mỗi dòng được kiểm tra trước khi ghi nên một dòng không hợp lệ không làm hỏng các dòng còn lại.
-    /// </summary>
     public async Task<PhanCongHangLoatResult> XacNhanPhanCongTuDongAsync(TuDongPhanCongConfirmRequest request)
     {
         return await _repository.ExecuteInTransactionAsync(async () =>
@@ -372,7 +382,6 @@ public class GVHuongDanService : IGVHuongDanService
     private static DAL.Entities.PhanBoThucTap? PhanBoHienTai(DAL.Entities.SinhVien sv) =>
         sv.PhanBoThucTaps.Where(p => p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault();
 
-    // Nhận diện lĩnh vực chuyên môn từ văn bản tự do (chuyên môn GV / ngành, kỹ năng, công nghệ của SV)
     private static readonly (string LinhVuc, string[] TuKhoa)[] BangLinhVuc =
     {
         ("Web", new[] { "web", "react", "vue", "angular", "node", "php", "frontend", "fullstack", "spring", "javascript", "typescript" }),

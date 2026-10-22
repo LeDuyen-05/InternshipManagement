@@ -2,14 +2,19 @@ import apiClient from './api'
 import { API_ROUTES } from '../constants/apiRoutes'
 
 export const phieuChamDiemService = {
-  // nhom: 'GV' (giảng viên chấm) | 'DN' (đơn vị thực tập chấm) | undefined (tất cả)
-  getDanhSachTieuChi: (nhom) => {
-    return apiClient.get(`${API_ROUTES.PHIEU_CHAM_DIEM}/tieu-chi`, { params: nhom ? { nhom } : {} })
+  // maDot: mã đợt thực tập, nhom: 'GV' | 'DN' | undefined
+  getDanhSachTieuChi: (maDot, nhom) => {
+    const params = {}
+    if (maDot) params.maDot = maDot
+    if (nhom) params.nhom = nhom
+    return apiClient.get(`${API_ROUTES.PHIEU_CHAM_DIEM}/tieu-chi`, { params })
   },
 
   // Bảng điểm theo mẫu file chấm điểm của Khoa
   getBangDiem: (maDot, maGV) => {
-    return apiClient.get(`${API_ROUTES.PHIEU_CHAM_DIEM}/bang-diem`, { params: { maDot, ...(maGV ? { maGV } : {}) } })
+    return apiClient.get(`${API_ROUTES.PHIEU_CHAM_DIEM}/bang-diem`, {
+      params: { maDot, ...(maGV ? { maGV } : {}) },
+    })
   },
 
   getPhieuChamBySinhVien: (maSV, maDot) => {

@@ -10,3 +10,5 @@ export function useIdentity() {
     maDaiDien: user?.maDaiDien || null
   }
 }
+
+export default useIdentity
