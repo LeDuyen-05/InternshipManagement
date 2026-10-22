@@ -48,6 +48,7 @@ public class AppDbContext : DbContext
             e.HasKey(x => x.MaSo);
             e.Property(x => x.NamHoc).HasColumnName("namHoc").HasMaxLength(20);
             e.Property(x => x.TrangThai).HasColumnName("trangThai").HasMaxLength(50);
+            e.Property(x => x.MaRubric).HasColumnName("maRubric").HasMaxLength(40);
         });
         modelBuilder.Entity<PhongVan>(e => { e.ToTable("PHONGVAN"); e.HasKey(x => x.MaPV); });
         modelBuilder.Entity<HuongDanDoanhNghiep>(e => { e.ToTable("HUONGDANDOANHNGHIEP"); e.HasKey(x => x.MaSo); });

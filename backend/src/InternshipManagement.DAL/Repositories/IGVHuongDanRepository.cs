@@ -5,6 +5,7 @@ namespace InternshipManagement.DAL.Repositories;
 public interface IGVHuongDanRepository : IRepository<GVHuongDan>
 {
     Task<IReadOnlyList<GVHuongDan>> GetDanhSachSVTheoGiangVienAsync(string maGV, string? keyword = null);
+    Task<IReadOnlyList<GVHuongDan>> GetTatCaPhanCongAsync();
     Task<IReadOnlyList<SinhVien>> GetDanhSachSVChuaPhanCongAsync(string? keyword = null);
     Task<IReadOnlyList<GiangVien>> GetDanhSachGiangVienKemTaiAsync();
     Task<GiangVien?> GetGiangVienByIdAsync(string maGV);

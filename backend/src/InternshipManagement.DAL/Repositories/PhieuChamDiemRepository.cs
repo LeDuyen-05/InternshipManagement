@@ -7,13 +7,19 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 {
     public PhieuChamDiemRepository(AppDbContext context) : base(context) { }
 
-    public async Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync()
+    public async Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync(string maDot)
     {
+        var rubric = await Context.DotThucTaps.Where(d => d.MaSo == maDot)
+            .Select(d => d.MaRubric).FirstOrDefaultAsync() ?? "LEGACY_4TC";
         return await Context.TieuChis
             .AsNoTracking()
-            .OrderBy(t => t.MaTieuChi)
+            .Where(t => t.MaRubric == rubric)
+            .OrderBy(t => t.MaCLO)
             .ToListAsync();
     }
+
+    public Task<DotThucTap?> GetDotThucTapAsync(string maDot) =>
+        Context.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == maDot);
 
     public async Task<PhieuChamDiem?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot)
     {
@@ -68,6 +74,9 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
         {
             existing.TongDiem = phieu.TongDiem;
             existing.NgayCham = DateTime.Now;
+            existing.NhanXetGV = phieu.NhanXetGV;
+            existing.DaDoiChieuPhieuDN = phieu.DaDoiChieuPhieuDN;
+            existing.GhiChuPhieuDN = phieu.GhiChuPhieuDN;
             if (!string.IsNullOrWhiteSpace(phieu.MaGVHuongDan))
                 existing.MaGVHuongDan = phieu.MaGVHuongDan;
 
