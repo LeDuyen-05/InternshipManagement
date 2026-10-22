@@ -22,6 +22,7 @@ GO
 -- ============================================================
 -- XÓA CÁC BẢNG NẾU ĐÃ TỒN TẠI (theo thứ tự phụ thuộc FK)
 -- ============================================================
+IF OBJECT_ID('THONGBAO',           'U') IS NOT NULL DROP TABLE THONGBAO;
 IF OBJECT_ID('TAIKHOAN',           'U') IS NOT NULL DROP TABLE TAIKHOAN;
 IF OBJECT_ID('CHITIETCHAMDIEM',    'U') IS NOT NULL DROP TABLE CHITIETCHAMDIEM;
 IF OBJECT_ID('PHIEUCHAMDIEM',      'U') IS NOT NULL DROP TABLE PHIEUCHAMDIEM;
@@ -115,6 +116,7 @@ CREATE TABLE DOTTHUCTAP (
     thoiGianBD      DATE            NOT NULL,
     thoiGianKT      DATE            NOT NULL,
     trangThai       NVARCHAR(50)    NOT NULL DEFAULT N'ChuaBatDau',
+    maRubric        NVARCHAR(40)    NOT NULL DEFAULT 'CNTT_CLO_V1',
     CONSTRAINT PK_DOTTHUCTAP PRIMARY KEY (maSo),
     CONSTRAINT CK_DOTTHUCTAP_THOIGIAN  CHECK (thoiGianKT >= thoiGianBD),
     CONSTRAINT CK_DOTTHUCTAP_TRANGTHAI CHECK (trangThai IN (N'ChuaBatDau', N'DangDienRa', N'DaKetThuc'))
@@ -291,6 +293,8 @@ CREATE TABLE TIEUCHI (
     maTieuChi   NVARCHAR(20)    NOT NULL,
     tenTieuChi  NVARCHAR(200)   NOT NULL,
     diemToiDa   DECIMAL(5,2)    NOT NULL DEFAULT 10,
+    maRubric    NVARCHAR(40)    NOT NULL DEFAULT 'CNTT_CLO_V1',
+    maCLO       NVARCHAR(20)    NOT NULL,
     CONSTRAINT PK_TIEUCHI PRIMARY KEY (maTieuChi),
     CONSTRAINT CK_TIEUCHI_DIEM CHECK (diemToiDa > 0)
 );
@@ -308,6 +312,9 @@ CREATE TABLE PHIEUCHAMDIEM (
     maSV            NVARCHAR(20)    NOT NULL,
     maHuongDanDN    NVARCHAR(20)    NULL,   -- Đại diện DN chấm điểm
     maGVHuongDan    NVARCHAR(20)    NULL,   -- GV hướng dẫn chấm điểm
+    nhanXetGV       NVARCHAR(MAX)   NULL,
+    daDoiChieuPhieuDN BIT            NOT NULL DEFAULT 0,
+    ghiChuPhieuDN   NVARCHAR(500)   NULL,
     CONSTRAINT PK_PHIEUCHAMDIEM PRIMARY KEY (maPhieu),
     CONSTRAINT UQ_PCD_SV_DOT    UNIQUE (maSV, maDot),
     CONSTRAINT FK_PCD_DOTTHUCTAP        FOREIGN KEY (maDot)          REFERENCES DOTTHUCTAP(maSo),
@@ -379,6 +386,28 @@ CREATE TABLE TAIKHOAN (
 GO
 
 -- ============================================================
+-- BẢNG 20: THONGBAO
+-- Quản lý thông báo học vụ do Cán bộ Khoa phát hành
+-- ============================================================
+CREATE TABLE THONGBAO (
+    maThongBao       NVARCHAR(50)   NOT NULL,
+    tieuDe           NVARCHAR(250)  NOT NULL,
+    noiDung          NVARCHAR(MAX)  NOT NULL,
+    ngayTao          DATETIME       NOT NULL DEFAULT GETDATE(),
+    nguoiGui         NVARCHAR(100)  NOT NULL DEFAULT N'Văn phòng Khoa CNTT',
+    doiTuong         NVARCHAR(50)   NOT NULL DEFAULT N'ALL', -- 'ALL', 'GiangVien', 'SinhVien'
+    danhMuc          NVARCHAR(50)   NOT NULL DEFAULT N'KHAN_CAP',
+    tepDinhKem       NVARCHAR(255)  NULL,
+    kichThuocTep     NVARCHAR(50)   NULL,
+    actionLink       NVARCHAR(255)  NULL,
+    actionText       NVARCHAR(100)  NULL,
+    maDot            NVARCHAR(20)   NULL,
+    CONSTRAINT PK_THONGBAO PRIMARY KEY (maThongBao),
+    CONSTRAINT FK_THONGBAO_DOT FOREIGN KEY (maDot) REFERENCES DOTTHUCTAP(maSo)
+);
+GO
+
+-- ============================================================
 -- TẠO INDEX HỖ TRỢ TRUY VẤN PHỔ BIẾN
 -- ============================================================
 
@@ -429,21 +458,13 @@ END;
 GO
 
 -- ============================================================
--- TRIGGER: tự cập nhật GIANGVIEN.soLuongSVHD
--- (đếm số phân công đang ở trạng thái DangHuongDan)
+-- GHI CHÚ VỀ GIANGVIEN.soLuongSVHD:
+-- soLuongSVHD là HẠN MỨC CHỈ TIÊU (Quota) tối đa do Khoa giao cho Giảng viên (mặc định 10 SV).
+-- Số lượng sinh viên đang hướng dẫn thực tế (soLuongHienTai) được đếm động qua bảng GVHUONGDAN.
 -- ============================================================
-CREATE OR ALTER TRIGGER trg_GVHD_CapNhatSoLuong ON GVHUONGDAN
-AFTER INSERT, UPDATE, DELETE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE g
-    SET soLuongSVHD = (SELECT COUNT(*) FROM GVHUONGDAN h
-                       WHERE h.maGV = g.maGV AND h.trangThai = N'DangHuongDan')
-    FROM GIANGVIEN g
-    WHERE g.maGV IN (SELECT maGV FROM inserted UNION SELECT maGV FROM deleted);
-END;
+IF OBJECT_ID('trg_GVHD_CapNhatSoLuong', 'TR') IS NOT NULL DROP TRIGGER trg_GVHD_CapNhatSoLuong;
 GO
+
 
 -- ============================================================
 -- DỮ LIỆU MẪU (Seed Data)
@@ -460,25 +481,36 @@ INSERT INTO VAITRO (maVaiTro, tenVaiTro, moTa) VALUES
 GO
 
 -- 2. Tiêu chí chấm điểm CLO (tổng điểm tối đa = 10)
-INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa) VALUES
-    ('TC01', N'Thái độ và kỷ luật làm việc',        3.0),
-    ('TC02', N'Năng lực chuyên môn và kỹ thuật',    4.0),
-    ('TC03', N'Kỹ năng giao tiếp và làm việc nhóm', 2.0),
-    ('TC04', N'Báo cáo và tài liệu thực tập',       1.0);
+INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa, maRubric, maCLO) VALUES
+    ('TC01', N'Thái độ và kỷ luật làm việc',        3.0, 'LEGACY_4TC', 'TC01'),
+    ('TC02', N'Năng lực chuyên môn và kỹ thuật',    4.0, 'LEGACY_4TC', 'TC02'),
+    ('TC03', N'Kỹ năng giao tiếp và làm việc nhóm', 2.0, 'LEGACY_4TC', 'TC03'),
+    ('TC04', N'Báo cáo và tài liệu thực tập',       1.0, 'LEGACY_4TC', 'TC04'),
+    ('CLO11', N'Mục tiêu, nội dung và ý nghĩa công việc thực tập', 0.75, 'CNTT_CLO_V1', 'CLO1.1'),
+    ('CLO12', N'Giới thiệu đơn vị thực tập', 0.75, 'CNTT_CLO_V1', 'CLO1.2'),
+    ('CLO13', N'Vị trí công việc và kế hoạch thực tập', 0.50, 'CNTT_CLO_V1', 'CLO1.3'),
+    ('CLO21', N'Vận dụng kiến thức để thực hiện công việc', 0.50, 'CNTT_CLO_V1', 'CLO2.1'),
+    ('CLO22', N'Giải thích phương pháp thực hiện công việc', 0.50, 'CNTT_CLO_V1', 'CLO2.2'),
+    ('CLO31', N'Yêu cầu công việc tại doanh nghiệp', 0.50, 'CNTT_CLO_V1', 'CLO3.1'),
+    ('CLO32', N'Chất lượng báo cáo thực tập', 0.50, 'CNTT_CLO_V1', 'CLO3.2'),
+    ('CLO33', N'Thuyết trình kết quả thực tập', 0.50, 'CNTT_CLO_V1', 'CLO3.3'),
+    ('CLO34', N'Trả lời câu hỏi của giảng viên', 0.50, 'CNTT_CLO_V1', 'CLO3.4'),
+    ('CLO41', N'Doanh nghiệp nhận xét thái độ, trách nhiệm và kỷ luật', 2.00, 'CNTT_CLO_V1', 'CLO4.1'),
+    ('CLO42', N'Doanh nghiệp nhận xét năng lực vận dụng kiến thức thực tế', 3.00, 'CNTT_CLO_V1', 'CLO4.2');
 GO
 
--- 3. Giảng viên (soLuongSVHD sẽ được trigger tự cập nhật)
+-- 3. Giảng viên (soLuongSVHD là hạn mức chỉ tiêu nhận tối đa, mặc định 10 SV/GV)
 INSERT INTO GIANGVIEN (maGV, hoTen, chuyenMon, soLuongSVHD) VALUES
-    ('GV001', N'Nguyễn Văn An',    N'Công nghệ phần mềm', 0),
-    ('GV002', N'Trần Thị Bình',    N'Hệ thống thông tin', 0),
-    ('GV003', N'Lê Quốc Cường',    N'Trí tuệ nhân tạo',   0),
-    ('GV004', N'Phạm Thị Dung',    N'Phát triển ứng dụng di động', 0),
-    ('GV005', N'Hoàng Minh Em',    N'Khoa học dữ liệu',   0),
-    ('GV006', N'Đỗ Minh Trí',      N'An toàn thông tin & Mạng', 0),
-    ('GV007', N'Vũ Thị Hồng',      N'Công nghệ phần mềm & DevOps', 0),
-    ('GV008', N'Bùi Quang Dũng',   N'Trí tuệ nhân tạo & Thị giác máy', 0),
-    ('GV009', N'Đinh Tuấn Kiệt',   N'Hệ thống thông tin quản lý', 0),
-    ('GV010', N'Ngô Mai Lan',      N'Phát triển ứng dụng Web & Cloud', 0);
+    ('GV001', N'Nguyễn Văn An',    N'Công nghệ phần mềm', 10),
+    ('GV002', N'Trần Thị Bình',    N'Hệ thống thông tin', 10),
+    ('GV003', N'Lê Quốc Cường',    N'Trí tuệ nhân tạo',   10),
+    ('GV004', N'Phạm Thị Dung',    N'Phát triển ứng dụng di động', 10),
+    ('GV005', N'Hoàng Minh Em',    N'Khoa học dữ liệu',   10),
+    ('GV006', N'Đỗ Minh Trí',      N'An toàn thông tin & Mạng', 10),
+    ('GV007', N'Vũ Thị Hồng',      N'Công nghệ phần mềm & DevOps', 10),
+    ('GV008', N'Bùi Quang Dũng',   N'Trí tuệ nhân tạo & Thị giác máy', 10),
+    ('GV009', N'Đinh Tuấn Kiệt',   N'Hệ thống thông tin quản lý', 10),
+    ('GV010', N'Ngô Mai Lan',      N'Phát triển ứng dụng Web & Cloud', 10);
 GO
 
 -- 4. Sinh viên
@@ -532,10 +564,10 @@ INSERT INTO DAIDIENDOANHNGHIEP (maSo, hoTen, chucVu, email, thongTinLienHe, maCo
 GO
 
 -- 7. Đợt thực tập
-INSERT INTO DOTTHUCTAP (maSo, tenDot, namHoc, thoiGianBD, thoiGianKT, trangThai) VALUES
-    ('DOT01', N'Thực tập tốt nghiệp đợt 1 năm 2026', N'2025-2026', '2026-02-02', '2026-05-15', N'DaKetThuc'),
-    ('DOT02', N'Thực tập tốt nghiệp đợt 2 năm 2026', N'2026-2027', '2026-09-14', '2026-12-25', N'DangDienRa'),
-    ('DOT03', N'Thực tập tốt nghiệp đợt 1 năm 2027', N'2026-2027', '2027-02-15', '2027-05-30', N'ChuaBatDau');
+INSERT INTO DOTTHUCTAP (maSo, tenDot, namHoc, thoiGianBD, thoiGianKT, trangThai, maRubric) VALUES
+    ('DOT01', N'Thực tập tốt nghiệp đợt 1 năm 2026', N'2025-2026', '2026-02-02', '2026-05-15', N'DaKetThuc', 'LEGACY_4TC'),
+    ('DOT02', N'Thực tập tốt nghiệp đợt 2 năm 2026', N'2026-2027', '2026-09-14', '2026-12-25', N'DangDienRa', 'CNTT_CLO_V1'),
+    ('DOT03', N'Thực tập tốt nghiệp đợt 1 năm 2027', N'2026-2027', '2027-02-15', '2027-05-30', N'ChuaBatDau', 'CNTT_CLO_V1');
 GO
 
 -- 8. Hồ sơ năng lực (embeddingHoSo để NULL, sẽ do mô hình ML sinh ra)
@@ -717,30 +749,68 @@ INSERT INTO PHIEUCHAMDIEM (maPhieu, tongDiem, ngayCham, maDot, maSV, maHuongDanD
     ('PCD002', 9.10, '2026-05-25', 'DOT01', 'SV002', 'DD003', 'PC002'),
     ('PCD003', 7.30, '2026-05-26', 'DOT01', 'SV003', 'DD004', 'PC003'),
     ('PCD004', 8.80, '2026-10-10', 'DOT02', 'SV004', 'DD001', 'PC004'),
-    ('PCD005', 9.40, '2026-10-10', 'DOT02', 'SV005', 'DD002', 'PC005'),
+    ('PCD005', 9.00, '2026-10-10', 'DOT02', 'SV005', 'DD002', 'PC005'),
     ('PCD006', 6.70, '2026-10-11', 'DOT02', 'SV006', 'DD003', 'PC006'),
     ('PCD007', 7.80, '2026-10-11', 'DOT02', 'SV007', 'DD004', 'PC007'),
     ('PCD008', 4.80, '2026-10-12', 'DOT02', 'SV008', 'DD004', 'PC008');
 GO
 
--- 18. Chi tiết chấm điểm (trigger kiểm tra không vượt điểm tối đa của tiêu chí)
+-- 18. Chi tiết chấm điểm – DOT01 (rubric LEGACY_4TC: TC01-TC04)
 INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
     ('CD001', 2.50, 'PCD001', 'TC01'), ('CD002', 3.50, 'PCD001', 'TC02'),
     ('CD003', 1.50, 'PCD001', 'TC03'), ('CD004', 1.00, 'PCD001', 'TC04'),
     ('CD005', 2.80, 'PCD002', 'TC01'), ('CD006', 3.60, 'PCD002', 'TC02'),
     ('CD007', 1.80, 'PCD002', 'TC03'), ('CD008', 0.90, 'PCD002', 'TC04'),
     ('CD009', 2.00, 'PCD003', 'TC01'), ('CD010', 3.00, 'PCD003', 'TC02'),
-    ('CD011', 1.50, 'PCD003', 'TC03'), ('CD012', 0.80, 'PCD003', 'TC04'),
-    ('CD013', 2.70, 'PCD004', 'TC01'), ('CD014', 3.60, 'PCD004', 'TC02'),
-    ('CD015', 1.60, 'PCD004', 'TC03'), ('CD016', 0.90, 'PCD004', 'TC04'),
-    ('CD017', 2.90, 'PCD005', 'TC01'), ('CD018', 3.80, 'PCD005', 'TC02'),
-    ('CD019', 1.80, 'PCD005', 'TC03'), ('CD020', 0.90, 'PCD005', 'TC04'),
-    ('CD021', 2.00, 'PCD006', 'TC01'), ('CD022', 2.50, 'PCD006', 'TC02'),
-    ('CD023', 1.40, 'PCD006', 'TC03'), ('CD024', 0.80, 'PCD006', 'TC04'),
-    ('CD025', 2.40, 'PCD007', 'TC01'), ('CD026', 3.10, 'PCD007', 'TC02'),
-    ('CD027', 1.50, 'PCD007', 'TC03'), ('CD028', 0.80, 'PCD007', 'TC04'),
-    ('CD029', 1.50, 'PCD008', 'TC01'), ('CD030', 1.80, 'PCD008', 'TC02'),
-    ('CD031', 1.00, 'PCD008', 'TC03'), ('CD032', 0.50, 'PCD008', 'TC04');
+    ('CD011', 1.50, 'PCD003', 'TC03'), ('CD012', 0.80, 'PCD003', 'TC04');
+GO
+
+-- Chi tiết chấm điểm – DOT02 (rubric CNTT_CLO_V1: CLO11-CLO42, tổng tối đa 10đ)
+-- CLO11(0.75) CLO12(0.75) CLO13(0.5) CLO21(0.5) CLO22(0.5) CLO31(0.5) CLO32(0.5) CLO33(0.5) CLO34(0.5) CLO41(2.0) CLO42(3.0) => max=10đ
+-- PCD004 – SV004 – tongDiem = 8.80 (CLO1-9=5.00, CLO41=1.52, CLO42=2.28)
+INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
+    ('D4C01', 0.75, 'PCD004', 'CLO11'), ('D4C02', 0.75, 'PCD004', 'CLO12'),
+    ('D4C03', 0.50, 'PCD004', 'CLO13'), ('D4C04', 0.50, 'PCD004', 'CLO21'),
+    ('D4C05', 0.50, 'PCD004', 'CLO22'), ('D4C06', 0.50, 'PCD004', 'CLO31'),
+    ('D4C07', 0.50, 'PCD004', 'CLO32'), ('D4C08', 0.50, 'PCD004', 'CLO33'),
+    ('D4C09', 0.50, 'PCD004', 'CLO34'), ('D4C10', 1.52, 'PCD004', 'CLO41'),
+    ('D4C11', 2.28, 'PCD004', 'CLO42');
+GO
+-- PCD005 – SV005 – tongDiem = 9.00 (CLO1-9=5.00, CLO41=1.60, CLO42=2.40)
+INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
+    ('D5C01', 0.75, 'PCD005', 'CLO11'), ('D5C02', 0.75, 'PCD005', 'CLO12'),
+    ('D5C03', 0.50, 'PCD005', 'CLO13'), ('D5C04', 0.50, 'PCD005', 'CLO21'),
+    ('D5C05', 0.50, 'PCD005', 'CLO22'), ('D5C06', 0.50, 'PCD005', 'CLO31'),
+    ('D5C07', 0.50, 'PCD005', 'CLO32'), ('D5C08', 0.50, 'PCD005', 'CLO33'),
+    ('D5C09', 0.50, 'PCD005', 'CLO34'), ('D5C10', 1.60, 'PCD005', 'CLO41'),
+    ('D5C11', 2.40, 'PCD005', 'CLO42');
+GO
+-- PCD006 – SV006 – tongDiem = 6.70 (CLO1-9=5.00, CLO41=0.68, CLO42=1.02)
+INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
+    ('D6C01', 0.75, 'PCD006', 'CLO11'), ('D6C02', 0.75, 'PCD006', 'CLO12'),
+    ('D6C03', 0.50, 'PCD006', 'CLO13'), ('D6C04', 0.50, 'PCD006', 'CLO21'),
+    ('D6C05', 0.50, 'PCD006', 'CLO22'), ('D6C06', 0.50, 'PCD006', 'CLO31'),
+    ('D6C07', 0.50, 'PCD006', 'CLO32'), ('D6C08', 0.50, 'PCD006', 'CLO33'),
+    ('D6C09', 0.50, 'PCD006', 'CLO34'), ('D6C10', 0.68, 'PCD006', 'CLO41'),
+    ('D6C11', 1.02, 'PCD006', 'CLO42');
+GO
+-- PCD007 – SV007 – tongDiem = 7.80 (CLO1-9=5.00, CLO41=1.12, CLO42=1.68)
+INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
+    ('D7C01', 0.75, 'PCD007', 'CLO11'), ('D7C02', 0.75, 'PCD007', 'CLO12'),
+    ('D7C03', 0.50, 'PCD007', 'CLO13'), ('D7C04', 0.50, 'PCD007', 'CLO21'),
+    ('D7C05', 0.50, 'PCD007', 'CLO22'), ('D7C06', 0.50, 'PCD007', 'CLO31'),
+    ('D7C07', 0.50, 'PCD007', 'CLO32'), ('D7C08', 0.50, 'PCD007', 'CLO33'),
+    ('D7C09', 0.50, 'PCD007', 'CLO34'), ('D7C10', 1.12, 'PCD007', 'CLO41'),
+    ('D7C11', 1.68, 'PCD007', 'CLO42');
+GO
+-- PCD008 – SV008 – tongDiem = 4.80 (CLO11-12=0.50, CLO13-34=0.30 each, CLO41=0.70, CLO42=1.00)
+INSERT INTO CHITIETCHAMDIEM (maSo, diemCham, maPhieu, maTieuChi) VALUES
+    ('D8C01', 0.50, 'PCD008', 'CLO11'), ('D8C02', 0.50, 'PCD008', 'CLO12'),
+    ('D8C03', 0.30, 'PCD008', 'CLO13'), ('D8C04', 0.30, 'PCD008', 'CLO21'),
+    ('D8C05', 0.30, 'PCD008', 'CLO22'), ('D8C06', 0.30, 'PCD008', 'CLO31'),
+    ('D8C07', 0.30, 'PCD008', 'CLO32'), ('D8C08', 0.30, 'PCD008', 'CLO33'),
+    ('D8C09', 0.30, 'PCD008', 'CLO34'), ('D8C10', 0.70, 'PCD008', 'CLO41'),
+    ('D8C11', 1.00, 'PCD008', 'CLO42');
 GO
 
 -- 19. Tài khoản mẫu (matKhau lưu dạng thường '123456', sẽ mã hóa sau bằng script riêng)
