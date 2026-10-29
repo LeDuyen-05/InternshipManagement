@@ -5,11 +5,6 @@ using InternshipManagement.DAL.Repositories;
 
 namespace InternshipManagement.BLL.Services.SinhVien;
 
-/// <summary>
-/// Module MẪU — dùng làm khuôn mẫu cho các module còn lại (CongTy, GiangVien...).
-/// Chứa hành vi nghiệp vụ của lớp SinhVien (CapNhatThongTin...) trong sơ đồ phân tích.
-/// Đây là class KỸ THUẬT phục vụ triển khai, KHÔNG phải lớp trong sơ đồ lớp phân tích.
-/// </summary>
 public class SinhVienService : ISinhVienService
 {
     private readonly ISinhVienRepository _repository;
@@ -57,20 +52,23 @@ public class SinhVienService : ISinhVienService
         return ToDto(entity);
     }
 
-    /// <summary>Tương ứng CapNhatThongTin() trong sơ đồ lớp phân tích.</summary>
     public async Task UpdateAsync(string maSV, UpdateSinhVienDto dto)
     {
+        var errors = _validator.Validate(maSV, dto.HoTen, dto.Gpa, dto.Lop, dto.KhoaHoc, dto.CongNghe, dto.KyNang, dto.DuAnDaThucHien);
+        if (errors.Count > 0)
+            throw new ArgumentException(string.Join(" ", errors));
+
         var entity = await _repository.GetByIdAsync(maSV)
             ?? throw new NotFoundException("SinhVien", maSV);
 
-        entity.HoTen = dto.HoTen;
-        entity.Lop = dto.Lop;
-        entity.KhoaHoc = dto.KhoaHoc;
+        entity.HoTen = dto.HoTen.Trim();
+        entity.Lop = string.IsNullOrWhiteSpace(dto.Lop) ? null : dto.Lop.Trim();
+        entity.KhoaHoc = string.IsNullOrWhiteSpace(dto.KhoaHoc) ? null : dto.KhoaHoc.Trim();
         entity.Gpa = dto.Gpa;
-        entity.KyNang = dto.KyNang;
-        entity.ChuyenNganh = dto.ChuyenNganh;
-        entity.CongNghe = dto.CongNghe;
-        entity.DuAnDaThucHien = dto.DuAnDaThucHien;
+        entity.KyNang = string.IsNullOrWhiteSpace(dto.KyNang) ? null : dto.KyNang.Trim();
+        entity.ChuyenNganh = string.IsNullOrWhiteSpace(dto.ChuyenNganh) ? null : dto.ChuyenNganh.Trim();
+        entity.CongNghe = string.IsNullOrWhiteSpace(dto.CongNghe) ? null : dto.CongNghe.Trim();
+        entity.DuAnDaThucHien = string.IsNullOrWhiteSpace(dto.DuAnDaThucHien) ? null : dto.DuAnDaThucHien.Trim();
 
         _repository.Update(entity);
         await _repository.SaveChangesAsync();

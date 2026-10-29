@@ -7,100 +7,162 @@ public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
-    // 18 lớp nghiệp vụ theo đúng sơ đồ lớp mức phân tích đã xác nhận.
+    public DbSet<TaiKhoan> TaiKhoans => Set<TaiKhoan>();
+    public DbSet<VaiTro> VaiTros => Set<VaiTro>();
     public DbSet<SinhVien> SinhViens => Set<SinhVien>();
     public DbSet<GiangVien> GiangViens => Set<GiangVien>();
     public DbSet<CongTy> CongTys => Set<CongTy>();
     public DbSet<DaiDienDoanhNghiep> DaiDienDoanhNghieps => Set<DaiDienDoanhNghiep>();
     public DbSet<HoSoNangLuc> HoSoNangLucs => Set<HoSoNangLuc>();
     public DbSet<DotThucTap> DotThucTaps => Set<DotThucTap>();
+    public DbSet<GoiYCongTy> GoiYCongTys => Set<GoiYCongTy>();
+    public DbSet<TieuChi> TieuChis => Set<TieuChi>();
     public DbSet<DangKyThucTap> DangKyThucTaps => Set<DangKyThucTap>();
-    public DbSet<PhongVan> PhongVans => Set<PhongVan>();
     public DbSet<PhanBoThucTap> PhanBoThucTaps => Set<PhanBoThucTap>();
+    public DbSet<PhongVan> PhongVans => Set<PhongVan>();
     public DbSet<GVHuongDan> GVHuongDans => Set<GVHuongDan>();
     public DbSet<HuongDanDoanhNghiep> HuongDanDoanhNghieps => Set<HuongDanDoanhNghiep>();
     public DbSet<TienDoThucTap> TienDoThucTaps => Set<TienDoThucTap>();
     public DbSet<PhieuChamDiem> PhieuChamDiems => Set<PhieuChamDiem>();
     public DbSet<ChiTietChamDiem> ChiTietChamDiems => Set<ChiTietChamDiem>();
-    public DbSet<TieuChi> TieuChis => Set<TieuChi>();
-    public DbSet<GoiYCongTy> GoiYCongTys => Set<GoiYCongTy>();
     public DbSet<GioiThieu> GioiThieus => Set<GioiThieu>();
-    public DbSet<DeXuatCongTy> DeXuatCongTys => Set<DeXuatCongTy>();
+    public DbSet<ThongBao> ThongBaos => Set<ThongBao>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Áp dụng các file Configuration riêng cho các bảng có khóa đặc biệt / là pattern mẫu.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        // --- Các entity còn lại: khai báo khóa chính trực tiếp tại đây để tránh
-        // tạo quá nhiều file Configuration nhỏ lẻ (giữ đồ án gọn, dễ bảo trì) ---
-        modelBuilder.Entity<GiangVien>().HasKey(x => x.MaGV);
-        modelBuilder.Entity<CongTy>().HasKey(x => x.MaCongTy);
-        modelBuilder.Entity<DaiDienDoanhNghiep>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<HoSoNangLuc>().HasKey(x => x.MaHoSo);
-        modelBuilder.Entity<DotThucTap>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<PhongVan>().HasKey(x => x.MaPV);
-        modelBuilder.Entity<GVHuongDan>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<HuongDanDoanhNghiep>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<TienDoThucTap>().HasKey(x => x.MaTienDo);
-        modelBuilder.Entity<PhieuChamDiem>().HasKey(x => x.MaPhieu);
-        modelBuilder.Entity<TieuChi>().HasKey(x => x.MaTieuChi);
-        modelBuilder.Entity<GioiThieu>().HasKey(x => x.MaSo);
-        modelBuilder.Entity<DeXuatCongTy>().HasKey(x => x.MaDeXuat);
+        modelBuilder.Entity<TaiKhoan>(e =>
+        {
+            e.ToTable("TAIKHOAN");
+            e.HasKey(x => x.MaTaiKhoan);
+            e.Property(x => x.MaTaiKhoan).HasMaxLength(20);
+            e.Property(x => x.TenDangNhap).HasMaxLength(100).IsRequired();
+            e.Property(x => x.MatKhau).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Email).HasColumnName("email").HasMaxLength(200);
+            e.Property(x => x.SoDienThoai).HasColumnName("soDienThoai").HasMaxLength(30);
+            e.HasIndex(x => x.TenDangNhap).IsUnique();
+            e.HasOne(x => x.VaiTro).WithMany().HasForeignKey(x => x.MaVaiTro);
+        });
 
-        // GoiYCongTy: ĐỀ XUẤT khóa phức hợp (xem ghi chú trong Domain/Entities/GoiYCongTy.cs)
-        modelBuilder.Entity<GoiYCongTy>().HasKey(x => new { x.MaHoSo, x.MaCongTy });
+        modelBuilder.Entity<VaiTro>(e =>
+        {
+            e.ToTable("VAITRO");
+            e.HasKey(x => x.MaVaiTro);
+        });
 
-        // Quan hệ 1-1 SinhVien - HoSoNangLuc
-        modelBuilder.Entity<HoSoNangLuc>()
-            .HasOne(h => h.SinhVien)
-            .WithOne(s => s.HoSoNangLuc)
-            .HasForeignKey<HoSoNangLuc>(h => h.MaSinhVien);
+        modelBuilder.Entity<GiangVien>(e =>
+        {
+            e.ToTable("GIANGVIEN");
+            e.HasKey(x => x.MaGV);
+        });
 
-        // PhongVan: 2 FK tới SinhVien và CongTy
-        modelBuilder.Entity<PhongVan>()
-            .HasOne(p => p.SinhVien).WithMany(s => s.PhongVans).HasForeignKey(p => p.MaSinhVien);
-        modelBuilder.Entity<PhongVan>()
-            .HasOne(p => p.CongTy).WithMany(c => c.PhongVans).HasForeignKey(p => p.MaCongTy);
+        modelBuilder.Entity<CongTy>(e =>
+        {
+            e.ToTable("CONGTY");
+            e.HasKey(x => x.MaCongTy);
+            e.Property(x => x.ThoiGian).HasMaxLength(100);
+            e.Property(x => x.MaSVDeXuat).HasColumnName("maSVDeXuat").HasMaxLength(20);
+        });
 
-        // GVHuongDan: lớp kết hợp GiangVien - SinhVien
-        modelBuilder.Entity<GVHuongDan>()
-            .HasOne(g => g.GiangVien).WithMany(gv => gv.GVHuongDans).HasForeignKey(g => g.MaGiangVien);
-        modelBuilder.Entity<GVHuongDan>()
-            .HasOne(g => g.SinhVien).WithMany(s => s.GVHuongDans).HasForeignKey(g => g.MaSinhVien);
+        modelBuilder.Entity<DaiDienDoanhNghiep>(e =>
+        {
+            e.ToTable("DAIDIENDOANHNGHIEP");
+            e.HasKey(x => x.MaSo);
+            e.Property(x => x.MaSo).HasColumnName("maSo");
+            e.Property(x => x.MaCongTy).HasColumnName("maCongTy");
+            e.Property(x => x.HoTen).HasColumnName("hoTen");
+            e.Property(x => x.ChucVu).HasColumnName("chucVu");
+            e.Property(x => x.Email).HasColumnName("email");
+            e.HasOne(d => d.CongTy).WithMany(c => c.DaiDienDoanhNghieps).HasForeignKey(d => d.MaCongTy);
+        });
 
-        // HuongDanDoanhNghiep: lớp kết hợp DaiDienDoanhNghiep - DangKyThucTap
-        modelBuilder.Entity<HuongDanDoanhNghiep>()
-            .HasOne(h => h.DaiDienDoanhNghiep).WithMany(d => d.HuongDanDoanhNghieps).HasForeignKey(h => h.MaDaiDien);
-        modelBuilder.Entity<HuongDanDoanhNghiep>()
-            .HasOne(h => h.DangKyThucTap).WithMany(d => d.HuongDanDoanhNghieps).HasForeignKey(h => h.MaDangKy);
+        modelBuilder.Entity<DotThucTap>(e =>
+        {
+            e.ToTable("DOTTHUCTAP");
+            e.HasKey(x => x.MaSo);
+            e.Property(x => x.NamHoc).HasColumnName("namHoc").HasMaxLength(20);
+            e.Property(x => x.TrangThai).HasColumnName("trangThai").HasMaxLength(50);
+            e.Property(x => x.MaRubric).HasColumnName("maRubric").HasMaxLength(40);
+        });
 
-        // PhieuChamDiem: 3 FK
-        modelBuilder.Entity<PhieuChamDiem>()
-            .HasOne(p => p.GVHuongDan).WithMany(g => g.PhieuChamDiems).HasForeignKey(p => p.MaGV);
-        modelBuilder.Entity<PhieuChamDiem>()
-            .HasOne(p => p.HuongDanDoanhNghiep).WithMany(h => h.PhieuChamDiems).HasForeignKey(p => p.MaDoanhNghiep);
-        modelBuilder.Entity<PhieuChamDiem>()
-            .HasOne(p => p.DotThucTap).WithMany(d => d.PhieuChamDiems).HasForeignKey(p => p.MaDot);
+        modelBuilder.Entity<HoSoNangLuc>(e =>
+        {
+            e.ToTable("HOSONANGLUC");
+            e.HasKey(x => x.MaHoSo);
+            e.Property(x => x.MaSV).HasColumnName("maSV");
+            e.Property(x => x.MaHoSo).HasColumnName("maHoSo");
+            e.Property(x => x.NDHoSo).HasColumnName("NDHoSo");
+            e.Property(x => x.NgayCapNhat).HasColumnName("ngayCapNhat");
+            e.Property(x => x.FileCV).HasColumnName("FileCV").HasMaxLength(500);
+            e.HasOne(h => h.SinhVien)
+                .WithOne(s => s.HoSoNangLuc)
+                .HasForeignKey<HoSoNangLuc>(h => h.MaSV);
+        });
 
-        // GioiThieu: lớp kết hợp GiangVien - CongTy
-        modelBuilder.Entity<GioiThieu>()
-            .HasOne(g => g.GiangVien).WithMany(gv => gv.GioiThieus).HasForeignKey(g => g.MaGV);
-        modelBuilder.Entity<GioiThieu>()
-            .HasOne(g => g.CongTy).WithMany(c => c.GioiThieus).HasForeignKey(g => g.MaCongTy);
+        modelBuilder.Entity<PhongVan>(e =>
+        {
+            e.ToTable("PHONGVAN");
+            e.HasKey(x => x.MaPV);
+            e.Property(x => x.MaPV).HasColumnName("maPV");
+            e.Property(x => x.MaSinhVien).HasColumnName("maSV");
+            e.Property(x => x.MaDaiDien).HasColumnName("maDaiDien");
+            e.Property(x => x.HinhThuc).HasColumnName("hinhThuc");
+            e.Property(x => x.NgayPV).HasColumnName("ngayPV");
+            e.Property(x => x.KetQua).HasColumnName("ketQua");
+            e.HasOne(p => p.SinhVien).WithMany(s => s.PhongVans).HasForeignKey(p => p.MaSinhVien);
+            e.HasOne(p => p.DaiDienDoanhNghiep).WithMany(d => d.PhongVans).HasForeignKey(p => p.MaDaiDien);
+        });
 
-        // DeXuatCongTy: 3 FK
-        modelBuilder.Entity<DeXuatCongTy>()
-            .HasOne(d => d.CongTy).WithMany(c => c.DeXuatCongTys).HasForeignKey(d => d.MaCongTy);
-        modelBuilder.Entity<DeXuatCongTy>()
-            .HasOne(d => d.SinhVien).WithMany(s => s.DeXuatCongTys).HasForeignKey(d => d.MaSV);
-        modelBuilder.Entity<DeXuatCongTy>()
-            .HasOne(d => d.GiangVien).WithMany(g => g.DeXuatCongTys).HasForeignKey(d => d.MaGV);
+        modelBuilder.Entity<HuongDanDoanhNghiep>(e =>
+        {
+            e.ToTable("HUONGDANDOANHNGHIEP");
+            e.HasKey(x => x.MaSo);
+            e.Property(x => x.MaSo).HasColumnName("maSo");
+            e.Property(x => x.MaPhanBo).HasColumnName("maPB");
+            e.Property(x => x.MaDaiDien).HasColumnName("maDaiDien");
+            e.Property(x => x.NgayBD).HasColumnName("ngayBD");
+            e.Property(x => x.VaiTro).HasColumnName("vaiTro");
+            e.Property(x => x.DanhGia).HasColumnName("danhGia");
+            e.HasOne(h => h.DaiDienDoanhNghiep).WithMany(d => d.HuongDanDoanhNghieps).HasForeignKey(h => h.MaDaiDien);
+            e.HasOne(h => h.PhanBoThucTap).WithMany(p => p.HuongDanDoanhNghieps).HasForeignKey(h => h.MaPhanBo);
+        });
 
-        // GoiYCongTy: 2 FK
-        modelBuilder.Entity<GoiYCongTy>()
-            .HasOne(g => g.HoSoNangLuc).WithMany(h => h.GoiYCongTys).HasForeignKey(g => g.MaHoSo);
-        modelBuilder.Entity<GoiYCongTy>()
-            .HasOne(g => g.CongTy).WithMany(c => c.GoiYCongTys).HasForeignKey(g => g.MaCongTy);
+        modelBuilder.Entity<GioiThieu>(e =>
+        {
+            e.ToTable("GIOITHIEU");
+            e.HasKey(x => x.MaSo);
+            e.HasOne(g => g.GiangVien).WithMany(gv => gv.GioiThieus).HasForeignKey(g => g.MaGV);
+            e.HasOne(g => g.CongTy).WithMany(c => c.GioiThieus).HasForeignKey(g => g.MaCongTy);
+        });
+
+        modelBuilder.Entity<ThongBao>(e =>
+        {
+            e.ToTable("THONGBAO");
+            e.HasKey(x => x.MaThongBao);
+            e.Property(x => x.MaThongBao).HasColumnName("maThongBao");
+            e.Property(x => x.TieuDe).HasColumnName("tieuDe");
+            e.Property(x => x.NoiDung).HasColumnName("noiDung");
+            e.Property(x => x.NgayTao).HasColumnName("ngayTao");
+            e.Property(x => x.MaNguoiGui).HasColumnName("maNguoiGui");
+            e.Property(x => x.DoiTuong).HasColumnName("doiTuong");
+            e.Property(x => x.LoaiThongBao).HasColumnName("loaiThongBao");
+            e.Property(x => x.TepDinhKem).HasColumnName("tepDinhKem");
+            e.Property(x => x.Ghim).HasColumnName("ghim");
+        });
+
+        modelBuilder.Entity<GoiYCongTy>(e =>
+        {
+            e.ToTable("GOIYCONGTY");
+            e.HasKey(x => x.MaSo);
+            e.Property(x => x.MaSo).HasColumnName("maSo");
+            e.Property(x => x.MaHoSo).HasColumnName("maHoSo");
+            e.Property(x => x.MaCongTy).HasColumnName("maCongTy");
+            e.Property(x => x.TyLeTuongThich).HasColumnName("tyLeTuongThich").HasColumnType("decimal(5,2)");
+            e.Property(x => x.NgayGoiY).HasColumnName("ngayGoiY");
+            e.HasOne(x => x.HoSoNangLuc).WithMany().HasForeignKey(x => x.MaHoSo);
+            e.HasOne(x => x.CongTy).WithMany(x => x.GoiYCongTys).HasForeignKey(x => x.MaCongTy);
+        });
     }
 }
+

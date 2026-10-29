@@ -1,0 +1,142 @@
+{
+  "baselines": {
+    "tfidf_cosine": {
+      "5": {
+        "ndcg": 0.516123428838724,
+        "recall": 0.05175090829646535,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      },
+      "10": {
+        "ndcg": 0.5071746160393155,
+        "recall": 0.10776374001282792,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      }
+    },
+    "lsa_cosine": {
+      "5": {
+        "ndcg": 0.523758955893249,
+        "recall": 0.0519389333166633,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      },
+      "10": {
+        "ndcg": 0.5122647711651558,
+        "recall": 0.10682349781364853,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      }
+    },
+    "sbert_cosine": {
+      "5": {
+        "ndcg": 0.4172502301726773,
+        "recall": 0.05123618574309219,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      },
+      "10": {
+        "ndcg": 0.406517485284801,
+        "recall": 0.08672932179616048,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      }
+    }
+  },
+  "experiments": [
+    {
+      "name": "semantic",
+      "features": [
+        "tfidf_cosine",
+        "lsa_cosine",
+        "sbert_cosine"
+      ],
+      "num_leaves": 7,
+      "max_depth": 3,
+      "best_iteration": 6,
+      "metrics": {
+        "5": {
+          "ndcg": 0.5898499480442394,
+          "recall": 0.07080644291443873,
+          "ndcg_queries": 35,
+          "recall_queries": 35,
+          "total_queries": 35
+        },
+        "10": {
+          "ndcg": 0.5446814653916774,
+          "recall": 0.1121318472809467,
+          "ndcg_queries": 35,
+          "recall_queries": 35,
+          "total_queries": 35
+        }
+      }
+    },
+    {
+      "name": "six_features",
+      "features": [
+        "tfidf_cosine",
+        "lsa_cosine",
+        "sbert_cosine",
+        "gpa_chuan_hoa",
+        "thieu_gpa",
+        "jd_co_mo_ta"
+      ],
+      "num_leaves": 7,
+      "max_depth": 3,
+      "best_iteration": 23,
+      "metrics": {
+        "5": {
+          "ndcg": 0.6357965563397975,
+          "recall": 0.07039292478791973,
+          "ndcg_queries": 35,
+          "recall_queries": 35,
+          "total_queries": 35
+        },
+        "10": {
+          "ndcg": 0.5768560116582282,
+          "recall": 0.113830832486781,
+          "ndcg_queries": 35,
+          "recall_queries": 35,
+          "total_queries": 35
+        }
+      }
+    },
+    {
+      "name": "six_features_wide",
+      "features": [
+        "tfidf_cosine",
+        "lsa_cosine",
+        "sbert_cosine",
+        "gpa_chuan_hoa",
+        "thieu_gpa",
+        "jd_co_mo_ta"
+      ],
+      "num_leaves": 15,
+      "max_depth": 4,
+      "best_iteration": 21,
+      "metrics": {
+        "5": {
+          "ndcg": 0.6384222414710781,
+          "recall": 0.07150854385129318,
+          "ndcg_queries": 35,
+          "recall_queries": 35,
+          "total_queries": 35
+        },
+        "10": {
+          "ndcg": 0.5779192130110383,
+          "recall": 0.11483681442589777,
+          "ndcg_queries": 35,
+          "recall_queries": 35,
+          "total_queries": 35
+        }
+      }
+    }
+  ],
+  "selected": "six_features_wide"
+}

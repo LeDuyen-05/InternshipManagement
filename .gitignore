@@ -1,21 +1,60 @@
+# Visual Studio / VS Code / JetBrains
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.code-workspace
+
 # Backend (.NET)
+[Bb]in/
+[Oo]bj/
 backend/**/bin/
 backend/**/obj/
-*.user
+*.log
+*-build-diagnostic.txt
+*.diagnostic.txt
 
 # Frontend (Node)
+node_modules/
 frontend/node_modules/
+dist/
 frontend/dist/
+.env
+.env.local
+.env.*.local
 frontend/.env
+frontend/.env.local
+frontend/.env.*
+!frontend/.env.example
 
 # ML Service (Python)
+venv/
+.venv/
 ml-service/venv/
+ml-service/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
 ml-service/__pycache__/
 ml-service/**/__pycache__/
 ml-service/.env
+ml-service/output/
+ml-service/data_raw/
 
-# OS / Editor
+# Local review and scratch output
+.tmp-doc-review/
+scratch/
+
+# OS Files
 .DS_Store
 .vscode/
 .idea/
+.vs/
 *.code-workspace
+
+Thumbs.db
+Desktop.ini
+QuanLyThucTap_TSQL.sql

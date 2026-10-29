@@ -4,7 +4,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace InternshipManagement.DAL.Configurations;
 
-/// <summary>File Configuration mẫu — dùng làm pattern cho các bảng khác nếu cần.</summary>
 public class SinhVienConfiguration : IEntityTypeConfiguration<SinhVien>
 {
     public void Configure(EntityTypeBuilder<SinhVien> builder)
@@ -14,10 +13,14 @@ public class SinhVienConfiguration : IEntityTypeConfiguration<SinhVien>
 
         builder.Property(x => x.MaSV).HasMaxLength(20);
         builder.Property(x => x.HoTen).HasMaxLength(100).IsRequired();
-        builder.Property(x => x.Lop).HasMaxLength(20);
+        builder.Property(x => x.Lop).HasMaxLength(50);
+        builder.Property(x => x.KhoaHoc).HasMaxLength(20);
         builder.Property(x => x.ChuyenNganh).HasMaxLength(100);
-        builder.Property(x => x.CongNghe).HasMaxLength(255);
+        builder.Property(x => x.CongNghe).HasMaxLength(500);
         builder.Property(x => x.KyNang).HasMaxLength(500);
         builder.Property(x => x.DuAnDaThucHien).HasMaxLength(1000);
+        builder.Property(x => x.Gpa)
+            .HasColumnType("decimal(4,2)");
     }
 }
+

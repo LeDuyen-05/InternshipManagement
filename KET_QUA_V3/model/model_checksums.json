@@ -1,0 +1,10 @@
+{
+  "model_meta.json": "db36fdd64ec64d64128f7d483bc3d65b48d50631f0d530f5c7fe1c0604ce4e6f",
+  "model.txt": "6dc17b7ad73ef449be9f8cb6154d90b011f540ef71086af03fbe3b9c992b4471",
+  "validation_results.json": "9bf3489978220ceb6090f0804f463c9a07ee6d8aa91264fc0d4999749007b378",
+  "preparation.json": "e1e488b0aeb436e9c074f351f2302715ffa92e309e0084bebc402ca807b51943",
+  "training_history.csv": "36b1501495525af11b63ddd9219b714b99901cf437bab22385e4a99862df3dbc",
+  "feature_importance.csv": "cf85a61535e071ba30e3e3da8ace27ba1869dc473c24a6a34c7b87d7c277aa4f",
+  "tfidf_vectorizer.joblib": "4d9f16366b7bc102b46d808b5f080592a38ac037c1a3097b5bb40fd6f1d798ff",
+  "lsa_svd.joblib": "4395137923feb7665ca5b49955895e331e49054189a01ccdac8e4424cb773f3f"
+}

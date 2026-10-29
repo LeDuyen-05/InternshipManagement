@@ -1,0 +1,13 @@
+{
+  "started_utc": "2026-10-29T13:21:01.153313+00:00",
+  "input_manifest_sha256": "5231ebbf611a55f44cdbbe318f6c72c24da0e347985bf5b969487476260a7eef",
+  "training_code_sha256": "d8c0ac0aca4b3f739933c0c0d3d756e9e85f230068be23b802fa4ed59a6467d4",
+  "configurations": [
+    "semantic",
+    "six_features",
+    "six_features_wide"
+  ],
+  "selection": "validation NDCG@5; tied results prefer earlier configuration",
+  "seed": 42,
+  "test_policy": "evaluate after selection; do not adapt model using test results"
+}
