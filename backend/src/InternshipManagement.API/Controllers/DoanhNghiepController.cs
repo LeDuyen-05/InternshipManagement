@@ -42,53 +42,82 @@ public class DoanhNghiepController : ControllerBase
     }
 
     [HttpGet("tong-quan/{maCongTy}")]
-    public async Task<IActionResult> GetTongQuan(string maCongTy) =>
-        Ok(await _service.GetTongQuanAsync(maCongTy, await PhamViCongTyAsync()));
+    public async Task<IActionResult> GetTongQuan(string maCongTy, [FromQuery] string? maDot) =>
+        Ok(await _service.GetTongQuanAsync(maCongTy, await PhamViCongTyAsync(), maDot));
 
     [HttpGet("tin-tuyen-dung/{maCongTy}")]
-    public async Task<IActionResult> GetTinTuyenDung(string maCongTy) =>
-        Ok(await _service.GetTinTuyenDungAsync(maCongTy, await PhamViCongTyAsync()));
+    public async Task<IActionResult> GetTinTuyenDung(string maCongTy, [FromQuery] string? maDot) =>
+        Ok(await _service.GetTinTuyenDungAsync(maCongTy, await PhamViCongTyAsync(), maDot));
 
     [HttpPost("tin-tuyen-dung")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
     public async Task<IActionResult> LuuTinTuyenDung([FromBody] CapNhatTinTuyenDungRequest request) =>
         Ok(await _service.LuuTinTuyenDungAsync(request, await PhamViCongTyAsync()));
 
     [HttpGet("ung-vien/{maCongTy}")]
-    public async Task<IActionResult> GetDanhSachUngVien(string maCongTy) =>
-        Ok(await _service.GetUngVienAsync(maCongTy, await PhamViCongTyAsync()));
+    public async Task<IActionResult> GetDanhSachUngVien(string maCongTy, [FromQuery] string? maDot) =>
+        Ok(await _service.GetUngVienAsync(maCongTy, await PhamViCongTyAsync(), maDot));
 
     [HttpPut("ung-vien/{maDK}/trang-thai")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
     public async Task<IActionResult> CapNhatTrangThaiUngVien(string maDK, [FromBody] CapNhatTrangThaiUngVienRequest request) =>
         Ok(await _service.CapNhatTrangThaiUngVienAsync(maDK, request.TrangThai, await PhamViCongTyAsync()));
 
     [HttpGet("phong-van/{maCongTy}")]
-    public async Task<IActionResult> GetDanhSachPhongVan(string maCongTy) =>
-        Ok(await _service.GetPhongVanAsync(maCongTy, await PhamViCongTyAsync()));
+    public async Task<IActionResult> GetDanhSachPhongVan(string maCongTy, [FromQuery] string? maDot) =>
+        Ok(await _service.GetPhongVanAsync(maCongTy, await PhamViCongTyAsync(), maDot));
 
     [HttpPost("phong-van")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
     public async Task<IActionResult> TaoPhongVan([FromBody] TaoPhongVanRequest request) =>
         Ok(await _service.TaoPhongVanAsync(request, await PhamViCongTyAsync()));
 
     [HttpPut("phong-van/{maPV}")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
     public async Task<IActionResult> DoiLichPhongVan(string maPV, [FromBody] DoiLichPhongVanRequest request) =>
         Ok(await _service.DoiLichPhongVanAsync(maPV, request, await PhamViCongTyAsync()));
 
     /// <summary>Cập nhật kết quả phỏng vấn; "Dat" tạo quyết định tiếp nhận và tự đóng tuyển khi đủ chỉ tiêu.</summary>
     [HttpPut("phong-van/{maPV}/ket-qua")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
     public async Task<IActionResult> CapNhatKetQuaPhongVan(string maPV, [FromBody] CapNhatKetQuaPhongVanRequest request)
     {
-        var result = await _service.CapNhatKetQuaPhongVanAsync(maPV, request.KetQua, await PhamViCongTyAsync());
+        var source = User.IsInRole(Roles.DaiDienDN) ? "DoanhNghiep" : request.Nguon;
+        if (source == null || (!User.IsInRole(Roles.DaiDienDN) && source == "DoanhNghiep"))
+            return BadRequest(new { message = "Khoa cần ghi rõ nguồn DN thông báo hoặc SV trình bày." });
+        var result = await _service.CapNhatKetQuaPhongVanAsync(maPV, request.KetQua, await PhamViCongTyAsync(),
+            request.LyDo, User.MaTaiKhoan() ?? throw new UnauthorizedAccessException(), source, request.MaDK);
         return result.ThanhCong ? Ok(result) : BadRequest(new { success = false, message = result.Message });
     }
 
     [HttpGet("thuc-tap-sinh/{maCongTy}")]
-    public async Task<IActionResult> GetDanhSachThucTapSinh(string maCongTy) =>
-        Ok(await _service.GetThucTapSinhAsync(maCongTy, await PhamViCongTyAsync()));
+    public async Task<IActionResult> GetDanhSachThucTapSinh(string maCongTy, [FromQuery] string? maDot) =>
+        Ok(await _service.GetThucTapSinhAsync(maCongTy, await PhamViCongTyAsync(), maDot));
 
-    /// <summary>Đơn vị thực tập chấm Phiếu nhận xét (CLO4.1, CLO4.2).</summary>
+    [HttpGet("phong-van/{maPV}/lich-su")]
+    public async Task<IActionResult> InterviewHistory(string maPV) =>
+        Ok(await _service.GetLichSuPhongVanAsync(maPV, await PhamViCongTyAsync()));
+
+    [HttpPut("phong-van/{maPV}/sua-ket-qua")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
+    public async Task<IActionResult> CorrectInterview(string maPV, DieuChinhPhongVanRequest request)
+    {
+        var source = User.IsInRole(Roles.DaiDienDN) ? "DoanhNghiep" : request.Nguon ?? "";
+        return Ok(await _service.SuaKetQuaPhongVanAsync(maPV, request, await PhamViCongTyAsync(),
+            User.MaTaiKhoan() ?? throw new UnauthorizedAccessException(), source));
+    }
+
+    [HttpPost("phong-van/{maPV}/xep-lai")]
+    [Authorize(Roles = $"{Roles.DaiDienDN},{Roles.Khoa}")]
+    public async Task<IActionResult> RetryInterview(string maPV, DieuChinhPhongVanRequest request)
+    {
+        var source = User.IsInRole(Roles.DaiDienDN) ? "DoanhNghiep" : request.Nguon ?? "";
+        return Ok(await _service.XepLaiPhongVanAsync(maPV, request, await PhamViCongTyAsync(),
+            User.MaTaiKhoan() ?? throw new UnauthorizedAccessException(), source));
+    }
+
     [HttpPost("danh-gia")]
+    [Authorize(Roles = Roles.DaiDienDN)]
     public async Task<IActionResult> DanhGiaThucTapSinh([FromBody] DanhGiaThucTapSinhRequest request) =>
-        Ok(await _service.DanhGiaThucTapSinhAsync(request,
-            User.IsInRole(Roles.DaiDienDN) ? User.MaDaiDien() : null,
-            await PhamViCongTyAsync()));
+        Ok(await _service.DanhGiaThucTapSinhAsync(request, User.MaDaiDien(), await PhamViCongTyAsync()));
 }

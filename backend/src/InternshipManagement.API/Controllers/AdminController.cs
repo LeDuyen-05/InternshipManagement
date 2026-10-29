@@ -7,8 +7,17 @@ using Microsoft.AspNetCore.Mvc;
 namespace InternshipManagement.API.Controllers;
 
 [ApiController, Route("api/admin"), Authorize(Roles = "QuanTriVien")]
-public class AdminController(AdminService service) : ControllerBase
+public class AdminController(AdminService service, EnterpriseRepresentativeService representatives) : ControllerBase
 {
+    [HttpGet("enterprise-onboarding")]
+    public async Task<IActionResult> EnterpriseOnboarding() => Ok(await representatives.GetAsync());
+
+    [HttpPost("enterprise-representatives")]
+    public async Task<IActionResult> CreateRepresentative(CreateRepresentativeRequest request) => Ok(await representatives.CreateAsync(request));
+
+    [HttpPut("enterprise-representatives/{id}")]
+    public async Task<IActionResult> UpdateRepresentative(string id, UpdateRepresentativeRequest request) => Ok(await representatives.UpdateAsync(id, request));
+
     [HttpGet("accounts")]
     public async Task<IActionResult> Accounts() => Ok(await service.AccountsAsync());
 
@@ -38,10 +47,50 @@ public class AdminController(AdminService service) : ControllerBase
 }
 
 [ApiController, Route("api/khoa"), Authorize(Roles = "Khoa")]
-public class KhoaController(AdminService service) : ControllerBase
+public class KhoaController(AdminService service, CatalogImportService imports) : ControllerBase
 {
+    [HttpGet("danh-muc/{loai}/mau-csv")]
+    public IActionResult CatalogTemplate(string loai)
+    {
+        if (!CatalogImportService.Templates.TryGetValue(loai, out var header)) return NotFound(new { message = "Danh mục chỉ nhận sv, gv hoặc cong-ty." });
+        var bytes = new System.Text.UTF8Encoding(true).GetBytes(header + "\r\n");
+        return File(bytes, "text/csv; charset=utf-8", $"mau-{loai}.csv");
+    }
+
+    [HttpGet("danh-muc/{loai}/export-csv")]
+    public async Task<IActionResult> ExportCatalog(string loai)
+    {
+        try
+        {
+            var csv = await imports.ExportAsync(loai);
+            return File(new System.Text.UTF8Encoding(true).GetBytes(csv), "text/csv; charset=utf-8", $"danh-sach-{loai}.csv");
+        }
+        catch (ArgumentException ex) { return NotFound(new { message = ex.Message }); }
+    }
+
+    [HttpPost("danh-muc/{loai}/import"), RequestSizeLimit(5_242_880)]
+    [Consumes("multipart/form-data")]
+    public async Task<IActionResult> ImportCatalog(string loai, IFormFile? file)
+    {
+        if (file is null || file.Length == 0) return BadRequest(new { message = "Chọn file CSV không rỗng." });
+        if (file.Length > 5_242_880) return BadRequest(new { message = "File CSV tối đa 5 MB." });
+        if (!string.Equals(Path.GetExtension(file.FileName), ".csv", StringComparison.OrdinalIgnoreCase))
+            return BadRequest(new { message = "Chỉ nhận file CSV; hãy dùng mẫu tải từ màn hình." });
+        try
+        {
+            await using var stream = file.OpenReadStream();
+            using var reader = new StreamReader(stream, new System.Text.UTF8Encoding(false, true), detectEncodingFromByteOrderMarks: true);
+            var csv = await reader.ReadToEndAsync();
+            var result = await imports.ImportAsync(loai, csv);
+            if (result.Loi.Count > 0) return UnprocessableEntity(new { soLuongNhap = 0, loi = result.Loi });
+            return Ok(new { soLuongNhap = result.SoLuongNhap, loi = Array.Empty<CatalogImportError>() });
+        }
+        catch (System.Text.DecoderFallbackException) { return BadRequest(new { message = "File phải được mã hóa UTF-8." }); }
+        catch (ArgumentException ex) { return BadRequest(new { message = ex.Message }); }
+    }
+
     [HttpGet("tong-quan")]
-    public async Task<IActionResult> Overview() => Ok(await service.KhoaOverviewAsync());
+    public async Task<IActionResult> Overview([FromQuery] string? maDot) => Ok(await service.KhoaOverviewAsync(maDot));
 
     [HttpGet("dang-ky")]
     public async Task<IActionResult> Registrations([FromQuery] string? maDot) => Ok(await service.RegistrationsAsync(maDot));
@@ -86,7 +135,7 @@ public class KhoaController(AdminService service) : ControllerBase
     [HttpPut("han-bao-cao/{maDot}")]
     public async Task<IActionResult> UpdateDeadline(string maDot, DeadlineUpdateRequest r)
     {
-        await service.UpdateDeadlineAsync(maDot, r);
+        await service.UpdateDeadlineAsync(maDot, r, User.MaTaiKhoan());
         return Ok();
     }
 
