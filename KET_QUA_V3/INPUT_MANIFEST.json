@@ -1,0 +1,23 @@
+{
+  "package": "CHI_COLAB_V3_INPUT_v1",
+  "purpose": "fixed weak-label ranking experiment",
+  "raw_cv_jd_text_included": false,
+  "sha256": {
+    "ml-service/data_pipeline/__init__.py": "93b4e3b9219e5d064a8cf1f15d9ef5d63465f704a5fdd72172c9d18798e80116",
+    "ml-service/data_pipeline/embedder.py": "0db8745aad0e840c4f4affbe5f6f266721577c0ee92a99275bced15b6db31478",
+    "ml-service/data_pipeline/preprocessor.py": "2786e02f42c90be86953ad3fcdc8923cac607963b45055a41a0d60b5f7745aba",
+    "ml-service/ranking_pipeline_v3.py": "d8c0ac0aca4b3f739933c0c0d3d756e9e85f230068be23b802fa4ed59a6467d4",
+    "ml-service/requirements-colab-v3.txt": "f8ed53005e61a51b21652dc9f144bac79d063c968e40fe3d0b678cc2f1c90e7c",
+    "ml-service/run_colab_training.py": "39bc230ecd942ba0a91d7366961594f97278facd383a53db4704717c46cb6249",
+    "prepared/audit.json": "e1da7282f821d785a3d67bfd62104cab052a964a9ee113e0bc0cf43116290fcd",
+    "prepared/lsa_svd.joblib": "4395137923feb7665ca5b49955895e331e49054189a01ccdac8e4424cb773f3f",
+    "prepared/preparation.json": "e1e488b0aeb436e9c074f351f2302715ffa92e309e0084bebc402ca807b51943",
+    "prepared/prepared_checksums.json": "f690fe8bcb608a378d21c0d23b5b628ca3189b4120c55bc38fb8e81f48ab057e",
+    "prepared/profile_groups.csv": "79d77f7abb3811013c1e18f25ce76d7afcfed4991252f92b128683b1d13e9d63",
+    "prepared/test.csv": "348cee2bf5b2ec6a1f738a075349a3db92a4aa1a80277a3c1c135a4a1627e5d2",
+    "prepared/tfidf_vectorizer.joblib": "4d9f16366b7bc102b46d808b5f080592a38ac037c1a3097b5bb40fd6f1d798ff",
+    "prepared/train.csv": "396fd956615291dd30d87c235cff565f1592a033d2ab0ab4fdfd0ab35a90791c",
+    "prepared/val.csv": "577ae141ac0d1b749d388cf1bdac67f1a7e4a98d021d7b8ffebd84f3f6b005e6",
+    "ml-service/ranking_pipeline_v3_original.py": "3308afba70e255a644befef9b092a0415ee9471a8261734bb5670f1736c5e9bf"
+  }
+}

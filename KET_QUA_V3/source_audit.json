@@ -1,0 +1,27 @@
+{
+  "profiles": 236,
+  "jobs": 178,
+  "pairs": 42008,
+  "labels": {
+    "0": 19815,
+    "1": 4346,
+    "2": 14977,
+    "3": 2870
+  },
+  "split_pairs": {
+    "train": 29548,
+    "val": 6230,
+    "test": 6230
+  },
+  "split_profiles": {
+    "test": 35,
+    "train": 166,
+    "val": 35
+  },
+  "missing_gpa_profiles": 83,
+  "checksum_failures": [],
+  "label_type": "weak_rule",
+  "source_manifest_package": "dataset-train-ai v2",
+  "source_manifest_sha256": "fdf9964e9e44dcb81645d40254df17337ac9b501eec73e526521afb6df9f84b8",
+  "near_duplicate_review": "pending"
+}

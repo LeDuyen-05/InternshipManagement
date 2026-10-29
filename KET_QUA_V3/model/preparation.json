@@ -1,0 +1,30 @@
+{
+  "schema_version": "chi-v3-train-only-1",
+  "features": [
+    "tfidf_cosine",
+    "lsa_cosine",
+    "sbert_cosine",
+    "gpa_chuan_hoa",
+    "thieu_gpa",
+    "jd_co_mo_ta"
+  ],
+  "seed": 42,
+  "lsa_dimensions": 256,
+  "fit_profiles": 166,
+  "fit_known_jobs": 178,
+  "protocol": "unseen students, known 178-job catalogue; fit train profiles + known jobs only",
+  "profile_tokens": "clean_tokens(text)",
+  "job_tokens": "clean_tokens(text) + sorted unique canonical skills",
+  "sbert_max_difference": 1.006961822480612e-06,
+  "sbert_metadata": {
+    "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "dim": 384,
+    "profiles": 236,
+    "jobs": 178,
+    "note": "Embeddings L2-normalized; sbert_cosine = dot product. Texts truncated at model max_seq_length (128 tokens) by the encoder default."
+  },
+  "sbert_revision_verified": false,
+  "gpa_policy": "source linear conversion, not official university conversion",
+  "script_sha256": "f7df594b56b9cd51453fb71223690fe336a2aace9cd00634b6a7a192ce661d0e",
+  "preprocessor_sha256": "2786e02f42c90be86953ad3fcdc8923cac607963b45055a41a0d60b5f7745aba"
+}

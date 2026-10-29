@@ -1,0 +1,177 @@
+COMMAND: /usr/bin/python3 -m pip install --disable-pip-version-check --only-binary=:all: --target /content/ranking_pipeline_v3_z99hpuou/dependencies -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt
+Collecting numpy==2.2.6 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 2))
+  Downloading numpy-2.2.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (62 kB)
+Collecting pandas==2.2.3 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 3))
+  Downloading pandas-2.2.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (89 kB)
+Collecting scipy==1.15.3 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 4))
+  Downloading scipy-1.15.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (61 kB)
+Collecting scikit-learn==1.6.1 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 5))
+  Downloading scikit_learn-1.6.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (18 kB)
+Collecting lightgbm==4.6.0 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 6))
+  Downloading lightgbm-4.6.0-py3-none-manylinux_2_28_x86_64.whl.metadata (17 kB)
+Collecting joblib==1.5.1 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 7))
+  Downloading joblib-1.5.1-py3-none-any.whl.metadata (5.6 kB)
+Collecting threadpoolctl==3.6.0 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 8))
+  Downloading threadpoolctl-3.6.0-py3-none-any.whl.metadata (13 kB)
+Collecting python-dateutil==2.9.0.post0 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 9))
+  Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+Collecting pytz==2025.2 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 10))
+  Downloading pytz-2025.2-py2.py3-none-any.whl.metadata (22 kB)
+Collecting tzdata==2025.2 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 11))
+  Downloading tzdata-2025.2-py2.py3-none-any.whl.metadata (1.4 kB)
+Collecting six==1.17.0 (from -r /content/ranking_pipeline_v3_z99hpuou/input/ml-service/requirements-colab-v3.txt (line 12))
+  Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+Downloading numpy-2.2.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (16.5 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.5/16.5 MB 25.5 MB/s  0:00:00
+Downloading pandas-2.2.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (12.7 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 12.7/12.7 MB 70.7 MB/s  0:00:00
+Downloading scipy-1.15.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (37.3 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 37.3/37.3 MB 43.1 MB/s  0:00:00
+Downloading scikit_learn-1.6.1-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (13.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 13.2/13.2 MB 103.4 MB/s  0:00:00
+Downloading lightgbm-4.6.0-py3-none-manylinux_2_28_x86_64.whl (3.6 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.6/3.6 MB 89.9 MB/s  0:00:00
+Downloading joblib-1.5.1-py3-none-any.whl (307 kB)
+Downloading threadpoolctl-3.6.0-py3-none-any.whl (18 kB)
+Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+Downloading pytz-2025.2-py2.py3-none-any.whl (509 kB)
+Downloading tzdata-2025.2-py2.py3-none-any.whl (347 kB)
+Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+Installing collected packages: pytz, tzdata, threadpoolctl, six, numpy, joblib, scipy, python-dateutil, scikit-learn, pandas, lightgbm
+
+Successfully installed joblib-1.5.1 lightgbm-4.6.0 numpy-2.2.6 pandas-2.2.3 python-dateutil-2.9.0.post0 pytz-2025.2 scikit-learn-1.6.1 scipy-1.15.3 six-1.17.0 threadpoolctl-3.6.0 tzdata-2025.2
+COMMAND: /usr/bin/python3 /content/ranking_pipeline_v3_z99hpuou/input/ml-service/run_colab_training.py --input /content/ranking_pipeline_v3_z99hpuou/input --validate-only
+INPUT_OK: hashes, prepared artifacts and counts verified; no training/test scoring performed
+COMMAND: /usr/bin/python3 /content/ranking_pipeline_v3_z99hpuou/input/ml-service/run_colab_training.py --input /content/ranking_pipeline_v3_z99hpuou/input --out /content/ranking_pipeline_v3_z99hpuou/result
+STEP 1/4: Training and selecting on validation
+{
+  "selected": "six_features_wide",
+  "val_ndcg5": 0.6384222414710781,
+  "test_evaluated": false
+}
+STEP 2/4: Model locked; scoring test
+{
+  "label_type": "weak_rule_not_human",
+  "model_meta_sha256": "db36fdd64ec64d64128f7d483bc3d65b48d50631f0d530f5c7fe1c0604ce4e6f",
+  "model_sha256": "6dc17b7ad73ef449be9f8cb6154d90b011f540ef71086af03fbe3b9c992b4471",
+  "test_file_sha256": "348cee2bf5b2ec6a1f738a075349a3db92a4aa1a80277a3c1c135a4a1627e5d2",
+  "ltr": {
+    "5": {
+      "ndcg": 0.6204585917433993,
+      "recall": 0.059029057377658414,
+      "ndcg_queries": 35,
+      "recall_queries": 35,
+      "total_queries": 35
+    },
+    "10": {
+      "ndcg": 0.5799462602697336,
+      "recall": 0.10845806410260954,
+      "ndcg_queries": 35,
+      "recall_queries": 35,
+      "total_queries": 35
+    }
+  },
+  "baselines": {
+    "tfidf_cosine": {
+      "5": {
+        "ndcg": 0.517314091759061,
+        "recall": 0.05019542688023105,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      },
+      "10": {
+        "ndcg": 0.5075906973433867,
+        "recall": 0.09499470926034757,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      }
+    },
+    "lsa_cosine": {
+      "5": {
+        "ndcg": 0.5200606245051862,
+        "recall": 0.05040212220903216,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      },
+      "10": {
+        "ndcg": 0.5065255052288524,
+        "recall": 0.09529276374695854,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      }
+    },
+    "sbert_cosine": {
+      "5": {
+        "ndcg": 0.4339960919128889,
+        "recall": 0.04140953233361387,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      },
+      "10": {
+        "ndcg": 0.41105786958846463,
+        "recall": 0.07298430307101363,
+        "ndcg_queries": 35,
+        "recall_queries": 35,
+        "total_queries": 35
+      }
+    }
+  },
+  "by_profile_group": {
+    "BA": {
+      "5": {
+        "ndcg": 0.5093842901063521,
+        "recall": 0.07839378002743111,
+        "ndcg_queries": 9,
+        "recall_queries": 9,
+        "total_queries": 9
+      },
+      "10": {
+        "ndcg": 0.5145783272758343,
+        "recall": 0.14247953623829782,
+        "ndcg_queries": 9,
+        "recall_queries": 9,
+        "total_queries": 9
+      }
+    },
+    "BE": {
+      "5": {
+        "ndcg": 0.6875666114184634,
+        "recall": 0.05083273906072181,
+        "ndcg_queries": 18,
+        "recall_queries": 18,
+        "total_queries": 18
+      },
+      "10": {
+        "ndcg": 0.6179201501539838,
+        "recall": 0.09287391404079601,
+        "ndcg_queries": 18,
+        "recall_queries": 18,
+        "total_queries": 18
+      }
+    },
+    "FE": {
+      "5": {
+        "ndcg": 0.5944241368161826,
+        "recall": 0.05568546060977148,
+        "ndcg_queries": 8,
+        "recall_queries": 8,
+        "total_queries": 8
+      },
+      "10": {
+        "ndcg": 0.568043932648307,
+        "recall": 0.10524824558904067,
+        "ndcg_queries": 8,
+        "recall_queries": 8,
+        "total_queries": 8
+      }
+    }
+  }
+}
+STEP 3/4: Reload prediction check
+STEP 4/4: Report and return archive
+SUCCESS: /content/ranking_pipeline_v3_z99hpuou/KET_QUA_CHI_V3.zip

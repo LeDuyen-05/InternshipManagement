@@ -1,0 +1,43 @@
+{
+  "model_type": "LightGBM LambdaMART",
+  "selected": "six_features_wide",
+  "feature_order": [
+    "tfidf_cosine",
+    "lsa_cosine",
+    "sbert_cosine",
+    "gpa_chuan_hoa",
+    "thieu_gpa",
+    "jd_co_mo_ta"
+  ],
+  "all_features": [
+    "tfidf_cosine",
+    "lsa_cosine",
+    "sbert_cosine",
+    "gpa_chuan_hoa",
+    "thieu_gpa",
+    "jd_co_mo_ta"
+  ],
+  "train_gpa_median": 3.28,
+  "seed": 42,
+  "best_iteration": 21,
+  "selection": "max val NDCG@5; ties prefer earlier smaller configuration",
+  "label": "nhan, weak rule 0..3",
+  "gain": [
+    0,
+    1,
+    3,
+    7
+  ],
+  "test_used_for_selection": false,
+  "source_prepared_checksums_sha256": "f690fe8bcb608a378d21c0d23b5b628ca3189b4120c55bc38fb8e81f48ab057e",
+  "training_script_sha256": "d8c0ac0aca4b3f739933c0c0d3d756e9e85f230068be23b802fa4ed59a6467d4",
+  "versions": {
+    "numpy": "2.2.6",
+    "pandas": "2.2.3",
+    "scikit-learn": "1.6.1",
+    "lightgbm": "4.6.0",
+    "joblib": "1.5.1",
+    "scipy": "1.15.3"
+  },
+  "serving_status": "offline feature scorer only; new-text SBERT encoder validation and web integration pending"
+}
