@@ -1,3 +1,4 @@
+using System.Data;
 using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,8 +36,8 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
             .AsNoTracking()
             .Include(t => t.SinhVien)
             .Include(t => t.DotThucTap)
-            .Where(t => t.TrangThaiDuyet == "DaNop" &&
-                        t.SinhVien.GVHuongDans.Any(h => h.MaGiangVien == maGV && h.TrangThai == "DangHuongDan"))
+            .Where(t => t.MaPhanBoLuuTru == null && t.TrangThaiDuyet == "DaNop" &&
+                        t.SinhVien.GVHuongDans.Any(h => h.MaGiangVien == maGV && h.MaDot == t.MaDot && h.TrangThai == "DangHuongDan"))
             .OrderByDescending(t => t.NgayNop)
             .ToListAsync();
     }
@@ -54,6 +55,7 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
     {
         var record = await DbSet.FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
         if (record == null) return false;
+        if (record.MaPhanBoLuuTru != null) throw new InvalidOperationException("Báo cáo đã lưu trữ khi điều chỉnh nơi thực tập.");
 
         record.TrangThaiDuyet = trangThaiDuyet;
         if (nhanXet != null)
@@ -65,17 +67,20 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
         return true;
     }
 
-    public async Task<bool> IsSupervisorAsync(string maGV, string maSV)
+    public async Task<bool> IsSupervisorAsync(string maGV, string maSV, string maDot)
     {
         return await Context.GVHuongDans
-            .AnyAsync(g => g.MaGiangVien == maGV && g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
+            .AnyAsync(g => g.MaGiangVien == maGV && g.MaSinhVien == maSV && g.MaDot == maDot && g.TrangThai == "DangHuongDan");
     }
 
     public Task<string?> GetTrangThaiPhanBoAsync(string maSV, string maDot) =>
         Context.PhanBoThucTaps
             .Where(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.TrangThai != "Huy")
-            .Select(p => p.TrangThai)
+            .Select(p => p.DaDuocKhoaDuyet ? p.TrangThai : "ChoKhoaDuyet")
             .FirstOrDefaultAsync();
+
+    public Task<PhanBoThucTap?> GetActivePlacementAsync(string maSV, string maDot) => Context.PhanBoThucTaps.AsNoTracking()
+        .Include(x => x.HoSoTuTim).FirstOrDefaultAsync(x => x.MaSinhVien == maSV && x.MaDot == maDot && x.DaDuocKhoaDuyet && x.TrangThai == "DangThucTap");
 
     public override async Task<TienDoThucTap?> GetByIdAsync(string maTienDo)
     {
@@ -94,8 +99,14 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
 
     public async Task<TienDoThucTap> UpdateAsync(TienDoThucTap entity)
     {
+        await using var tx = Context.Database.IsRelational() ? await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        if (entity.MaPhanBoLuuTru != null) throw new InvalidOperationException("Không sửa đè báo cáo đã lưu trữ khi đổi nơi thực tập.");
+        if (await Context.PhanBoThucTaps.AnyAsync(x => x.MaSinhVien == entity.MaSV && x.MaDot == entity.MaDot && x.NgayHuy != null)
+            && !await Context.PhanBoThucTaps.AnyAsync(x => x.MaSinhVien == entity.MaSV && x.MaDot == entity.MaDot && x.DaDuocKhoaDuyet && x.TrangThai == "DangThucTap"))
+            throw new InvalidOperationException("Nơi thực tập đã bị hủy/đang điều chỉnh, chưa được nộp báo cáo mới.");
         DbSet.Update(entity);
         await Context.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
         return entity;
     }
 }

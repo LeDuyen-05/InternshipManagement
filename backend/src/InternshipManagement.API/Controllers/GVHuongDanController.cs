@@ -22,34 +22,35 @@ public class GVHuongDanController : ControllerBase
 
     [HttpGet("giang-vien/{maGV}/sinh-vien")]
     [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
-    public async Task<IActionResult> GetDanhSachSVTheoGiangVien(string maGV, [FromQuery] string? keyword)
+    public async Task<IActionResult> GetDanhSachSVTheoGiangVien(string maGV, [FromQuery] string? keyword, [FromQuery] string? maDot)
     {
         if (!_access.IsLecturer(User, maGV)) return Forbid();
-        var list = await _service.GetDanhSachSVTheoGiangVienAsync(maGV, keyword);
+        var list = await _service.GetDanhSachSVTheoGiangVienAsync(maGV, keyword, maDot);
         return Ok(new { success = true, data = list, message = "Lấy danh sách sinh viên hướng dẫn thành công" });
     }
 
     [HttpGet("khoa/sinh-vien-chua-phan-cong")]
     [Authorize(Roles = Roles.Khoa)]
-    public async Task<IActionResult> GetDanhSachSVChuaPhanCong([FromQuery] string? keyword)
+    public async Task<IActionResult> GetDanhSachSVChuaPhanCong([FromQuery] string maDot, [FromQuery] string? keyword)
     {
-        var list = await _service.GetDanhSachSVChuaPhanCongAsync(keyword);
+        var list = await _service.GetDanhSachSVChuaPhanCongAsync(maDot, keyword);
         return Ok(new { success = true, data = list, message = "Lấy danh sách sinh viên chưa phân công thành công" });
     }
 
     [HttpGet("khoa/giang-vien-tai")]
     [Authorize(Roles = $"{Roles.GiangVien},{Roles.Khoa}")]
-    public async Task<IActionResult> GetDanhSachGiangVienKemTai()
+    public async Task<IActionResult> GetDanhSachGiangVienKemTai([FromQuery] string? maDot)
     {
-        var list = await _service.GetDanhSachGiangVienKemTaiAsync();
+        var list = await _service.GetDanhSachGiangVienKemTaiAsync(maDot);
         return Ok(new { success = true, data = list, message = "Lấy danh sách tải công việc giảng viên thành công" });
     }
 
     
     [HttpGet("khoa/tat-ca-phan-cong")]
-    public async Task<IActionResult> GetTatCaPhanCong()
+    [Authorize(Roles = Roles.Khoa)]
+    public async Task<IActionResult> GetTatCaPhanCong([FromQuery] string? maDot)
     {
-        var list = await _service.GetTatCaPhanCongAsync();
+        var list = await _service.GetTatCaPhanCongAsync(maDot);
         return Ok(new { success = true, data = list, message = "Lấy danh sách tất cả phân công thành công" });
     }
 
@@ -87,20 +88,13 @@ public class GVHuongDanController : ControllerBase
 
     [HttpDelete("khoa/huy/{maSo}")]
     [Authorize(Roles = Roles.Khoa)]
-    public async Task<IActionResult> HuyPhanCong(string maSo)
+    public async Task<IActionResult> HuyPhanCong(string maSo, [FromQuery] string maDot)
     {
-        try
-        {
-            var success = await _service.HuyPhanCongAsync(maSo);
-            if (!success)
-                return NotFound(new { success = false, message = "Không tìm thấy bản ghi phân công" });
+        var success = await _service.HuyPhanCongAsync(maSo, maDot);
+        if (!success)
+            return NotFound(new { success = false, message = "Không tìm thấy bản ghi phân công" });
 
-            return Ok(new { success = true, message = "Hủy phân công thành công" });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = ex.Message });
-        }
+        return Ok(new { success = true, message = "Hủy phân công thành công" });
     }
 
     [HttpPut("khoa/giang-vien/{maGV}/chi-tieu")]
@@ -140,9 +134,9 @@ public class GVHuongDanController : ControllerBase
 
     [HttpGet("khoa/phan-cong/tu-dong-de-xuat")]
     [Authorize(Roles = Roles.Khoa)]
-    public async Task<IActionResult> DeXuatPhanCongTuDong()
+    public async Task<IActionResult> DeXuatPhanCongTuDong([FromQuery] string maDot, [FromQuery] string[]? maSV = null)
     {
-        var result = await _service.DeXuatPhanCongTuDongAsync();
+        var result = await _service.DeXuatPhanCongTuDongAsync(maDot, Request.Query.ContainsKey(nameof(maSV)) ? maSV : null);
         return Ok(new { success = true, data = result, message = "Đề xuất phân công tự động thành công" });
     }
 
@@ -151,6 +145,11 @@ public class GVHuongDanController : ControllerBase
     public async Task<IActionResult> XacNhanPhanCongTuDong([FromBody] TuDongPhanCongConfirmRequest request)
     {
         var result = await _service.XacNhanPhanCongTuDongAsync(request);
-        return Ok(new { success = true, data = result, message = "Đã lưu kết quả phân công tự động vào cơ sở dữ liệu!" });
+        return Ok(new
+        {
+            success = true,
+            data = result,
+            message = $"Đã phân công thành công {result.ThanhCong.Count} sinh viên; không thể phân công {result.KhongThanhCong.Count} sinh viên."
+        });
     }
 }

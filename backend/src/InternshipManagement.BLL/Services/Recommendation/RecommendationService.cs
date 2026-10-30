@@ -1,126 +1,110 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
+using InternshipManagement.BLL.Common;
 using InternshipManagement.BLL.DTOs.Recommendation;
 using InternshipManagement.DAL;
-using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace InternshipManagement.BLL.Services.Recommendation;
 
-public class RecommendationService
+// Both API contracts share business eligibility, LTR and the explicit baseline fallback.
+public class RecommendationService(AppDbContext db, TimeProvider? clock = null, ILtrScorer? scorer = null)
 {
-    private readonly AppDbContext _db;
-    public RecommendationService(AppDbContext db) => _db = db;
-
-    public async Task<RecommendationResponse> RecommendAsync(string maSV, int k = 5, bool persist = false)
+    private readonly TimeProvider _clock = clock ?? TimeProvider.System;
+    private static void Validate(string? round, int k)
     {
-        k = Math.Clamp(k, 1, 20);
-        var sv = await _db.SinhViens.AsNoTracking().FirstOrDefaultAsync(x => x.MaSV == maSV)
-                 ?? throw new KeyNotFoundException("Không tìm thấy sinh viên.");
-        var profile = await _db.HoSoNangLucs.AsNoTracking().FirstOrDefaultAsync(x => x.MaSV == maSV);
-        var profileText = profile?.NDHoSo;
-        if (string.IsNullOrWhiteSpace(profileText))
-            profileText = $"{sv.KyNang} {sv.ChuyenNganh} {sv.CongNghe} {sv.DuAnDaThucHien}";
-
-        var companies = await _db.CongTys.AsNoTracking().Where(x => x.TrangThai == "DaDuyet").ToListAsync();
-        // Không gợi ý doanh nghiệp đã đủ chỉ tiêu (đã tự đóng tuyển) trong đợt đang diễn ra
-        var dot = await _db.DotThucTaps.AsNoTracking().Where(d => d.TrangThai == "DangDienRa")
-            .OrderByDescending(d => d.ThoiGianBD).Select(d => d.MaSo).FirstOrDefaultAsync();
-        if (dot != null)
-        {
-            var daNhan = await _db.PhanBoThucTaps.AsNoTracking()
-                .Where(p => p.MaDot == dot && p.TrangThai != "Huy")
-                .GroupBy(p => p.MaCongTy).Select(g => new { g.Key, SoLuong = g.Count() })
-                .ToDictionaryAsync(x => x.Key, x => x.SoLuong);
-            companies = companies.Where(c => (c.SoLuongNhan ?? 0) <= 0 || daNhan.GetValueOrDefault(c.MaCongTy) < c.SoLuongNhan).ToList();
-        }
-        var ranked = Rank(profileText!, companies).Take(k).ToList();
-
-        if (persist && profile is not null && ranked.Count > 0)
-        {
-            var old = await _db.GoiYCongTys.Where(x => x.MaHoSo == profile.MaHoSo).ToListAsync();
-            _db.GoiYCongTys.RemoveRange(old);
-            foreach (var x in ranked)
-            {
-                _db.GoiYCongTys.Add(new DAL.Entities.GoiYCongTy
-                {
-                    MaSo = DAL.Common.IdGenerator.New("GY"),
-                    MaHoSo = profile.MaHoSo,
-                    MaCongTy = x.company.MaCongTy,
-                    TyLeTuongThich = Math.Round((decimal)x.score * 100m, 2),
-                    NgayGoiY = DateTime.Today
-                });
-            }
-            await _db.SaveChangesAsync();
-        }
-
-        var items = ranked.Select((x, i) => new RecommendationItem(
-            x.company.MaCongTy,
-            x.company.TenCongTy,
-            Math.Round(x.score, 6),
-            Math.Round(x.score * 100, 2),
-            i + 1,
-            x.company.YeuCau ?? string.Empty
-        )).ToList();
-
-        return new RecommendationResponse(maSV, sv.HoTen, profile?.MaHoSo ?? "CHUA_CO_HO_SO", k, items);
+        if (string.IsNullOrWhiteSpace(round)) throw new ArgumentException("Vui lòng chọn đợt thực tập để xem gợi ý.");
+        if (k is < 1 or > 20) throw new ArgumentException("Top-K phải là số nguyên từ 1 đến 20.");
     }
 
-    public async Task<EvaluationResponse> EvaluateAsync(string maSV, int k = 5)
+    public async Task<RecommendationResponse> RecommendAsync(string maSV, int k = 5, bool persist = false, string? maDot = null, CancellationToken cancellationToken = default)
     {
-        k = Math.Clamp(k, 1, 20);
-        var sv = await _db.SinhViens.AsNoTracking().FirstOrDefaultAsync(x => x.MaSV == maSV) ?? throw new KeyNotFoundException("Không tìm thấy sinh viên.");
-        var profile = await _db.HoSoNangLucs.AsNoTracking().FirstOrDefaultAsync(x => x.MaSV == maSV);
-        var text = profile?.NDHoSo;
-        if (string.IsNullOrWhiteSpace(text)) text = $"{sv.KyNang} {sv.ChuyenNganh} {sv.CongNghe} {sv.DuAnDaThucHien}";
-        var companies = await _db.CongTys.AsNoTracking().Where(x => x.TrangThai == "DaDuyet").ToListAsync();
-        var ranked = Rank(text!, companies).ToList();
-        var assigned = await _db.PhanBoThucTaps.AsNoTracking().Where(x => x.MaSinhVien == maSV).Select(x => x.MaCongTy).ToListAsync();
-        var approved = await _db.DangKyThucTaps.AsNoTracking().Where(x => x.MaSV == maSV && x.TrangThai == "DaDuyet").Select(x => x.MaCongTy).ToListAsync();
-        var relevant = new Dictionary<string, double>();
-        foreach (var id in approved) relevant[id] = Math.Max(relevant.GetValueOrDefault(id), 2);
-        foreach (var id in assigned) relevant[id] = Math.Max(relevant.GetValueOrDefault(id), 3);
+        Validate(maDot, k);
+        if (persist) throw new InvalidOperationException("Chưa lưu gợi ý vào bảng cũ vì bảng này không có mã đợt/phiên bản hồ sơ. Hãy dùng kết quả tính trực tiếp theo đợt.");
+        var student = await db.SinhViens.AsNoTracking().Include(x => x.HoSoNangLuc).SingleOrDefaultAsync(x => x.MaSV == maSV)
+            ?? throw new KeyNotFoundException("Không tìm thấy sinh viên.");
+        var round = await db.DotThucTaps.AsNoTracking().SingleOrDefaultAsync(x => x.MaSo == maDot)
+            ?? throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
+        var state = await db.ChotDotThucTaps.AsNoTracking().SingleOrDefaultAsync(x => x.MaDot == maDot);
+        RecommendationResponse Empty(string message, int count = 0) => new(student.MaSV, student.HoTen, student.HoSoNangLuc?.MaHoSo ?? "CHUA_CO_HO_SO", k, [], round.MaSo, count, message);
+        if (round.TrangThai != "DangDienRa" || (state is not null && state.TrangThai != "ChuaChot"))
+            return Empty("Đợt không mở tiếp nhận mới hoặc đã chốt; không gợi ý đăng ký mới trong đợt này.");
 
-        var top = ranked.Take(k).Select(x => relevant.GetValueOrDefault(x.company.MaCongTy)).ToList();
-        var ideal = relevant.Values.OrderByDescending(x => x).Take(k).ToList();
-        var dcg = Dcg(top); var idcg = Dcg(ideal);
-        return new EvaluationResponse(k, idcg == 0 ? 0 : Math.Round(dcg / idcg, 6), idcg, dcg);
-    }
+        var eligible = (await new Admin.CompanyRoundService(db, _clock).AvailableAsync(maDot))
+            .Where(x => !string.IsNullOrWhiteSpace(x.YeuCau)).OrderBy(x => x.MaCongTy, StringComparer.Ordinal)
+            .ThenBy(x => x.MaViTri, StringComparer.Ordinal).ToList();
+        if (eligible.Count == 0) return Empty("Chưa có công ty/JD hợp lệ còn nhận đăng ký trong đợt đang chọn.");
 
-    private static List<(CongTy company, double score)> Rank(string query, List<CongTy> companies)
-    {
-        var docs = companies.Select(x => Tokenize(x.YeuCau ?? "")).ToList();
-        var q = Tokenize(query);
+        var eligibleCompanyCount = eligible.Select(x => x.MaCongTy).Distinct().Count();
+        // GET không tạo hồ sơ hoặc tự gán GPA/chuyên ngành mặc định.
+        var actualFields = new[] { student.KyNang, student.CongNghe, student.DuAnDaThucHien, student.HoSoNangLuc?.NDHoSo };
+        if (actualFields.All(string.IsNullOrWhiteSpace)) return Empty("Hãy cập nhật kỹ năng, công nghệ, dự án hoặc mô tả năng lực để nhận gợi ý.", eligibleCompanyCount);
+        static string Text(InternshipManagement.DAL.Entities.SinhVien sv) => string.Join(" . ",
+            new[] { sv.HoSoNangLuc?.NDHoSo, sv.KyNang, sv.CongNghe, sv.DuAnDaThucHien, sv.ChuyenNganh }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        var profileText = Text(student);
+        var query = Tokenize(profileText);
+        if (query.Count == 0) return Empty("Hồ sơ chưa có nội dung năng lực có thể đối sánh.", eligibleCompanyCount);
+        var jobs = eligible.Select((x, index) => new LtrJob(index.ToString(System.Globalization.CultureInfo.InvariantCulture), x.ViTriTuyen ?? "", x.YeuCau!)).ToList();
+        var attempt = scorer is null ? new LtrAttempt(null, "Disabled") : await scorer.ScoreAsync(
+            new(profileText, student.Gpa is null ? null : (double)student.Gpa.Value), jobs, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        // Inference may take seconds: re-read business data before returning any result.
+        var latest = (await new Admin.CompanyRoundService(db, _clock).AvailableAsync(maDot))
+            .Where(x => !string.IsNullOrWhiteSpace(x.YeuCau)).OrderBy(x => x.MaCongTy, StringComparer.Ordinal).ThenBy(x => x.MaViTri, StringComparer.Ordinal).ToList();
+        if (latest.Count == 0) return Empty("Không còn JD hợp lệ nhận đăng ký trong đợt; danh sách vừa được cập nhật.");
+        var latestStudent = await db.SinhViens.AsNoTracking().Include(x => x.HoSoNangLuc).SingleAsync(x => x.MaSV == maSV, cancellationToken);
+        bool SameOffer(InternshipManagement.BLL.DTOs.DangKyThucTap.CongTyDto a, InternshipManagement.BLL.DTOs.DangKyThucTap.CongTyDto b) =>
+            a.MaCongTy == b.MaCongTy && a.MaViTri == b.MaViTri && a.ViTriTuyen == b.ViTriTuyen && a.YeuCau == b.YeuCau;
+        if (Text(latestStudent) != profileText || latestStudent.Gpa != student.Gpa || latest.Any(x => !eligible.Any(y => SameOffer(x, y))))
+            attempt = new(null, "InputChanged");
+        var scoreByOffer = attempt.Items?.ToDictionary(x => x.Id, StringComparer.Ordinal);
+        var oldOffers = eligible;
+        eligible = latest;
+        student = latestStudent;
+        query = Tokenize(Text(student));
+        if (new[] { student.KyNang, student.CongNghe, student.DuAnDaThucHien, student.HoSoNangLuc?.NDHoSo }.All(string.IsNullOrWhiteSpace) || query.Count == 0)
+            return Empty("Hãy cập nhật nội dung năng lực để nhận gợi ý.");
+        eligibleCompanyCount = eligible.Select(x => x.MaCongTy).Distinct().Count();
+        var trained = scoreByOffer is not null;
+        var documents = eligible.Select(x => Tokenize(x.ViTriTuyen + " " + x.YeuCau)).ToList();
         var model = new RankingModel();
-        model.Train(docs);
-        var result = new List<(CongTy, double)>();
-        for (var i = 0; i < companies.Count; i++)
-        {
-            var score = model.Score(q, docs[i]);
-            if (score > 0)
+        if (!trained) model.Train(documents);
+        var ranked = eligible.Select((offer, index) =>
             {
-                result.Add((companies[i], score));
-            }
-        }
-        return result.OrderByDescending(x => x.Item2).ThenBy(x => x.Item1.MaCongTy).ToList();
+                var score = trained ? scoreByOffer![oldOffers.FindIndex(x => SameOffer(offer, x)).ToString(System.Globalization.CultureInfo.InvariantCulture)] : null;
+                var cosine = score?.TfidfCosine ?? Math.Clamp(model.Score(query, documents[index]), 0, 1);
+                return new { Offer = offer, Document = documents[index], Score = score?.RankingScore ?? cosine, Cosine = cosine };
+            })
+            .Where(x => double.IsFinite(x.Score) && (trained || x.Score > 0)).OrderByDescending(x => x.Score).ThenBy(x => x.Offer.MaViTri, StringComparer.Ordinal)
+            .GroupBy(x => x.Offer.MaCongTy).Select(g => g.First()).OrderByDescending(x => x.Score).ThenBy(x => x.Offer.MaCongTy, StringComparer.Ordinal)
+            .Take(k).Select((x, index) => new RecommendationItem(x.Offer.MaCongTy, x.Offer.TenCongTy,
+                Math.Round(x.Cosine, 6), trained ? null : Math.Round(x.Score * 100, 2), index + 1, x.Offer.YeuCau!, round.MaSo,
+                x.Offer.ViTriTuyen!, x.Offer.SoLuongNhan ?? 0,
+                query.Keys.Intersect(x.Document.Keys).OrderBy(t => t, StringComparer.Ordinal).Take(12).ToList(), x.Offer.MaViTri,
+                trained ? x.Score : null)).ToList();
+        return new(student.MaSV, student.HoTen, student.HoSoNangLuc?.MaHoSo ?? "CHUA_CO_HO_SO", k, ranked, round.MaSo,
+            eligibleCompanyCount, ranked.Count == 0 ? "Chưa tìm thấy nội dung hồ sơ khớp với JD đang mở trong đợt. Có thể tìm công ty hoặc liên hệ Khoa hỗ trợ."
+                : trained ? "Gợi ý LambdaMART tham khảo, huấn luyện/đánh giá trên nhãn luật; chưa có đánh giá người chấm độc lập."
+                : "Đang dùng TF-IDF/cosine tham khảo" + (attempt.FallbackReason == "Disabled" ? "; dịch vụ mô hình chưa bật." : "; dịch vụ mô hình chưa sẵn sàng hoặc dữ liệu vừa đổi."),
+            trained ? "LightGBM LambdaMART v3 (six_features_wide)" : "TF-IDF + cosine (baseline tham khảo)",
+            trained ? "TrainedModel" : attempt.FallbackReason == "Disabled" ? "BaselineOnly" : "BaselineFallback", trained,
+            trained ? "Điểm xếp hạng, không phải phần trăm hoặc xác suất trúng tuyển." : "Độ tương đồng nội dung, không phải xác suất trúng tuyển.",
+            trained ? attempt.ModelVersion : null, trained ? null : attempt.FallbackReason);
+    }
+
+    public async Task<EvaluationResponse> EvaluateAsync(string maSV, int k = 5, string? maDot = null)
+    {
+        Validate(maDot, k);
+        if (!await db.SinhViens.AnyAsync(x => x.MaSV == maSV)) throw new KeyNotFoundException("Không tìm thấy sinh viên.");
+        if (!await db.DotThucTaps.AnyAsync(x => x.MaSo == maDot)) throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
+        // Không dùng phân bổ/nguyện vọng hiện tại làm nhãn test hoặc trả NDCG giả cho web.
+        return new(k);
     }
 
     private static readonly Regex TokenRx = new(@"[\p{L}\p{N}][\p{L}\p{N}#+]*", RegexOptions.Compiled);
-    private static readonly HashSet<string> ShortAllow = new(StringComparer.OrdinalIgnoreCase) { "c", "r", "c#", "c++", "go" };
-
-    private static Dictionary<string, double> Tokenize(string text)
-    {
-        var words = TokenRx.Matches(text.ToLower(new CultureInfo("vi-VN")))
-            .Select(x => x.Value)
-            .Where(x => x.Length > 1 || ShortAllow.Contains(x))
-            .ToList();
-        return words.GroupBy(x => x).ToDictionary(x => x.Key, x => (double)x.Count());
-    }
-
-    private static double Dcg(IEnumerable<double> relevances)
-    {
-        var i = 1; var sum = 0d;
-        foreach (var rel in relevances) { sum += (Math.Pow(2, rel) - 1) / Math.Log(i + 1, 2); i++; }
-        return sum;
-    }
+    private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
+        { "và", "của", "với", "cho", "các", "một", "là", "có", "được", "trong", "tại", "the", "and", "of", "for", "with", "to", "in", "a", "an" };
+    private static readonly HashSet<string> ShortAllow = new(StringComparer.OrdinalIgnoreCase) { "c", "r" };
+    private static Dictionary<string, double> Tokenize(string text) => TokenRx.Matches(text.ToLowerInvariant()).Select(x => x.Value)
+        .Where(x => !StopWords.Contains(x) && (x.Length > 1 || ShortAllow.Contains(x)))
+        .GroupBy(x => x, StringComparer.Ordinal).ToDictionary(g => g.Key, g => (double)g.Count(), StringComparer.Ordinal);
 }

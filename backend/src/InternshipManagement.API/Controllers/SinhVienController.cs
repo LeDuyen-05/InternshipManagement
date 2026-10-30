@@ -25,6 +25,7 @@ public class SinhVienController : ControllerBase
         => Ok(await _service.GetAllAsync());
 
     [HttpGet("{maSV}")]
+    [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien}")]
     public async Task<ActionResult<SinhVienDto>> GetById(string maSV)
     {
         if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();

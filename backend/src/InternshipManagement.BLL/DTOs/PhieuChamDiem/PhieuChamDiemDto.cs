@@ -23,5 +23,6 @@ public record PhieuChamDiemDto(
     string? NhanXetGV = null,
     string? NhanXetDN = null,
     bool DaDoiChieuPhieuDN = false,
-    string? GhiChuPhieuDN = null
+    string? GhiChuPhieuDN = null,
+    decimal DiemTamTinh = 0
 );

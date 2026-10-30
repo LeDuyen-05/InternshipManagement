@@ -150,6 +150,9 @@ public class GioiThieuService : IGioiThieuService
         MaCongTy = entity.MaCongTy,
         TenCongTy = entity.CongTy?.TenCongTy ?? string.Empty,
         ViTriTuyen = entity.CongTy?.ViTriTuyen,
+        ThoiGian = entity.CongTy?.ThoiGian,
+        SoLuongNhan = entity.CongTy?.SoLuongNhan,
+        YeuCau = entity.CongTy?.YeuCau,
         NgayGioiThieu = entity.NgayGioiThieu,
         TrangThaiKetNoi = entity.TrangThaiKetNoi
     };

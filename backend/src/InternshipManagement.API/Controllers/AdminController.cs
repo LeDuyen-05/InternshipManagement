@@ -98,8 +98,19 @@ public class KhoaController(AdminService service, CatalogImportService imports) 
     [HttpPut("dang-ky/{id}/duyet")]
     public async Task<IActionResult> ApproveRegistration(string id, RegistrationApprovalRequest r)
     {
-        await service.ApproveRegistrationAsync(id, r);
-        return Ok();
+        try
+        {
+            await service.ApproveRegistrationAsync(id, r);
+            return Ok(new { success = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
     }
 
     [HttpPut("theo-doi/{id}/duyet")]

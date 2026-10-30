@@ -22,7 +22,9 @@ public class TienDoThucTapController : ControllerBase
     [HttpGet("sinhvien/{maSV}")]
     public async Task<IActionResult> GetTienDoBySinhVien(string maSV, [FromQuery] string? maDot)
     {
-        if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
+        if (User.IsInRole(Roles.GiangVien) && string.IsNullOrWhiteSpace(maDot))
+            return BadRequest(new { message = "Vui lòng chọn đợt để xem tiến độ sinh viên." });
+        if (!await _access.CanAccessStudentAsync(User, maSV, maDot)) return Forbid();
 
         if (!string.IsNullOrWhiteSpace(maDot))
         {
@@ -50,7 +52,7 @@ public class TienDoThucTapController : ControllerBase
         if (result == null)
             return NotFound(new { Message = "Không tìm thấy báo cáo tiến độ này." });
 
-        if (!await _access.CanAccessStudentAsync(User, result.MaSV)) return Forbid();
+        if (!await _access.CanAccessStudentAsync(User, result.MaSV, result.MaDot)) return Forbid();
 
         return Ok(result);
     }

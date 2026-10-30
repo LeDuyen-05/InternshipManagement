@@ -60,27 +60,4 @@ public class ThongKeController : ControllerBase
             });
         }
     }
-
-    [HttpGet("dot-thuc-tap")]
-    public async Task<IActionResult> GetDanhSachDotThucTap()
-    {
-        try
-        {
-            var result = await _thongKeService.GetDanhSachDotThucTapAsync();
-            return Ok(new
-            {
-                Success = true,
-                Message = "Lấy danh sách đợt thực tập thành công",
-                Data = result,
-            });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new
-            {
-                Success = false,
-                Message = "Lỗi khi lấy danh sách đợt thực tập: " + ex.Message,
-            });
-        }
-    }
 }

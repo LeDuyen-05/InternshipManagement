@@ -1,3 +1,4 @@
+using System.Data;
 using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -5,7 +6,36 @@ namespace InternshipManagement.DAL.Repositories;
 
 public class DangKyThucTapRepository : GenericRepository<DangKyThucTap>, IDangKyThucTapRepository
 {
-    public DangKyThucTapRepository(AppDbContext context) : base(context) { }
+    private readonly TimeProvider _clock;
+    public DangKyThucTapRepository(AppDbContext context, TimeProvider? clock = null) : base(context) { _clock = clock ?? TimeProvider.System; }
+
+    public async Task AddWithinLimitAsync(DangKyThucTap registration, int maximum)
+    {
+        await using var tx = Context.Database.IsRelational() ? await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        var offer = await Context.CongTyTheoDots.AsNoTracking().Include(x => x.CongTy)
+            .SingleOrDefaultAsync(x => x.MaDot == registration.MaDot && x.MaCongTy == registration.MaCongTy);
+        var now = _clock.GetUtcNow();
+        if (offer == null || !offer.HoatDong || offer.CongTy.TrangThai != "DaDuyet" || offer.CongTy.ChiTiepNhanTuTim
+            || now < offer.MoDangKy || now > offer.HanDangKy)
+            throw new InvalidOperationException("DN chưa được Khoa đưa vào đợt, đang ngừng nhận hoặc ngoài thời hạn đăng ký của đợt này.");
+        if (await CountDaTiepNhanAsync(registration.MaCongTy, registration.MaDot) >= offer.SoLuongNhan)
+            throw new InvalidOperationException("DN đã đủ chỉ tiêu trong đợt được chọn.");
+        var current = await DbSet.Where(d => d.MaSV == registration.MaSV && d.MaDot == registration.MaDot).ToListAsync();
+        if (current.Count >= maximum) throw new InvalidOperationException($"Đã dùng đủ {maximum} lượt đăng ký trong đợt, liên hệ Khoa hỗ trợ bố trí.");
+        if (current.Any(d => d.MaCongTy == registration.MaCongTy || d.ThuTuUuTien == registration.ThuTuUuTien))
+            throw new InvalidOperationException("Công ty hoặc thứ tự ưu tiên đã có trong lịch sử đăng ký đợt này.");
+        if (!await Context.DotThucTaps.AnyAsync(d => d.MaSo == registration.MaDot && d.TrangThai == "DangDienRa")
+            || await Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == registration.MaSV && p.MaDot == registration.MaDot && p.TrangThai != "Huy"))
+            throw new InvalidOperationException("Đợt đã đóng hoặc sinh viên vừa có nơi tiếp nhận; tải lại trước khi đăng ký.");
+        var position = await DAL.Common.PositionCapacity.RequireRoomAsync(Context, registration.MaCongTy, registration.MaDot, registration.MaViTri);
+        registration.MaViTri = position?.MaViTri;
+        registration.ViTriDangKy = position?.TenViTri ?? offer.ViTriTuyen;
+        registration.YeuCauDangKy = position?.YeuCau ?? offer.YeuCau;
+        registration.NgayDangKy = now.ToOffset(TimeSpan.FromHours(7)).DateTime;
+        await DbSet.AddAsync(registration);
+        await Context.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
+    }
 
     public async Task<IReadOnlyList<DangKyThucTap>> GetBySinhVienAsync(string maSV)
     {
@@ -66,13 +96,13 @@ public class DangKyThucTapRepository : GenericRepository<DangKyThucTap>, IDangKy
         return (phieu.TongDiem, soTieuChi > 0 && phieu.SoTieuChiDaCham >= soTieuChi);
     }
 
-    public async Task<IReadOnlyList<(string MaCongTy, string? KetQua, DateTime NgayPV)>> GetKetQuaPhongVanAsync(string maSV)
+    public async Task<IReadOnlyList<(string MaCongTy, string? KetQua, DateTime NgayPV, string? MaDK)>> GetKetQuaPhongVanAsync(string maSV)
     {
         var rows = await Context.PhongVans.AsNoTracking()
-            .Where(p => p.MaSinhVien == maSV)
-            .Select(p => new { p.DaiDienDoanhNghiep.MaCongTy, p.KetQua, p.NgayPV })
+            .Where(p => p.MaSinhVien == maSV && !Context.PhongVans.Any(n => n.MaPVTruoc == p.MaPV))
+            .Select(p => new { p.DaiDienDoanhNghiep.MaCongTy, p.KetQua, p.NgayPV, p.MaDK })
             .ToListAsync();
-        return rows.Select(r => (r.MaCongTy, r.KetQua, r.NgayPV)).ToList();
+        return rows.Select(r => (r.MaCongTy, r.KetQua, r.NgayPV, r.MaDK)).ToList();
     }
 
     public async Task<bool> HasPriorityInDotAsync(string maSV, string maDot, int thuTuUuTien)

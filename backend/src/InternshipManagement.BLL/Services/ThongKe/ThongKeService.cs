@@ -21,15 +21,25 @@ public class ThongKeService : IThongKeService
         var tenDot = dot?.TenDot ?? $"Đợt thực tập {resolvedMaDot}";
 
         var sinhViens = await _repository.GetSinhViensAsync(resolvedMaDot);
-        var gvHuongDans = await _repository.GetGVHuongDansAsync();
+        var gvHuongDans = (await _repository.GetGVHuongDansAsync()).Where(g => g.MaDot == resolvedMaDot).ToList();
         var giangViens = await _repository.GetGiangViensKemTaiAsync();
         var tienDos = await _repository.GetTienDoThucTapsAsync(resolvedMaDot);
         var phieuDiems = await _repository.GetPhieuChamDiemsAsync(resolvedMaDot);
+        var rubric = await _repository.GetTieuChisAsync(resolvedMaDot);
+        var finalization = await _repository.GetChotDotAsync(resolvedMaDot);
+        var nonCompletion = ((await _repository.GetKhongHoanTatAsync(resolvedMaDot)) ?? []).Select(x => x.MaSV).ToHashSet();
+        CloResult Evaluation(string student, IEnumerable<InternshipManagement.DAL.Entities.ChiTietChamDiem>? details)
+        {
+            var result = CloResult.Evaluate(rubric, details);
+            return nonCompletion.Contains(student) ? result with { Complete = false, Total = null, Status = "Không hoàn tất đợt" } : result;
+        }
 
         var response = new ThongKeBaoCaoResponse
         {
             MaDot = resolvedMaDot,
             TenDot = tenDot,
+            TrangThaiChotDot = InternshipManagement.DAL.AppDbContext.LockStatus(finalization, DateTimeOffset.UtcNow),
+            PhienBanChotDot = finalization?.PhienBan ?? 0,
         };
 
         // 1. Tổng quan Sinh viên & Phân công
@@ -50,9 +60,10 @@ public class ThongKeService : IThongKeService
             .GroupBy(p => p.MaSV)
             .ToDictionary(g => g.Key, g => g.First());
 
-        var daChamPhieuList = phieuDiems.Where(p => p.TongDiem.HasValue).ToList();
+        var evaluations = phieuDict.ToDictionary(x => x.Key, x => Evaluation(x.Key, x.Value.ChiTietChamDiems));
+        var daChamPhieuList = phieuDict.Values.Where(p => evaluations[p.MaSV].Complete).ToList();
         var daChamCount = daChamPhieuList.Count;
-        var chuaChamCount = Math.Max(0, tongSV - daChamCount);
+        var chuaChamCount = Math.Max(0, tongSV - daChamCount - nonCompletion.Count);
 
         double diemTB = 0;
         int soLuongDat = 0;
@@ -60,8 +71,8 @@ public class ThongKeService : IThongKeService
 
         if (daChamCount > 0)
         {
-            diemTB = Math.Round((double)daChamPhieuList.Average(p => (double)p.TongDiem!.Value), 2);
-            soLuongDat = daChamPhieuList.Count(p => ThangDiem.QuyDoi(p.TongDiem!.Value).Dat);
+            diemTB = Math.Round((double)daChamPhieuList.Average(p => (double)evaluations[p.MaSV].Total!.Value), 2);
+            soLuongDat = daChamPhieuList.Count(p => ThangDiem.QuyDoi(evaluations[p.MaSV].Total!.Value).Dat);
             soLuongKhongDat = daChamPhieuList.Count - soLuongDat;
         }
 
@@ -79,6 +90,9 @@ public class ThongKeService : IThongKeService
             TienDoChuaNop = chuaNop,
             DaChamCLO = daChamCount,
             ChuaChamCLO = chuaChamCount,
+            KhongHoanTatDot = nonCompletion.Count,
+            DangChamCLO = evaluations.Values.Count(x => !x.Complete && x.Status == "Chưa đủ điểm"),
+            ChuaBatDauCham = Math.Max(0, chuaChamCount - evaluations.Values.Count(x => !x.Complete && x.Status == "Chưa đủ điểm")),
             DiemTrungBinhCLO = diemTB,
             SoLuongDat = soLuongDat,
             SoLuongKhongDat = soLuongKhongDat,
@@ -100,59 +114,34 @@ public class ThongKeService : IThongKeService
         var totalDiem = Math.Max(1, daChamCount);
         response.PhanBoDiem = nhomXepLoai.Select(n =>
         {
-            var soLuong = daChamPhieuList.Count(p => ThangDiem.QuyDoi(p.TongDiem!.Value).DiemChu == n.Chu);
+            var soLuong = daChamPhieuList.Count(p => ThangDiem.QuyDoi(evaluations[p.MaSV].Total!.Value).DiemChu == n.Chu);
             return new PhanBoDiemCLODto { XepLoai = n.Ten, KhoangDiem = n.Khoang, SoLuong = soLuong, TiLe = Math.Round((double)soLuong / totalDiem * 100, 1) };
         }).ToList();
 
-        // 5. Thống kê theo chuẩn đầu ra CLO: gom tiêu chí CLOx.y theo nhóm CLOx, quy đổi về thang 10.
-        var tieuChis = phieuDiems.SelectMany(p => p.ChiTietChamDiems)
-            .Where(c => c.TieuChi != null && c.TieuChi.NhomDanhGia != null)
-            .Select(c => c.TieuChi!)
-            .GroupBy(t => t.MaTieuChi).Select(g => g.First()).ToList();
-        var nhomCLO = tieuChis.GroupBy(t => NhomCLO(t.MaTieuChi))
-            .Where(g => g.Key != null).OrderBy(g => g.Key).ToList();
-
-        response.DiemTheoCLO = nhomCLO.Select(g =>
-        {
-            var ma = g.Key!;
-            var maTieuChis = g.Select(t => t.MaTieuChi).ToHashSet();
-            var toiDa = (double)g.Sum(t => t.DiemToiDa);
-            var diemSV = daChamPhieuList
-                .Select(p => p.ChiTietChamDiems.Where(c => maTieuChis.Contains(c.MaTieuChi)).ToList())
-                .Where(cts => cts.Count == maTieuChis.Count)
-                .Select(cts => (double)cts.Sum(c => c.DiemCham) / toiDa * 10.0)
-                .ToList();
-            return new DiemChiTietCLODto
-            {
-                MaCLO = ma,
-                TenCLO = TenNhomCLO.TryGetValue(ma, out var ten) ? ten : ma,
-                DiemTrungBinh = diemSV.Count > 0 ? Math.Round(diemSV.Average(), 2) : 0,
-                TrongSo = Math.Round(toiDa / 10.0, 2),
-            };
-        }).ToList();
-        // 5. Thống kê theo đúng các tiêu chí của rubric đã được lưu trong phiếu.
+        // Chỉ phiếu đủ rubric mới tham gia trung bình; metadata lấy từ rubric đúng đợt.
         var allChiTiets = daChamPhieuList.SelectMany(p => p.ChiTietChamDiems).ToList();
-        var tongDiemToiDa = allChiTiets.GroupBy(c => c.TieuChi.MaTieuChi).Sum(g => (double)g.First().TieuChi.DiemToiDa);
-        response.DiemTheoCLO = allChiTiets.GroupBy(c => new { MaCLO = c.TieuChi.MaCLO, c.TieuChi.TenTieuChi, c.TieuChi.DiemToiDa })
-            .OrderBy(g => g.Key.MaCLO)
-            .Select(g => new DiemChiTietCLODto { MaCLO = g.Key.MaCLO, TenCLO = g.Key.TenTieuChi, DiemToiDa = (double)g.Key.DiemToiDa, DiemTrungBinh = Math.Round(g.Average(x => (double)x.DiemCham), 2), TrongSo = tongDiemToiDa > 0 ? (double)g.Key.DiemToiDa / tongDiemToiDa : 0 })
-            .ToList();
+        var tongDiemToiDa = rubric.Sum(c => c.DiemToiDa);
+        response.DiemTheoCLO = rubric.OrderBy(c => c.MaCLO).ThenBy(c => c.ThuTu).Select(c => new DiemChiTietCLODto {
+            MaTieuChi = c.MaTieuChi, MaCLO = c.MaCLO, TenCLO = c.TenTieuChi, DiemToiDa = (double)c.DiemToiDa,
+            DiemTrungBinh = Math.Round(allChiTiets.Where(x => x.MaTieuChi == c.MaTieuChi).Select(x => (double?)x.DiemCham).Average() ?? 0, 2),
+            TrongSo = tongDiemToiDa > 0 ? (double)(c.DiemToiDa / tongDiemToiDa) : 0
+        }).ToList();
 
         // 6. Tải Giảng viên hướng dẫn
         response.TaiGiangVien = giangViens.Select(gv =>
         {
-            var curCount = gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan");
-            var maxCount = Math.Max(1, gv.ChiTieuHD);
-            var rate = Math.Round((double)curCount / maxCount * 100, 1);
+            var curCount = gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan" && (h.MaDot == resolvedMaDot || h.MaDot == null));
+            var maxCount = Math.Max(0, gv.ChiTieuHD);
+            var rate = maxCount > 0 ? Math.Round((double)curCount / maxCount * 100, 1) : 0;
             return new ThongKeTaiGVDto
             {
                 MaGV = gv.MaGV,
                 HoTen = gv.HoTen,
                 ChuyenMon = gv.ChuyenMon,
-                SoLuongSVHD = gv.SoLuongSVHD,
+                SoLuongSVHD = maxCount,
                 SoLuongHienTai = curCount,
                 TiLeTai = rate,
-                TrangThaiTai = rate >= 100 ? "DuTai" : (rate >= 70 ? "BinhThuong" : "ConCho"),
+                TrangThaiTai = maxCount == 0 || rate >= 100 ? "DuTai" : (rate >= 70 ? "BinhThuong" : "ConCho"),
             };
         }).OrderByDescending(g => g.TiLeTai).ToList();
 
@@ -161,22 +150,18 @@ public class ThongKeService : IThongKeService
         {
             phieuDict.TryGetValue(sv.MaSV, out var phieu);
             daPhanCongMap.TryGetValue(sv.MaSV, out var gvName);
-            var tenCongTy = sv.PhanBoThucTaps.Where(p => p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ";
+            var tenCongTy = sv.PhanBoThucTaps.Where(p => p.MaDot == resolvedMaDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet).OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ";
 
-            double? tongDiem = phieu?.TongDiem.HasValue == true ? (double)phieu.TongDiem.Value : null;
-            string xepLoai = "Chưa có";
-            string ketQua = "Chưa chấm";
-
-            if (tongDiem.HasValue)
-            {
-                xepLoai = ThangDiem.MoTaXepLoai((decimal)tongDiem.Value);
-                ketQua = ThangDiem.QuyDoi((decimal)tongDiem.Value).Dat ? "Đạt" : "Không đạt";
-            }
+            var evaluation = Evaluation(sv.MaSV, phieu?.ChiTietChamDiems);
+            double? tongDiem = evaluation.Total.HasValue ? (double)evaluation.Total.Value : null;
+            var xepLoai = evaluation.Classification;
+            var ketQua = evaluation.Outcome;
 
             // Điểm thô của từng nhóm CLO (CLO1: /2.0, CLO2: /1.0, CLO3: /2.0, CLO4: /5.0)
             double? TongNhom(string nhom)
             {
-                var cts = phieu?.ChiTietChamDiems.Where(c => c.TieuChi?.NhomDanhGia != null && NhomCLO(c.MaTieuChi) == nhom).ToList();
+                var ids = rubric.Where(c => NhomCLO(c.MaCLO ?? c.MaTieuChi) == nhom).Select(c => c.MaTieuChi).ToHashSet();
+                var cts = phieu?.ChiTietChamDiems.Where(c => ids.Contains(c.MaTieuChi)).ToList();
                 return cts == null || cts.Count == 0 ? null : Math.Round((double)cts.Sum(c => c.DiemCham), 2);
             }
             double? c1 = TongNhom("CLO1"), c2 = TongNhom("CLO2"), c3 = TongNhom("CLO3"), c4 = TongNhom("CLO4");
@@ -193,10 +178,12 @@ public class ThongKeService : IThongKeService
                 DiemCLO3 = c3,
                 DiemCLO4 = c4,
                 TongDiem = tongDiem,
+                DiemTamTinh = nonCompletion.Contains(sv.MaSV) ? null : (double)evaluation.Partial, DaDuDiem = evaluation.Complete,
+                DaChamGV = evaluation.LecturerComplete, DaChamDN = evaluation.EnterpriseComplete,
                 XepLoai = xepLoai,
                 KetQua = ketQua,
                 NgayCham = phieu?.NgayCham,
-                DiemTheoTieuChi = phieu?.ChiTietChamDiems.OrderBy(c => c.TieuChi.MaCLO).Select(c => new DiemTieuChiSinhVienDto { MaCLO = c.TieuChi.MaCLO, DiemCham = (double)c.DiemCham, DiemToiDa = (double)c.TieuChi.DiemToiDa }).ToList() ?? new(),
+                DiemTheoTieuChi = phieu?.ChiTietChamDiems.Where(c => rubric.Any(t => t.MaTieuChi == c.MaTieuChi)).OrderBy(c => c.TieuChi.MaCLO).Select(c => new DiemTieuChiSinhVienDto { MaTieuChi = c.MaTieuChi, MaCLO = c.TieuChi.MaCLO, DiemCham = (double)c.DiemCham, DiemToiDa = (double)c.TieuChi.DiemToiDa }).ToList() ?? new(),
             };
         }).OrderBy(s => s.MaSV).ToList();
 
@@ -214,31 +201,29 @@ public class ThongKeService : IThongKeService
         // Header thông tin đợt
         sb.AppendLine($"BÁO CÁO KẾT QUẢ ĐÁNH GIÁ CLO THỰC TẬP DOANH NGHIỆP");
         sb.AppendLine($"Đợt thực tập: {data.TenDot} (Mã: {data.MaDot})");
+        sb.AppendLine($"Trạng thái chốt: {data.TrangThaiChotDot}; phiên bản: {data.PhienBanChotDot}. Báo cáo dữ liệu hiện hành; đối chiếu bản lưu tại quyết định chốt.");
         sb.AppendLine($"Thời gian xuất báo cáo: {DateTime.Now:dd/MM/yyyy HH:mm}");
         sb.AppendLine();
 
         // Header bảng dữ liệu
-        sb.AppendLine("STT,Mã sinh viên,Họ và tên,Lớp,Doanh nghiệp tiếp nhận,Giảng viên hướng dẫn,CLO1 (/2.0),CLO2 (/1.0),CLO3 (/2.0),CLO4 - Đơn vị thực tập (/5.0),Điểm tổng kết,Xếp loại,Kết quả");
+        sb.AppendLine("STT,Mã sinh viên,Họ và tên,Lớp,Doanh nghiệp tiếp nhận,Giảng viên hướng dẫn," + string.Join(",", data.DiemTheoCLO.Select(c => EscapeCsv($"{c.MaCLO} - {c.TenCLO} (/{c.DiemToiDa})"))) + ",Điểm tạm tính,Điểm tổng kết,Xếp loại,Kết quả");
 
         int index = 1;
         foreach (var sv in data.DanhSachBangDiem)
         {
-            var c1 = sv.DiemCLO1?.ToString("F2") ?? "-";
-            var c2 = sv.DiemCLO2?.ToString("F2") ?? "-";
-            var c3 = sv.DiemCLO3?.ToString("F2") ?? "-";
-            var c4 = sv.DiemCLO4?.ToString("F2") ?? "-";
-            var tong = sv.TongDiem?.ToString("F2") ?? "-";
+            var tong = sv.TongDiem?.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? "-";
 
             // Escape dấu phẩy hoặc ngoặc kép nếu có trong tên
             var hoTen = EscapeCsv(sv.HoTen);
             var congTy = EscapeCsv(sv.TenCongTy ?? "");
             var gv = EscapeCsv(sv.TenGVHD ?? "");
 
-            sb.AppendLine($"{index++},{sv.MaSV},{hoTen},{sv.Lop},{congTy},{gv},{c1},{c2},{c3},{c4},{tong},{sv.XepLoai},{sv.KetQua}");
+            var criterionValues = string.Join(",", data.DiemTheoCLO.Select(c => sv.DiemTheoTieuChi.FirstOrDefault(d => d.MaTieuChi == c.MaTieuChi)?.DiemCham.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? ""));
+            sb.AppendLine($"{index++},{sv.MaSV},{hoTen},{sv.Lop},{congTy},{gv},{criterionValues},{sv.DiemTamTinh?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? ""},{tong},{sv.XepLoai},{sv.KetQua}");
         }
 
         sb.AppendLine();
-        sb.AppendLine($"TỔNG KẾT:,Tổng số sinh viên: {data.TongQuan.TongSinhVien},Đã chấm: {data.TongQuan.DaChamCLO},Điểm trung bình CLO: {data.TongQuan.DiemTrungBinhCLO:F2},Tỷ lệ đạt: {data.TongQuan.TiLeDatCLO}%");
+        sb.AppendLine($"TỔNG KẾT:,Tổng số sinh viên: {data.TongQuan.TongSinhVien},Đủ điểm: {data.TongQuan.DaChamCLO},Điểm trung bình CLO: {data.TongQuan.DiemTrungBinhCLO:F2},Tỷ lệ đạt: {data.TongQuan.TiLeDatCLO}%");
 
         return Encoding.UTF8.GetBytes(sb.ToString());
     }

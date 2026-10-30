@@ -12,6 +12,11 @@ public class PhanBoThucTapDto
     public string? TenDot { get; set; }
     public DateTime NgayPhanBo { get; set; }
     public string TrangThai { get; set; } = default!;
+    public bool DaDuocKhoaDuyet { get; set; }
+    public DateTime? NgaySVXacNhan { get; set; }
+    public DateTimeOffset? HanXacNhanSV { get; set; }
+    public bool QuaHanXacNhan { get; set; }
+    public DateTime? NgayKhoaDuyet { get; set; }
 
     // Thông tin GVHD
     public string? GiangVienHD { get; set; }

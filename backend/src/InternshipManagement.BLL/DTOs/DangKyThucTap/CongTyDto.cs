@@ -2,6 +2,7 @@ namespace InternshipManagement.BLL.DTOs.DangKyThucTap;
 
 public class CongTyDto
 {
+    public string? MaViTri { get; set; }
     public string MaCongTy { get; set; } = default!;
     public string TenCongTy { get; set; } = default!;
     public string? ViTriTuyen { get; set; }
@@ -15,6 +16,8 @@ public class CongTyDto
     public int DaTiepNhan { get; set; }
     public int? ConLai { get; set; }
     public bool DaDuChiTieu { get; set; }
+    public DateTimeOffset? MoDangKy { get; set; }
+    public DateTimeOffset? HanDangKy { get; set; }
 }
 
 public class DeXuatCongTyRequest

@@ -1,3 +1,4 @@
+using System.Data;
 using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,13 +38,12 @@ public class GoiYCongTyRepository : IGoiYCongTyRepository
         }
 
         // Tạo mới hồ sơ năng lực nếu chưa tồn tại
-        var synthesizedText = $"Sinh viên: {sv.HoTen}, Chuyên ngành: {sv.ChuyenNganh ?? "Công nghệ thông tin"}, " +
-                              $"Kỹ năng: {sv.KyNang ?? ""}, Công nghệ: {sv.CongNghe ?? ""}, " +
-                              $"Dự án đã làm: {sv.DuAnDaThucHien ?? ""}, GPA: {sv.Gpa ?? 3.0m}.";
+        var synthesizedText = string.Join(". ", new[] { sv.ChuyenNganh, sv.KyNang, sv.CongNghe, sv.DuAnDaThucHien }
+            .Where(x => !string.IsNullOrWhiteSpace(x)));
 
         var newHoSo = new HoSoNangLuc
         {
-            MaHoSo = $"HS_{sv.MaSV}",
+            MaHoSo = DAL.Common.IdGenerator.New("HS"),
             MaSV = sv.MaSV,
             NDHoSo = synthesizedText,
             NgayCapNhat = DateTime.Now,
@@ -70,7 +70,7 @@ public class GoiYCongTyRepository : IGoiYCongTyRepository
     {
         return await _context.CongTys
             .AsNoTracking()
-            .Where(c => c.TrangThai == "DaDuyet")
+            .Where(c => c.TrangThai == "DaDuyet" && !c.ChiTiepNhanTuTim)
             .ToListAsync();
     }
 
@@ -91,6 +91,9 @@ public class GoiYCongTyRepository : IGoiYCongTyRepository
 
     public async Task CapNhatHoSoAsync(string maSV, string? ndHoSo, string? kyNang, string? congNghe, string? duAn)
     {
+        // Giữ kiểm tra hồ sơ chưa tồn tại và lần ghi đầu tiên trong cùng transaction.
+        await using var tx = _context.Database.IsRelational() && _context.Database.CurrentTransaction is null
+            ? await _context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         var sv = await _context.SinhViens
             .Include(s => s.HoSoNangLuc)
             .FirstOrDefaultAsync(s => s.MaSV == maSV);
@@ -100,30 +103,31 @@ public class GoiYCongTyRepository : IGoiYCongTyRepository
             throw new ArgumentException($"Không tìm thấy sinh viên có mã '{maSV}'.");
         }
 
-        if (!string.IsNullOrWhiteSpace(kyNang)) sv.KyNang = kyNang;
-        if (!string.IsNullOrWhiteSpace(congNghe)) sv.CongNghe = congNghe;
-        if (!string.IsNullOrWhiteSpace(duAn)) sv.DuAnDaThucHien = duAn;
+        if (kyNang is not null) sv.KyNang = string.IsNullOrWhiteSpace(kyNang) ? null : kyNang.Trim();
+        if (congNghe is not null) sv.CongNghe = string.IsNullOrWhiteSpace(congNghe) ? null : congNghe.Trim();
+        if (duAn is not null) sv.DuAnDaThucHien = string.IsNullOrWhiteSpace(duAn) ? null : duAn.Trim();
 
         if (sv.HoSoNangLuc == null)
         {
             sv.HoSoNangLuc = new HoSoNangLuc
             {
-                MaHoSo = $"HS_{sv.MaSV}",
+                MaHoSo = DAL.Common.IdGenerator.New("HS"),
                 MaSV = sv.MaSV,
-                NDHoSo = ndHoSo ?? $"{sv.KyNang} {sv.CongNghe} {sv.DuAnDaThucHien}",
+                NDHoSo = ndHoSo?.Trim() ?? "",
                 NgayCapNhat = DateTime.Now,
             };
             await _context.HoSoNangLucs.AddAsync(sv.HoSoNangLuc);
         }
         else
         {
-            if (!string.IsNullOrWhiteSpace(ndHoSo))
+            if (ndHoSo is not null)
             {
-                sv.HoSoNangLuc.NDHoSo = ndHoSo;
+                sv.HoSoNangLuc.NDHoSo = ndHoSo.Trim();
             }
             sv.HoSoNangLuc.NgayCapNhat = DateTime.Now;
         }
 
         await _context.SaveChangesAsync();
+        if (tx is not null) await tx.CommitAsync();
     }
 }

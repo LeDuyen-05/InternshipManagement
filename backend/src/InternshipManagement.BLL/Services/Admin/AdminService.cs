@@ -411,13 +411,50 @@ public class AdminService
 
     public async Task<object> RegistrationsAsync(string? maDot)
     {
+        var activePlacements = await _db.PhanBoThucTaps.AsNoTracking()
+            .Where(p => (maDot == null || p.MaDot == maDot) && p.TrangThai != "Huy")
+            .Select(p => new { p.MaSinhVien, p.MaDot, p.MaCongTy, TenCongTy = p.CongTy.TenCongTy })
+            .ToListAsync();
+        var placementMap = activePlacements
+            .GroupBy(p => $"{p.MaDot}/{p.MaSinhVien}")
+            .ToDictionary(g => g.Key, g => g.First().TenCongTy);
+
         var q = from r in _db.DangKyThucTaps.AsNoTracking()
                 join s in _db.SinhViens.AsNoTracking() on r.MaSV equals s.MaSV
                 join c in _db.CongTys.AsNoTracking() on r.MaCongTy equals c.MaCongTy
                 join d in _db.DotThucTaps.AsNoTracking() on r.MaDot equals d.MaSo
-                select new { maDangKy = r.MaDK, maSinhVien = r.MaSV, sinhVien = s.HoTen, s.Lop, r.MaCongTy, congTy = c.TenCongTy, ViTriTuyen = r.ViTriDangKy ?? c.ViTriTuyen, r.MaDot, dot = d.TenDot, r.NgayDangKy, r.ThuTuUuTien, r.TrangThai };
-        if (!string.IsNullOrWhiteSpace(maDot)) q = q.Where(x => x.MaDot == maDot);
-        return await q.OrderBy(x => x.TrangThai).ThenBy(x => x.NgayDangKy).ToListAsync();
+                select new {
+                    maDangKy = r.MaDK,
+                    maSinhVien = r.MaSV,
+                    sinhVien = s.HoTen,
+                    lop = s.Lop,
+                    maCongTy = r.MaCongTy,
+                    congTy = c.TenCongTy,
+                    viTriTuyen = r.ViTriDangKy ?? c.ViTriTuyen,
+                    maDot = r.MaDot,
+                    dot = d.TenDot,
+                    ngayDangKy = r.NgayDangKy,
+                    thuTuUuTien = r.ThuTuUuTien,
+                    trangThai = r.TrangThai
+                };
+        if (!string.IsNullOrWhiteSpace(maDot)) q = q.Where(x => x.maDot == maDot);
+        var rows = await q.OrderBy(x => x.trangThai).ThenBy(x => x.ngayDangKy).ToListAsync();
+        return rows.Select(r => new {
+            r.maDangKy,
+            r.maSinhVien,
+            r.sinhVien,
+            r.lop,
+            r.maCongTy,
+            r.congTy,
+            ViTriTuyen = r.viTriTuyen,
+            r.maDot,
+            r.dot,
+            r.ngayDangKy,
+            r.thuTuUuTien,
+            r.trangThai,
+            daCoNoiThucTap = placementMap.ContainsKey($"{r.maDot}/{r.maSinhVien}"),
+            tenNoiThucTap = placementMap.TryGetValue($"{r.maDot}/{r.maSinhVien}", out var comp) ? comp : null
+        }).ToList();
     }
 
     public async Task ApproveRegistrationAsync(string id, RegistrationApprovalRequest request)
@@ -426,7 +463,10 @@ public class AdminService
         var registration = await _db.DangKyThucTaps.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy nguyện vọng.");
         if (registration.TrangThai == "TuChoi" && request.TrangThai != "TuChoi")
             throw new InvalidOperationException("Nguyện vọng đã kết thúc; không mở lại để thay đổi lịch sử lượt đăng ký.");
-        if (request.TrangThai != registration.TrangThai && await _db.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == registration.MaSV && p.MaDot == registration.MaDot && p.TrangThai != "Huy"))
+        var hasActivePlacement = await _db.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == registration.MaSV && p.MaDot == registration.MaDot && p.TrangThai != "Huy");
+        if (request.TrangThai == "DaDuyet" && hasActivePlacement)
+            throw new InvalidOperationException("Sinh viên đã có nơi tiếp nhận chính thức trong đợt; không thể phê duyệt thêm nơi thực tập khác.");
+        if (request.TrangThai == "ChoDuyet" && hasActivePlacement && registration.TrangThai != "ChoDuyet")
             throw new InvalidOperationException("Sinh viên đã có nơi tiếp nhận; xử lý ở luồng nơi thực tập.");
         if (request.TrangThai == "TuChoi" && await _db.PhongVans.AnyAsync(p => p.MaSinhVien == registration.MaSV && (p.MaDK == registration.MaDK || (p.MaDK == null && p.DaiDienDoanhNghiep.MaCongTy == registration.MaCongTy)) && p.KetQua == "ChuaCoKetQua"))
             throw new InvalidOperationException("Có lịch PV chờ kết quả; dùng tab Kết quả/bỏ PV để ghi rõ kết quả và nguồn.");
@@ -455,7 +495,12 @@ public class AdminService
             }
         }
         registration.TrangThai = request.TrangThai;
-        if (request.TrangThai == "TuChoi") registration.LyDoKetThuc = "Khoa từ chối hồ sơ đăng ký trước phỏng vấn; không tự suy ra rớt PV.";
+        if (request.TrangThai == "TuChoi")
+        {
+            registration.LyDoKetThuc = hasActivePlacement
+                ? "Đã có nơi tiếp nhận chính thức tại đơn vị khác trong đợt; kết thúc nguyện vọng phụ."
+                : "Khoa từ chối hồ sơ đăng ký trước phỏng vấn; không tự suy ra rớt PV.";
+        }
         await _db.SaveChangesAsync();
     }
 
@@ -560,7 +605,7 @@ public class AdminService
             ?? throw new KeyNotFoundException($"Không tìm thấy đợt thực tập {request.MaDot}.");
 
         var startDate = request.NgayBatDau ?? round.ThoiGianBD;
-        var weeks = request.SoTuan > 0 ? request.SoTuan : 10;
+        var weeks = request.SoTuan > 0 ? request.SoTuan : 12;
 
         var assignedStudents = await _db.PhanBoThucTaps
             .AsNoTracking()

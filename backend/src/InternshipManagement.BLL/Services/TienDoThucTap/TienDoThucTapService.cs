@@ -1,4 +1,5 @@
 using InternshipManagement.BLL.DTOs.TienDoThucTap;
+using InternshipManagement.BLL.Common;
 using InternshipManagement.DAL.Repositories;
 using TienDoEntity = InternshipManagement.DAL.Entities.TienDoThucTap;
 
@@ -7,10 +8,12 @@ namespace InternshipManagement.BLL.Services.TienDoThucTap;
 public class TienDoThucTapService : ITienDoThucTapService
 {
     private readonly ITienDoThucTapRepository _tienDoThucTapRepository;
+    private readonly TimeProvider _clock;
 
-    public TienDoThucTapService(ITienDoThucTapRepository tienDoThucTapRepository)
+    public TienDoThucTapService(ITienDoThucTapRepository tienDoThucTapRepository, TimeProvider? clock = null)
     {
         _tienDoThucTapRepository = tienDoThucTapRepository;
+        _clock = clock ?? TimeProvider.System;
     }
 
     public async Task<IReadOnlyList<TienDoThucTapDto>> GetTienDoBySinhVienAsync(string maSV)
@@ -19,10 +22,13 @@ public class TienDoThucTapService : ITienDoThucTapService
         return entities.Select(e => new TienDoThucTapDto
         {
             MaTienDo = e.MaTienDo,
+            NopTre = e.NopTre,
+            HanNopBoSung = e.HanNopBoSung,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            MaPhanBoLuuTru = e.MaPhanBoLuuTru,
             NhanXetGV = e.NhanXetGV,
             NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
@@ -38,10 +44,13 @@ public class TienDoThucTapService : ITienDoThucTapService
         return entities.Select(e => new TienDoThucTapDto
         {
             MaTienDo = e.MaTienDo,
+            NopTre = e.NopTre,
+            HanNopBoSung = e.HanNopBoSung,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            MaPhanBoLuuTru = e.MaPhanBoLuuTru,
             NhanXetGV = e.NhanXetGV,
             NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
@@ -57,10 +66,13 @@ public class TienDoThucTapService : ITienDoThucTapService
         return entities.Select(e => new TienDoThucTapDto
         {
             MaTienDo = e.MaTienDo,
+            NopTre = e.NopTre,
+            HanNopBoSung = e.HanNopBoSung,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            MaPhanBoLuuTru = e.MaPhanBoLuuTru,
             NhanXetGV = e.NhanXetGV,
             NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
@@ -78,10 +90,13 @@ public class TienDoThucTapService : ITienDoThucTapService
         return new TienDoThucTapDto
         {
             MaTienDo = e.MaTienDo,
+            NopTre = e.NopTre,
+            HanNopBoSung = e.HanNopBoSung,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
             TrangThaiDuyet = e.TrangThaiDuyet,
+            MaPhanBoLuuTru = e.MaPhanBoLuuTru,
             NhanXetGV = e.NhanXetGV,
             NhanXet = e.NhanXet ?? e.NhanXetGV,
             MaDot = e.MaDot,
@@ -109,13 +124,15 @@ public class TienDoThucTapService : ITienDoThucTapService
 
         if (!isStaff)
         {
-            if (string.IsNullOrWhiteSpace(actorMaGV) || !await _tienDoThucTapRepository.IsSupervisorAsync(actorMaGV, entity.MaSV))
+            if (string.IsNullOrWhiteSpace(actorMaGV) || !await _tienDoThucTapRepository.IsSupervisorAsync(actorMaGV, entity.MaSV, entity.MaDot))
             {
                 throw new UnauthorizedAccessException("Giảng viên không phụ trách hướng dẫn sinh viên này.");
             }
         }
 
         var nhanXet = request.NhanXet ?? request.NhanXetGV;
+        if (entity.MaPhanBoLuuTru != null)
+            throw new InvalidOperationException("Báo cáo đã lưu trữ khi đổi nơi thực tập; chỉ xem lịch sử, không duyệt lại thành báo cáo của nơi mới.");
         return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet, nhanXet);
     }
 
@@ -140,14 +157,11 @@ public class TienDoThucTapService : ITienDoThucTapService
             throw new UnauthorizedAccessException("Bạn không có quyền nộp báo cáo cho sinh viên khác.");
         }
 
+        if (existing.MaPhanBoLuuTru != null)
+            throw new InvalidOperationException("Báo cáo đã lưu trữ khi đổi nơi thực tập; không sửa đè lịch sử, liên hệ GVHD/Khoa để có mốc báo cáo mới.");
         if (existing.TrangThaiDuyet is not ("ChuaNop" or "YeuCauSua"))
         {
             throw new InvalidOperationException("Báo cáo đã nộp/đã duyệt, không thể sửa.");
-        }
-
-        if (existing.DotThucTap?.TrangThai == "DaKetThuc")
-        {
-            throw new InvalidOperationException("Đợt thực tập đã kết thúc, không thể nộp báo cáo tiến độ.");
         }
 
         // Chỉ nộp báo cáo tuần khi đã có quyết định tiếp nhận và sinh viên đã xác nhận nhận việc
@@ -156,9 +170,21 @@ public class TienDoThucTapService : ITienDoThucTapService
             throw new InvalidOperationException("Bạn chưa có quyết định tiếp nhận thực tập trong đợt này nên chưa thể nộp báo cáo tiến độ.");
         if (trangThaiPhanBo == "ChuaNhanViec")
             throw new InvalidOperationException("Bạn cần xác nhận nhận quyết định tiếp nhận (mục Lịch phỏng vấn & Phân bổ) trước khi nộp báo cáo tiến độ.");
+        if (trangThaiPhanBo != "DangThucTap")
+            throw new InvalidOperationException("Chỉ được nộp tiến độ khi đang thực tập và nơi thực tập đã được Khoa chốt.");
 
+        var placement = await _tienDoThucTapRepository.GetActivePlacementAsync(existing.MaSV, existing.MaDot);
+        var verifiedStart = placement == null ? null : PlacementPeriod.Resolve(placement).Start;
+        if (verifiedStart.HasValue && _clock.GetUtcNow() < InternshipDeadlinePolicy.StartOfDay(verifiedStart.Value))
+            throw new InvalidOperationException("Chưa đến ngày bắt đầu tại DN đã được Khoa xác minh, chưa được nộp tiến độ.");
+        if (!verifiedStart.HasValue && existing.DotThucTap != null && _clock.GetUtcNow() < InternshipDeadlinePolicy.StartOfDay(existing.DotThucTap.ThoiGianBD))
+            throw new InvalidOperationException("Chưa đến ngày bắt đầu thực tập của đợt, chưa được nộp tiến độ.");
+
+        if (InternshipDeadlinePolicy.SubmissionClosed(existing, _clock.GetUtcNow()))
+            throw new InvalidOperationException("Đã hết hạn nộp báo cáo. Sinh viên phải lên Khoa trình bày lý do; chỉ được nộp khi Khoa chấp thuận và mở hạn bổ sung.");
         existing.NoiDungBaoCao = request.NoiDungBaoCao.Trim();
-        existing.NgayNop = DateTime.Now;
+        existing.NgayNop = _clock.GetUtcNow().ToOffset(InternshipDeadlinePolicy.VietnamOffset).DateTime;
+        existing.NopTre = InternshipDeadlinePolicy.IsLate(existing.NgayNop.Value, existing.MocThoiGian);
         existing.TrangThaiDuyet = "DaNop";
 
         var entity = await _tienDoThucTapRepository.UpdateAsync(existing);
@@ -166,6 +192,8 @@ public class TienDoThucTapService : ITienDoThucTapService
         return new TienDoThucTapDto
         {
             MaTienDo = entity.MaTienDo,
+            NopTre = entity.NopTre,
+            HanNopBoSung = entity.HanNopBoSung,
             MaDot = entity.MaDot,
             TenDot = entity.DotThucTap?.TenDot,
             MaSV = entity.MaSV,
@@ -173,6 +201,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             NoiDungBaoCao = entity.NoiDungBaoCao,
             NgayNop = entity.NgayNop,
             TrangThaiDuyet = entity.TrangThaiDuyet,
+            MaPhanBoLuuTru = entity.MaPhanBoLuuTru,
             NhanXet = entity.NhanXet ?? entity.NhanXetGV,
             NhanXetGV = entity.NhanXetGV
         };

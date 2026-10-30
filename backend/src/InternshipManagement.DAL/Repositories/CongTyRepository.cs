@@ -10,7 +10,7 @@ public class CongTyRepository : GenericRepository<CongTy>, ICongTyRepository
     public async Task<IReadOnlyList<CongTy>> GetDanhSachTuyenDungAsync()
     {
         return await DbSet
-            .Where(c => c.TrangThai == "DaDuyet")
+            .Where(c => c.TrangThai == "DaDuyet" && !c.ChiTiepNhanTuTim)
             .ToListAsync();
     }
 
@@ -27,7 +27,7 @@ public class CongTyRepository : GenericRepository<CongTy>, ICongTyRepository
             .ToDictionaryAsync(g => g.Key, g => g.Count());
 
     public async Task<IReadOnlyList<CongTy>> GetDeXuatCuaSinhVienAsync(string maSV) =>
-        await DbSet.AsNoTracking().Where(c => c.MaSVDeXuat == maSV).OrderBy(c => c.TenCongTy).ToListAsync();
+        await DbSet.AsNoTracking().Where(c => c.MaSVDeXuat == maSV && !c.ChiTiepNhanTuTim).OrderBy(c => c.TenCongTy).ToListAsync();
 
     public async Task<bool> ExistsByNameAsync(string tenCongTy)
     {

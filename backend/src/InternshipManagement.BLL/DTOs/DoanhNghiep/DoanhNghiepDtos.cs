@@ -31,6 +31,7 @@ public class CapNhatTrangThaiUngVienRequest
 
 public class TaoPhongVanRequest
 {
+    public string? MaDK { get; set; }
     public string MaSinhVien { get; set; } = default!;
     public string MaDaiDien { get; set; } = default!;
     public string? HinhThuc { get; set; }
@@ -47,7 +48,23 @@ public class DoiLichPhongVanRequest
 
 public class CapNhatKetQuaPhongVanRequest
 {
-    public string KetQua { get; set; } = "Dat";
+    public string KetQua { get; set; } = "";
+    public string? MaDK { get; set; }
+    public string? LyDo { get; set; }
+    public string? Nguon { get; set; }
+}
+
+public class DieuChinhPhongVanRequest
+{
+    public string MaDot { get; set; } = "";
+    public string? MaDK { get; set; }
+    public int? PhienBan { get; set; }
+    public string LyDo { get; set; } = "";
+    public string? Nguon { get; set; }
+    public string? KetQua { get; set; }
+    public DateTime? NgayPV { get; set; }
+    public string? MaDaiDien { get; set; }
+    public string? HinhThuc { get; set; }
 }
 
 /// <summary>Đơn vị thực tập chấm Phiếu nhận xét: CLO4.1 (tối đa 2đ) và CLO4.2 (tối đa 3đ).</summary>

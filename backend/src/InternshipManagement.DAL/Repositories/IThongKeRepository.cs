@@ -11,4 +11,7 @@ public interface IThongKeRepository
     Task<IReadOnlyList<GiangVien>> GetGiangViensKemTaiAsync();
     Task<IReadOnlyList<TienDoThucTap>> GetTienDoThucTapsAsync(string? maDot);
     Task<IReadOnlyList<PhieuChamDiem>> GetPhieuChamDiemsAsync(string? maDot);
+    Task<IReadOnlyList<TieuChi>> GetTieuChisAsync(string maDot);
+    Task<IReadOnlyList<KhongHoanTatDot>> GetKhongHoanTatAsync(string maDot);
+    Task<ChotDotThucTap?> GetChotDotAsync(string maDot);
 }

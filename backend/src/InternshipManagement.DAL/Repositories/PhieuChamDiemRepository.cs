@@ -1,3 +1,4 @@
+using System.Data;
 using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,10 +8,15 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 {
     public PhieuChamDiemRepository(AppDbContext context) : base(context) { }
 
+    public Task<bool> CanEnterpriseGradeAsync(string maSV, string maDot, string maDaiDien) =>
+        Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.DaDuocKhoaDuyet && (p.TrangThai == "DangThucTap" || p.TrangThai == "HoanThanh")
+            && Context.DaiDienDoanhNghieps.Any(d => d.MaSo == maDaiDien && d.MaCongTy == p.MaCongTy));
+
     public async Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync(string maDot)
     {
         var rubric = await Context.DotThucTaps.Where(d => d.MaSo == maDot)
-            .Select(d => d.MaRubric).FirstOrDefaultAsync() ?? "LEGACY_4TC";
+            .Select(d => d.MaRubric).FirstOrDefaultAsync();
+        if (rubric == null) return Array.Empty<TieuChi>();
         return await Context.TieuChis
             .AsNoTracking()
             .Where(t => t.NhomDanhGia != null && t.MaRubric == rubric)
@@ -41,8 +47,9 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             .FirstOrDefaultAsync(p => p.MaSV == maSV && p.MaDot == maDot);
     }
 
-    public Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV) =>
-        Context.GVHuongDans.AsNoTracking().FirstOrDefaultAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
+    public Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV, string maDot) =>
+        Context.GVHuongDans.AsNoTracking().FirstOrDefaultAsync(g => g.MaSinhVien == maSV && g.MaDot == maDot && g.TrangThai == "DangHuongDan"
+            && Context.PhanBoThucTaps.Any(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet));
 
     public async Task<IReadOnlyList<PhieuChamDiem>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot)
     {
@@ -56,9 +63,16 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 
     public async Task<PhieuChamDiem> LuuPhieuChamDiemAsync(PhieuChamDiem phieu, IEnumerable<ChiTietChamDiem> chiTiets)
     {
-        var activeIds = await Context.TieuChis.AsNoTracking()
-            .Where(t => t.NhomDanhGia != null).Select(t => t.MaTieuChi).ToListAsync();
-
+        await using var tx = Context.Database.IsRelational() ? await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        if (await Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == phieu.MaSV && p.MaDot == phieu.MaDot && p.NgayHuy != null))
+        {
+            var current = await Context.PhanBoThucTaps.AsNoTracking().SingleOrDefaultAsync(p => p.MaSinhVien == phieu.MaSV
+                && p.MaDot == phieu.MaDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet);
+            if (current == null || current.TrangThai is not ("DangThucTap" or "HoanThanh"))
+                throw new InvalidOperationException("Nơi thực tập đã bị hủy/đang điều chỉnh. Không ghi điểm vào hồ sơ không còn hiệu lực.");
+            if (phieu.MaDaiDien != null && !await Context.DaiDienDoanhNghieps.AnyAsync(d => d.MaSo == phieu.MaDaiDien && d.MaCongTy == current.MaCongTy))
+                throw new UnauthorizedAccessException("Đại diện nơi cũ không được chấm cho nơi mới.");
+        }
         var existing = await DbSet
             .Include(p => p.ChiTietChamDiems)
             .FirstOrDefaultAsync(p => p.MaSV == phieu.MaSV && p.MaDot == phieu.MaDot);
@@ -82,9 +96,8 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             existing.DaDoiChieuPhieuDN = phieu.DaDoiChieuPhieuDN;
             if (phieu.GhiChuPhieuDN != null) existing.GhiChuPhieuDN = phieu.GhiChuPhieuDN;
 
-            // Chi tiết của bộ tiêu chí cũ không còn hiệu lực được loại bỏ khi phiếu được chấm lại.
-            var legacy = existing.ChiTietChamDiems.Where(c => !activeIds.Contains(c.MaTieuChi)).ToList();
-            Context.ChiTietChamDiems.RemoveRange(legacy);
+            // Giữ chi tiết rubric cũ làm lịch sử. Các service đọc/tính điểm lọc theo rubric đúng đợt;
+            // lưu lại không được xóa lịch sử hoặc làm lần sửa trong cửa sổ mở lại bị chặn vì DELETE.
         }
 
         foreach (var ct in chiTiets)
@@ -101,6 +114,7 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
         }
 
         await Context.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
         return existing;
     }
 
@@ -108,7 +122,7 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
     {
         var phanBos = await Context.PhanBoThucTaps.AsNoTracking()
             .Include(p => p.CongTy)
-            .Where(p => p.MaDot == maDot && p.TrangThai != "Huy")
+            .Where(p => p.MaDot == maDot && p.DaDuocKhoaDuyet && (p.TrangThai == "DangThucTap" || p.TrangThai == "HoanThanh"))
             .ToListAsync();
         var phieus = await DbSet.AsNoTracking()
             .Include(p => p.ChiTietChamDiems)
@@ -116,11 +130,18 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             .Where(p => p.MaDot == maDot)
             .ToListAsync();
 
-        var maSVs = phanBos.Select(p => p.MaSinhVien).Concat(phieus.Select(p => p.MaSV)).Distinct().ToList();
+        var participantIds = await Context.SinhVienThamGiaDots.Where(x => x.MaDot == maDot && x.DangThamGia).Select(x => x.MaSV)
+            .Union(Context.PhanBoThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSinhVien))
+            .Union(Context.DangKyThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
+            .Union(Context.DeXuatThucTapTuTims.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
+            .Union(Context.GVHuongDans.Where(x => x.MaDot == maDot).Select(x => x.MaSinhVien))
+            .Union(Context.TienDoThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSV)).ToListAsync();
+        var nonCompletion = (await Context.KhongHoanTatDots.AsNoTracking().Where(x => x.MaDot == maDot && x.HieuLuc).Select(x => x.MaSV).ToListAsync()).ToHashSet();
+        var maSVs = participantIds.Concat(phieus.Select(p => p.MaSV)).Distinct().ToList();
         var sinhViens = await Context.SinhViens.AsNoTracking().Where(s => maSVs.Contains(s.MaSV)).ToListAsync();
         var phanCongs = await Context.GVHuongDans.AsNoTracking()
             .Include(g => g.GiangVien)
-            .Where(g => maSVs.Contains(g.MaSinhVien) && g.TrangThai == "DangHuongDan")
+            .Where(g => maSVs.Contains(g.MaSinhVien) && g.MaDot == maDot && g.TrangThai == "DangHuongDan")
             .ToListAsync();
 
         var result = new List<BangDiemNguon>();
@@ -132,7 +153,7 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
                 continue;
 
             var congTy = phanBos.Where(p => p.MaSinhVien == sv.MaSV).OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy;
-            result.Add(new BangDiemNguon(sv, congTy, pc?.MaGiangVien, pc?.GiangVien?.HoTen, phieu));
+            result.Add(new BangDiemNguon(sv, congTy, pc?.MaGiangVien, pc?.GiangVien?.HoTen, phieu, nonCompletion.Contains(sv.MaSV)));
         }
         return result;
     }

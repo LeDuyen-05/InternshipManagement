@@ -81,5 +81,9 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpPost("logout")]
-    public IActionResult Logout() => Ok(new { message = "Đăng xuất thành công. Client xóa JWT." });
+    public async Task<IActionResult> Logout()
+    {
+        await _service.RevokeSessionsAsync(User.MaTaiKhoan() ?? "");
+        return Ok(new { message = "Đã đăng xuất và thu hồi các phiên đăng nhập của tài khoản." });
+    }
 }

@@ -21,25 +21,8 @@ public static class DatabaseSchemaMigrator
             "IF COL_LENGTH('PHIEUCHAMDIEM', 'daDoiChieuPhieuDN') IS NULL ALTER TABLE PHIEUCHAMDIEM ADD daDoiChieuPhieuDN BIT NOT NULL CONSTRAINT DF_PHIEUCHAMDIEM_daDoiChieuPhieuDN DEFAULT 0;",
             "IF COL_LENGTH('PHIEUCHAMDIEM', 'ghiChuPhieuDN') IS NULL ALTER TABLE PHIEUCHAMDIEM ADD ghiChuPhieuDN NVARCHAR(500) NULL;",
 
-            """
-            IF NOT EXISTS (SELECT 1 FROM TIEUCHI WHERE maTieuChi = 'CLO11')
-            BEGIN
-                EXEC('
-                INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa, maRubric, maCLO) VALUES
-                (''CLO11'', N''Mục tiêu, nội dung và ý nghĩa công việc thực tập'', 0.75, ''CNTT_CLO_V1'', ''CLO1.1''),
-                (''CLO12'', N''Giới thiệu đơn vị thực tập'', 0.75, ''CNTT_CLO_V1'', ''CLO1.2''),
-                (''CLO13'', N''Vị trí công việc và kế hoạch thực tập'', 0.50, ''CNTT_CLO_V1'', ''CLO1.3''),
-                (''CLO21'', N''Vận dụng kiến thức để thực hiện công việc'', 0.50, ''CNTT_CLO_V1'', ''CLO2.1''),
-                (''CLO22'', N''Giải thích phương pháp thực hiện công việc'', 0.50, ''CNTT_CLO_V1'', ''CLO2.2''),
-                (''CLO31'', N''Yêu cầu công việc tại doanh nghiệp'', 0.50, ''CNTT_CLO_V1'', ''CLO3.1''),
-                (''CLO32'', N''Chất lượng báo cáo thực tập'', 0.50, ''CNTT_CLO_V1'', ''CLO3.2''),
-                (''CLO33'', N''Thuyết trình kết quả thực tập'', 0.50, ''CNTT_CLO_V1'', ''CLO3.3''),
-                (''CLO34'', N''Trả lời câu hỏi của giảng viên'', 0.50, ''CNTT_CLO_V1'', ''CLO3.4''),
-                (''CLO41'', N''Doanh nghiệp nhận xét thái độ, trách nhiệm và kỷ luật'', 2.00, ''CNTT_CLO_V1'', ''CLO4.1''),
-                (''CLO42'', N''Doanh nghiệp nhận xét năng lực vận dụng kiến thức thực tế'', 3.00, ''CNTT_CLO_V1'', ''CLO4.2'');
-                ');
-            END
-            """
+            // Dọn dẹp dứt điểm các mã tiêu chí thừa cũ (CLO11..CLO42 không có trong phiếu chấm) để bảo đảm duy nhất 1 bộ 11 CLO chuẩn
+            "DELETE FROM TIEUCHI WHERE maTieuChi IN ('CLO11','CLO12','CLO13','CLO21','CLO22','CLO31','CLO32','CLO33','CLO34','CLO41','CLO42') AND NOT EXISTS (SELECT 1 FROM CHITIETCHAMDIEM c WHERE c.maTieuChi = TIEUCHI.maTieuChi);"
         };
 
         foreach (var sql in statements)
