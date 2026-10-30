@@ -1,102 +1,107 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { goiYCongTyService } from '../../services/goiYCongTyService'
+import { dangKyThucTapService } from '../../services/dangKyThucTapService'
 import { useIdentity } from '../../hooks/useIdentity'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
+import RecommendationScore from '../../components/common/RecommendationScore'
 
 export default function GoiYCongTyAIPage() {
   const { maSV: selectedMaSV } = useIdentity()
+  const { selectedDot, roundLock } = useDotThucTap()
+  const maDot = selectedDot?.maDot
   const navigate = useNavigate()
-  // Nộp nguyện vọng thật qua trang Đăng ký (kiểm tra đợt, chỉ tiêu, giới hạn 3 NV, đã trúng tuyển...)
-  const dangKyNguyenVong = (item) => navigate('/sinh-vien/dang-ky', { state: { maCongTy: item.maCongTy } })
   const [topK, setTopK] = useState(5)
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const contextKey = JSON.stringify([selectedMaSV, maDot, topK])
+  const current = useRef(contextKey); current.current = contextKey
+  const requestVersion = useRef(0)
+  const invalidateRequests = useCallback(() => { requestVersion.current++ }, [])
+  const [data, setData] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState(null)
   const [toastMsg, setToastMsg] = useState('')
-
-  // State Modal chỉnh sửa hồ sơ năng lực
   const [showEditModal, setShowEditModal] = useState(false)
-  const [editNdHoSo, setEditNdHoSo] = useState('')
-  const [editKyNang, setEditKyNang] = useState('')
-  const [editCongNghe, setEditCongNghe] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-
-  // State Modal xem chi tiết JD công ty
-  const [selectedCompany, setSelectedCompany] = useState(null)
-
-  const loadData = async (svId = selectedMaSV, k = topK) => {
-    try {
-      setLoading(true)
-      setError(null)
-      const res = await goiYCongTyService.getTopK(svId, k)
-      if (res.data?.success) {
-        setData(res.data.data)
-      } else {
-        setData(res.data)
-      }
-    } catch (err) {
-      console.error('Lỗi lấy gợi ý công ty:', err)
-      setError(err.response?.data?.message || err.message || 'Không thể tải dữ liệu gợi ý AI')
-    } finally {
-      setLoading(false)
-    }
+  const [editNdHoSo, setEditNdHoSo] = useState(''), [editKyNang, setEditKyNang] = useState('')
+  const [editCongNghe, setEditCongNghe] = useState(''), [editDuAn, setEditDuAn] = useState('')
+  const [submitting, setSubmitting] = useState(false), [selectedCompany, setSelectedCompany] = useState(null)
+  // Điều kiện đăng ký do backend quyết định (một nguồn duy nhất với trang Đăng ký):
+  // đã trúng tuyển/đang thực tập/đã hoàn thành đạt thì AI chỉ còn là tham khảo, không mở đăng ký.
+  const [dieuKien, setDieuKien] = useState(null)
+  const dieuKienKey = useRef('')
+  useEffect(() => {
+    const key = JSON.stringify([selectedMaSV, maDot])
+    dieuKienKey.current = key
+    setDieuKien(null)
+    if (!selectedMaSV || !maDot) return
+    dangKyThucTapService.getDieuKien(maDot)
+      .then(res => { if (dieuKienKey.current === key) setDieuKien(res || null) })
+      .catch(() => { if (dieuKienKey.current === key) setDieuKien({ duocDangKy: false, lyDo: 'Chưa kiểm tra được điều kiện đăng ký. Hãy mở trang Đăng ký để xem trạng thái.', loiTai: true }) })
+  }, [selectedMaSV, maDot])
+  const dotDangMo = selectedDot?.trangThai === 'DangDienRa'
+  const lyDoKhongDangKy = !dotDangMo
+    ? 'Đợt đang chọn không mở đăng ký nguyện vọng; gợi ý chỉ để tham khảo.'
+    : roundLock.structureBlocked
+      ? 'Đợt đã khóa thay đổi đăng ký; gợi ý chỉ để tham khảo.'
+      : dieuKien == null
+        ? 'Đang kiểm tra điều kiện đăng ký…'
+        : !dieuKien.duocDangKy
+          ? dieuKien.lyDo
+          : null
+  const daCoNoiThucTap = Boolean(dieuKien && !dieuKien.duocDangKy && !dieuKien.loiTai)
+  const showToast = msg => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 4000) }
+  const dangKyNguyenVong = item => {
+    if (lyDoKhongDangKy || item.maDot !== maDot || data?.maDot !== maDot || loading) return
+    navigate('/sinh-vien/dang-ky', { state: { maCongTy: item.maCongTy, maViTri: item.maViTri, maDot } })
   }
+
+  const loadData = useCallback(async (student, k, recalculate = false) => {
+    const key = JSON.stringify([student, maDot, k]), version = ++requestVersion.current
+    setData(null); setError(null); setLoading(true)
+    if (!student || !maDot) { setLoading(false); return false }
+    try {
+      const response = recalculate ? await goiYCongTyService.recalculate(student, k, maDot) : await goiYCongTyService.getTopK(student, k, maDot)
+      if (version !== requestVersion.current || current.current !== key) return false
+      const result = response.data?.success ? response.data.data : response.data
+      if (result?.maDot !== maDot) throw new Error('Phản hồi gợi ý không thuộc đợt đang chọn. Hãy tải lại.')
+      setData(result)
+      return true
+    } catch (e) {
+      if (version === requestVersion.current && current.current === key) setError(e.response?.data?.message || e.message || 'Không tải được gợi ý.')
+      return false
+    } finally {
+      if (version === requestVersion.current && current.current === key) setLoading(false)
+    }
+  }, [maDot])
 
   useEffect(() => {
-    if (selectedMaSV) loadData(selectedMaSV, topK)
-  }, [selectedMaSV, topK])
+    setSelectedCompany(null); setShowEditModal(false); setToastMsg('')
+    loadData(selectedMaSV, topK)
+    return invalidateRequests
+  }, [selectedMaSV, topK, loadData, invalidateRequests])
 
-  const showToast = (msg) => {
-    setToastMsg(msg)
-    setTimeout(() => setToastMsg(''), 4000)
-  }
-
-  // Kích hoạt tính toán lại AI
   const handleRecalculate = async () => {
-    try {
-      setLoading(true)
-      const res = await goiYCongTyService.recalculate(selectedMaSV, topK)
-      if (res.data?.success) {
-        setData(res.data.data)
-      }
-      showToast('Đã tính toán lại độ tương đồng AI thành công!')
-    } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi tính toán lại AI')
-    } finally {
-      setLoading(false)
-    }
+    if (await loadData(selectedMaSV, topK, true)) showToast('Đã cập nhật gợi ý tham khảo từ hồ sơ và JD hiện tại.')
   }
-
-  // Mở modal sửa hồ sơ
   const handleOpenEdit = () => {
-    const sv = data?.sinhVien
-    setEditNdHoSo(sv?.ndHoSo || '')
-    setEditKyNang(sv?.kyNang || '')
-    setEditCongNghe(sv?.congNghe || '')
+    if (!data || data.maDot !== maDot) return
+    const student = data.sinhVien
+    setEditNdHoSo(student?.ndHoSo || ''); setEditKyNang(student?.kyNang || '')
+    setEditCongNghe(student?.congNghe || ''); setEditDuAn(student?.duAnDaThucHien || '')
     setShowEditModal(true)
   }
-
-  // Lưu hồ sơ mới và cập nhật điểm AI
   const handleSaveHoSo = async () => {
+    const key = contextKey, round = maDot, version = ++requestVersion.current
+    if (!round || !selectedMaSV || submitting) return
+    setSubmitting(true); setError(null)
     try {
-      setSubmitting(true)
-      const res = await goiYCongTyService.capNhatHoSo(selectedMaSV, {
-        ndHoSo: editNdHoSo,
-        kyNang: editKyNang,
-        congNghe: editCongNghe,
-      })
-      if (res.data?.success) {
-        setData(res.data.data)
-      }
-      setShowEditModal(false)
-      showToast('Đã cập nhật hồ sơ và tính toán lại gợi ý AI theo kỹ năng mới!')
-    } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi cập nhật hồ sơ')
-    } finally {
-      setSubmitting(false)
-    }
+      const response = await goiYCongTyService.capNhatHoSo(selectedMaSV, { ndHoSo: editNdHoSo, kyNang: editKyNang, congNghe: editCongNghe, duAnDaThucHien: editDuAn }, topK, round)
+      if (current.current !== key || version !== requestVersion.current) return
+      const result = response.data?.success ? response.data.data : response.data
+      if (result?.maDot !== round) throw new Error('Phản hồi không thuộc đợt đang chọn.')
+      setData(result); setShowEditModal(false); showToast('Đã cập nhật hồ sơ và gợi ý theo nội dung mới.')
+    } catch (e) {
+      if (current.current === key) setError(e.response?.data?.message || e.message || 'Không lưu được hồ sơ.')
+    } finally { setSubmitting(false) }
   }
 
   const sv = data?.sinhVien
@@ -122,9 +127,9 @@ export default function GoiYCongTyAIPage() {
               <span className="material-symbols-outlined text-2xl">psychology</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Cố Vấn AI — Gợi Ý Doanh Nghiệp Thực Tập (Top-K)</h1>
+              <h1 className="text-xl font-bold text-slate-900">Gợi ý doanh nghiệp thực tập phù hợp hồ sơ</h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Mô hình xử lý ngôn ngữ tự nhiên <strong>TF-IDF & Cosine Similarity</strong> đối sánh hồ sơ năng lực với yêu cầu tuyển dụng
+                Đối sánh hồ sơ năng lực và yêu cầu tuyển dụng để hỗ trợ chọn nơi thực tập phù hợp.
               </p>
             </div>
           </div>
@@ -132,15 +137,13 @@ export default function GoiYCongTyAIPage() {
 
         {/* Gợi ý luôn áp dụng cho sinh viên đang đăng nhập. */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs">
-            <span className="text-slate-500 font-semibold">Tài khoản SV:</span>
-            <span className="font-bold text-purple-800">{selectedMaSV}</span>
-          </div>
+
 
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs">
             <span className="text-slate-500 font-semibold">Số gợi ý:</span>
             <select
               value={topK}
+              disabled={submitting}
               onChange={(e) => setTopK(Number(e.target.value))}
               className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
             >
@@ -153,27 +156,48 @@ export default function GoiYCongTyAIPage() {
           <button
             type="button"
             onClick={handleRecalculate}
-            disabled={loading}
-            title="Kích hoạt tính toán lại ma trận tương đồng AI"
+            disabled={loading || submitting || !maDot}
+            title="Cập nhật danh sách gợi ý theo hồ sơ mới nhất"
             className="px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
             <span className={`material-symbols-outlined text-base ${loading ? 'animate-spin' : ''}`}>sync</span>
-            <span>Tính lại AI</span>
+            <span>Cập nhật gợi ý</span>
           </button>
         </div>
       </div>
 
+      <div role="status" className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900 space-y-1.5 shadow-2xs">
+        <div className="flex items-center gap-2 font-bold text-sm text-blue-950">
+          <span className="material-symbols-outlined text-blue-700 text-[18px]">verified_user</span>
+          <span>Đợt thực tập: {selectedDot?.tenDot || 'Chưa chọn đợt'}</span>
+        </div>
+        <p className="text-slate-600 m-0 leading-relaxed">
+          Hệ thống tự động đối chiếu thông tin chuyên môn của sinh viên (kỹ năng, công nghệ, dự án) với các vị trí tuyển dụng được phê duyệt trong đợt để gợi ý danh sách phù hợp nhất.
+        </p>
+        <p className="text-slate-500 m-0 italic">
+          * {data?.daSuDungModelTrain ? 'Điểm số hiển thị là điểm xếp hạng chuyên môn từ mô hình học máy (Learning to Rank), hỗ trợ định hướng thứ tự ưu tiên.' : 'Tỷ lệ phần trăm thể hiện mức độ tương đồng chuyên môn tham khảo, không đại diện cho quyết định trúng tuyển chính thức của doanh nghiệp.'}
+        </p>
+      </div>
+      {lyDoKhongDangKy && dieuKien != null && (
+        <div role="alert" className={`p-4 rounded-xl border text-sm flex items-start gap-2 ${daCoNoiThucTap ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+          <span className="material-symbols-outlined text-base mt-0.5">{daCoNoiThucTap ? 'verified' : 'info'}</span>
+          <div>
+            <p className="font-semibold">{lyDoKhongDangKy}</p>
+            <p className="text-xs mt-0.5">Nút “Đăng ký” trên các gợi ý đã được tắt. Danh sách bên dưới (nếu có) chỉ để tham khảo.</p>
+          </div>
+        </div>
+      )}
       {loading ? (
         <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-3">
           <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-semibold text-slate-600">Đang chạy thuật toán phân tích TF-IDF và vector hóa hồ sơ...</p>
+          <p className="text-sm font-semibold text-slate-600">Đang đối chiếu hồ sơ và yêu cầu tuyển dụng trong đợt...</p>
         </div>
       ) : error ? (
         <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl text-center space-y-3">
           <span className="material-symbols-outlined text-rose-600 text-4xl">error_outline</span>
           <p className="text-sm font-bold text-rose-800">{error}</p>
           <button
-            onClick={() => loadData()}
+            onClick={() => loadData(selectedMaSV, topK)}
             className="px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700"
           >
             Thử lại
@@ -229,7 +253,7 @@ export default function GoiYCongTyAIPage() {
               <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 text-xs text-purple-900 flex items-start gap-2">
                 <span className="material-symbols-outlined text-purple-600 text-base mt-0.5">dataset</span>
                 <div>
-                  <span className="font-bold">Dữ liệu nguồn AI xử lý (NDHoSo): </span>
+                  <span className="font-bold">Tóm tắt mục tiêu & định hướng thực tập: </span>
                   <span className="text-slate-700 italic">{sv.ndHoSo}</span>
                 </div>
               </div>
@@ -238,39 +262,70 @@ export default function GoiYCongTyAIPage() {
 
           {/* 3. Danh sách Top-K Gợi ý Doanh Nghiệp */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <span>Bảng Xếp Hạng Top {topK} Doanh Nghiệp Phù Hợp Nhất</span>
-                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
-                    Khảo sát {data?.tongSoCongTyKhaoSat || 0} công ty
-                  </span>
-                </h2>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Xếp hạng theo điểm độ tương đồng Cosine giữa vector hồ sơ và vector JD tuyển dụng
-                </p>
-              </div>
+            {topList.length > 0 && (
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <span>Bảng Xếp Hạng Top {topK} Doanh Nghiệp Phù Hợp Nhất</span>
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
+                      Khảo sát {data?.tongSoCongTyKhaoSat || 0} công ty
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Kết quả đối sánh hồ sơ và yêu cầu tuyển dụng (JD). {data?.daSuDungModelTrain ? 'Điểm số là điểm xếp hạng ưu tiên, không phải xác suất trúng tuyển.' : 'Tỷ lệ hiển thị là mức độ tương đồng chuyên môn, không phải xác suất trúng tuyển.'}
+                  </p>
+                </div>
 
-              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
-                <span className="material-symbols-outlined text-base text-emerald-600">verified</span>
-                <span>Nguồn: <strong>{data?.nguonDuLieu}</strong></span>
+                <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
+                  <span className="material-symbols-outlined text-base text-emerald-600">verified</span>
+                  <span>Nguồn: <strong>Kế hoạch thực tập được Khoa phê duyệt</strong></span>
+                </div>
               </div>
-            </div>
+            )}
 
             {topList.length === 0 ? (
-              <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-2">
-                <span className="material-symbols-outlined text-slate-300 text-4xl">domain_disabled</span>
-                <p className="text-sm font-semibold text-slate-600">Hiện chưa có công ty nào được duyệt trong hệ thống để so khớp.</p>
+              <div className="bg-white p-8 sm:p-12 rounded-2xl border border-slate-200 shadow-xs text-center space-y-4">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                  <span className="material-symbols-outlined text-3xl">domain_disabled</span>
+                </div>
+                <div className="max-w-md mx-auto space-y-2">
+                  <h3 className="text-base font-bold text-slate-900">Chưa có doanh nghiệp được gợi ý</h3>
+                  <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                    {data?.thongBao || 'Chưa có công ty/JD hợp lệ còn nhận đăng ký trong đợt đang chọn.'}
+                  </p>
+                  <p className="text-xs text-slate-500 leading-relaxed">
+                    Chỉ hiển thị các vị trí tuyển dụng đã được Khoa phê duyệt kế hoạch, đúng đợt thực tập và còn chỉ tiêu tiếp nhận.
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/sinh-vien/dang-ky')}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">apartment</span>
+                    <span>{daCoNoiThucTap ? 'Xem trạng thái đăng ký thực tập' : 'Xem danh sách doanh nghiệp hoặc khai báo tự tìm'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRecalculate}
+                    disabled={loading || submitting || !maDot}
+                    className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">sync</span>
+                    <span>Thử tính lại</span>
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {topList.map((item, index) => {
                   const isRank1 = index === 0
-                  const isHighMatch = item.tiLeTuongThich >= 75
 
                   return (
                     <div
-                      key={item.maCongTy}
+                      key={item.maViTri || item.maCongTy}
                       className={`bg-white rounded-2xl border transition-all p-5 shadow-sm hover:shadow-md ${
                         isRank1
                           ? 'border-purple-300 ring-2 ring-purple-100'
@@ -306,64 +361,46 @@ export default function GoiYCongTyAIPage() {
                           <div className="flex items-center gap-1.5 flex-wrap pt-1">
                             <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                               <span className="material-symbols-outlined text-sm text-purple-600">auto_awesome</span>
-                              Kỹ năng khớp:
+                              Từ khóa chung:
                             </span>
-                            {item.kyNangPhuHop && item.kyNangPhuHop.length > 0 ? (
-                              item.kyNangPhuHop.map((skill) => (
-                                <span
-                                  key={skill}
-                                  className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-[11px] border border-emerald-200"
-                                >
-                                  ✓ {skill}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">Khớp theo định hướng chuyên môn tổng quát</span>
-                            )}
+                            {(() => {
+                              const stopWords = [
+                                // Âm tiết từ ghép bị tách
+                                'lập', 'trình', 'hệ', 'thống', 'phát', 'triển', 'kỹ', 'sư',
+                                'quản', 'lý', 'viên', 'thuật', 'dụng', 'năng', 'nghề',
+                                'công', 'nghệ', 'thông', 'tin', 'ứng', 'phần', 'mềm',
+                                'kiến', 'trúc', 'giải', 'pháp', 'điều', 'hành', 'chức',
+                                'thiết', 'kế', 'phân', 'tích', 'tích', 'hợp', 'xuất',
+                                // Từ nối / giới từ
+                                'và', 'các', 'cho', 'của', 'với', 'trong', 'theo', 'về',
+                                'từ', 'để', 'có', 'là', 'được', 'trên', 'tại', 'hoặc',
+                              ];
+                              const meaningful = (item.kyNangPhuHop || []).filter(s => !stopWords.includes(s.toLowerCase()));
+                              return meaningful.length > 0 ? (
+                                meaningful.map((skill) => (
+                                  <span
+                                    key={skill}
+                                    className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-[11px] border border-emerald-200"
+                                  >
+                                    ✓ {skill}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">Đang đối sánh yêu cầu công việc</span>
+                              );
+                            })()}
                           </div>
                         </div>
 
                         {/* Cột 2: Điểm tương đồng AI */}
                         <div className="flex lg:flex-col items-center lg:items-end justify-between border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 gap-2 min-w-[200px]">
-                          <div className="text-left lg:text-right">
-                            <div className="flex items-baseline gap-1 lg:justify-end">
-                              <span
-                                className={`text-2xl font-black font-mono ${
-                                  isHighMatch ? 'text-purple-700' : 'text-slate-700'
-                                }`}
-                              >
-                                {item.tiLeTuongThich}%
-                              </span>
-                              <span className="text-xs text-slate-400 font-semibold">Tương thích</span>
-                            </div>
-                            <span
-                              className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5 ${
-                                item.tiLeTuongThich >= 80
-                                  ? 'bg-purple-100 text-purple-700'
-                                  : item.tiLeTuongThich >= 65
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}
-                            >
-                              {item.danhGiaDoTuongThich}
-                            </span>
-                          </div>
-
-                          {/* Thanh tiến độ */}
-                          <div className="w-28 h-2 bg-slate-100 rounded-full overflow-hidden hidden lg:block">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                isHighMatch ? 'bg-purple-600' : 'bg-blue-600'
-                              }`}
-                              style={{ width: `${item.tiLeTuongThich}%` }}
-                            ></div>
-                          </div>
+                          <RecommendationScore item={item} index={index} total={data?.tongSoCongTyKhaoSat} />
 
                           {/* Nút tác vụ */}
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setSelectedCompany(item)}
+                              onClick={() => setSelectedCompany({ ...item, _index: index })}
                               className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
                             >
                               Xem JD
@@ -371,8 +408,9 @@ export default function GoiYCongTyAIPage() {
                             <button
                               type="button"
                               onClick={() => dangKyNguyenVong(item)}
-                              title="Mở form đăng ký nguyện vọng cho doanh nghiệp này"
-                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition-colors shadow-sm cursor-pointer"
+                              disabled={Boolean(lyDoKhongDangKy)}
+                              title={lyDoKhongDangKy || 'Mở form đăng ký nguyện vọng cho doanh nghiệp này'}
+                              className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition-colors shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-700"
                             >
                               Đăng ký
                             </button>
@@ -407,7 +445,7 @@ export default function GoiYCongTyAIPage() {
             </div>
 
             <p className="text-xs text-slate-500">
-              Thêm các từ khóa kỹ năng mới vào hồ sơ để thuật toán AI phân tích lại độ tương đồng với các JD công ty.
+              Cập nhật kỹ năng, công nghệ và dự án thực tế để hệ thống đối chiếu lại danh sách doanh nghiệp phù hợp nhất.
             </p>
 
             <div className="space-y-3">
@@ -418,6 +456,7 @@ export default function GoiYCongTyAIPage() {
                 <input
                   type="text"
                   value={editKyNang}
+                  maxLength={500}
                   onChange={(e) => setEditKyNang(e.target.value)}
                   placeholder="Ví dụ: C#, SQL, OOP, RESTful API..."
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white"
@@ -431,6 +470,7 @@ export default function GoiYCongTyAIPage() {
                 <input
                   type="text"
                   value={editCongNghe}
+                  maxLength={500}
                   onChange={(e) => setEditCongNghe(e.target.value)}
                   placeholder="Ví dụ: ASP.NET Core, ReactJS, Docker, AWS..."
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white"
@@ -438,12 +478,17 @@ export default function GoiYCongTyAIPage() {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">3. Dự án đã thực hiện:</label>
+                <textarea aria-label="Dự án đã thực hiện" maxLength={1000} rows={3} value={editDuAn} onChange={e => setEditDuAn(e.target.value)} className="w-full border rounded-xl p-2 text-xs" />
+              </div>
+              <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  3. Văn bản hồ sơ đầy đủ (NDHoSo cho mô hình TF-IDF):
+                  4. Văn bản mô tả năng lực:
                 </label>
                 <textarea
                   rows={4}
                   value={editNdHoSo}
+                  maxLength={10000}
                   onChange={(e) => setEditNdHoSo(e.target.value)}
                   placeholder="Nhập mô tả quá trình học tập, đồ án đã hoàn thành, định hướng nghề nghiệp..."
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white resize-none"
@@ -466,7 +511,7 @@ export default function GoiYCongTyAIPage() {
                 className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl flex items-center gap-1.5 shadow-sm disabled:opacity-50"
               >
                 {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                <span>Lưu & Tính Lại Điểm AI</span>
+                <span>Lưu hồ sơ và cập nhật gợi ý</span>
               </button>
             </div>
           </div>
@@ -493,9 +538,9 @@ export default function GoiYCongTyAIPage() {
 
             <div className="space-y-3 text-xs">
               <div className="p-3 bg-purple-50 rounded-xl flex justify-between items-center">
-                <span>Điểm tương thích hồ sơ:</span>
+                <span>Điểm gợi ý:</span>
                 <span className="text-base font-bold font-mono text-purple-800">
-                  {selectedCompany.tiLeTuongThich}% ({selectedCompany.danhGiaDoTuongThich})
+                  <RecommendationScore item={selectedCompany} index={selectedCompany._index} total={data?.tongSoCongTyKhaoSat} />
                 </span>
               </div>
 
@@ -531,7 +576,9 @@ export default function GoiYCongTyAIPage() {
               <button
                 type="button"
                 onClick={() => dangKyNguyenVong(selectedCompany)}
-                className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-sm"
+                disabled={Boolean(lyDoKhongDangKy)}
+                title={lyDoKhongDangKy || undefined}
+                className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Đăng ký nguyện vọng
               </button>

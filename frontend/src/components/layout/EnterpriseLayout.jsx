@@ -1,9 +1,11 @@
-import { useState, useEffect, createContext, useContext } from 'react'
+import { Suspense, useState, useEffect, useCallback, createContext, useContext } from 'react'
 import { Outlet } from 'react-router-dom'
 import EnterpriseHeader from './EnterpriseHeader.jsx'
 import EnterpriseSidebar from './EnterpriseSidebar.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import ResponsiveNavigation from './ResponsiveNavigation.jsx'
+import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 
 export const EnterpriseContext = createContext(null)
 
@@ -13,82 +15,71 @@ export function useEnterprise() {
 
 export default function EnterpriseLayout() {
   const { user } = useAuth()
+  const { selectedDot, loading: roundLoading } = useDotThucTap()
+  const maDot = selectedDot?.maDot
   const [activeCompany, setActiveCompany] = useState(null)
+  const [companyId, setCompanyId] = useState(() => localStorage.getItem('active_company_id'))
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const contextKey = JSON.stringify([user?.maTaiKhoan, user?.maDaiDien, maDot, companyId])
+  const [loadedKey, setLoadedKey] = useState(null)
+  const ready = loadedKey === contextKey && !roundLoading
+  const company = ready ? activeCompany : null
 
-  const handleSelectCompany = async (company) => {
-    if (user?.maVaiTro === 'VT05') return // Tài khoản đại diện doanh nghiệp gắn chặt với công ty của mình
-    try {
-      setLoading(true)
-      const res = await doanhNghiepService.getTongQuan(company.maCongTy)
-      setActiveCompany({
-        ...company,
-        ...(res?.congTy || {}),
-        daiDiens: res?.daiDiens || [],
-        daiDienChinh: res?.daiDiens?.[0] || company.daiDienChinh,
-        chiTieu: res?.chiTieu || null,
-      })
-      localStorage.setItem('active_company_id', company.maCongTy)
-    } catch (err) {
-      console.error('Lỗi chọn doanh nghiệp:', err)
-      setActiveCompany(company)
-      localStorage.setItem('active_company_id', company.maCongTy)
-    } finally {
-      setLoading(false)
-    }
+  const handleSelectCompany = (nextCompany) => {
+    if (user?.maVaiTro === 'VT05') return
+    setCompanyId(nextCompany.maCongTy)
+    localStorage.setItem('active_company_id', nextCompany.maCongTy)
   }
+  const updateChiTieu = useCallback((quota) => {
+    if (quota?.maDot !== maDot) return
+    setActiveCompany(previous => previous?.chiTieu?.maDot === maDot ? { ...previous, chiTieu: quota } : previous)
+  }, [maDot])
 
   useEffect(() => {
+    let active = true
+    setActiveCompany(null); setError(''); setLoading(true)
     async function initCompany() {
       try {
-        setLoading(true)
-        // 1. Nếu là tài khoản đại diện DN (VT05) có mã đại diện, tìm công ty theo đại diện
-        if (user?.maDaiDien) {
-          const repData = await doanhNghiepService.getByDaiDien(user.maDaiDien)
-          if (repData?.congTy) {
-            const overview = await doanhNghiepService.getTongQuan(repData.congTy.maCongTy)
-            setActiveCompany({
-              ...repData.congTy,
-              daiDiens: overview?.daiDiens || [],
-              daiDienChinh: repData,
-              chiTieu: overview?.chiTieu || null,
-            })
-            return
-          }
+        if (!maDot || roundLoading) return
+        let found, representative
+        if (user?.maVaiTro === 'VT05') {
+          if (!user.maDaiDien) throw new Error('Tài khoản chưa được gắn với đại diện doanh nghiệp.')
+          representative = await doanhNghiepService.getByDaiDien(user.maDaiDien)
+          found = representative?.congTy
+        } else {
+          const companies = await doanhNghiepService.getDanhSachDoanhNghiep()
+          found = companies?.find(c => c.maCongTy === companyId) || companies?.[0]
         }
-
-        // 2. Tải danh sách công ty từ database, lấy công ty đã lưu hoặc công ty đầu tiên
-        const companies = await doanhNghiepService.getDanhSachDoanhNghiep()
-        if (companies && companies.length > 0) {
-          const savedId = localStorage.getItem('active_company_id')
-          const found = companies.find((c) => c.maCongTy === savedId) || companies[0]
-          const overview = await doanhNghiepService.getTongQuan(found.maCongTy)
-          setActiveCompany({
-            ...found,
-            ...(overview?.congTy || {}),
-            daiDiens: overview?.daiDiens || [],
-            daiDienChinh: overview?.daiDiens?.[0] || found.daiDienChinh,
-            chiTieu: overview?.chiTieu || null,
-          })
-        }
+        if (!found) throw new Error('Chưa tìm thấy doanh nghiệp được cấp quyền.')
+        const overview = await doanhNghiepService.getTongQuan(found.maCongTy, maDot)
+        if (!active) return
+        if (overview?.chiTieu?.maDot !== maDot) throw new Error('Phản hồi không thuộc đợt đang chọn.')
+        setActiveCompany({ ...found, ...(overview.congTy || {}),
+          daiDiens: overview.daiDiens || [], daiDienChinh: representative || overview.daiDiens?.[0],
+          chiTieu: overview.chiTieu })
       } catch (err) {
-        console.error('Lỗi khởi tạo doanh nghiệp từ DB:', err)
+        if (active) setError(err.response?.data?.message || err.message || 'Không tải được doanh nghiệp trong đợt đang chọn.')
       } finally {
-        setLoading(false)
+        if (active) { setLoading(false); setLoadedKey(contextKey) }
       }
     }
-
     initCompany()
-  }, [user?.maDaiDien])
+    return () => { active = false }
+  }, [user?.maVaiTro, user?.maDaiDien, maDot, roundLoading, companyId, contextKey])
 
   return (
-    <EnterpriseContext.Provider value={{ activeCompany, setActiveCompany: handleSelectCompany, loading }}>
+    <EnterpriseContext.Provider value={{ activeCompany: company, setActiveCompany: handleSelectCompany, updateChiTieu, maDot, loading: loading || !ready }}>
       <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-        <EnterpriseSidebar activeCompany={activeCompany} />
-        <div className="pl-64 flex flex-col min-h-screen">
-          <EnterpriseHeader activeCompany={activeCompany} onSelectCompany={handleSelectCompany} />
-          <main className="flex-1 pt-16 p-6">
-            <Outlet />
+        <ResponsiveNavigation><EnterpriseSidebar activeCompany={company} /></ResponsiveNavigation>
+        <div className="lg:pl-64 flex flex-col min-h-screen">
+          <EnterpriseHeader activeCompany={company} onSelectCompany={handleSelectCompany} />
+          <main className="flex-1 pt-20 px-4 pb-4 sm:px-6 sm:pb-6 min-w-0">
+            <Suspense fallback={<div role="status" aria-live="polite" className="p-6 text-slate-600">Đang tải trang…</div>}>
+              {loading || !ready ? <p role="status">Đang tải doanh nghiệp theo đợt…</p>
+                : error ? <p role="alert" className="text-rose-700">{error}</p>
+                : <Outlet key={contextKey} />}
+            </Suspense>
           </main>
         </div>
       </div>

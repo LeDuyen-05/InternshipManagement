@@ -1,44 +1,47 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import AuthPage from '../pages/Auth/AuthPage.jsx'
-import DashboardPage from '../pages/Dashboard/DashboardPage.jsx'
-import AdminPage from '../pages/Admin/AdminPage.jsx'
-import KhoaPage from '../pages/Khoa/KhoaPage.jsx'
-import PhanBoGVHDPage from '../pages/Khoa/PhanBoGVHDPage.jsx'
-import ThongKeBaoCaoPage from '../pages/Khoa/ThongKeBaoCaoPage.jsx'
-import AIPage from '../pages/AI/AIPage.jsx'
-import ChangePasswordPage from '../pages/Account/ChangePasswordPage.jsx'
-import KhoaOperationsPage from '../pages/Khoa/KhoaOperationsPage.jsx'
-import KhoaDeadlinesPage from '../pages/Khoa/KhoaDeadlinesPage.jsx'
-import KhoaCommitteePage from '../pages/Khoa/KhoaCommitteePage.jsx'
-import KhoaCriteriaPage from '../pages/Khoa/KhoaCriteriaPage.jsx'
 
-import MainLayout from '../components/layout/MainLayout.jsx'
-import DashboardSinhVienPage from '../pages/SinhVien/DashboardSinhVienPage.jsx'
-import HoSoNangLucPage from '../pages/SinhVien/HoSoNangLucPage.jsx'
-import DangKyThucTapPage from '../pages/SinhVien/DangKyThucTapPage.jsx'
-import LichTrinhPhongVanPage from '../pages/SinhVien/LichTrinhPhongVanPage.jsx'
-import NopTienDoSVPage from '../pages/SinhVien/NopTienDoSVPage.jsx'
-import EnterpriseLayout from '../components/layout/EnterpriseLayout.jsx'
-import EnterpriseDashboardPage from '../pages/DoanhNghiep/EnterpriseDashboardPage.jsx'
-import QuanLyTinTuyenDungPage from '../pages/DoanhNghiep/QuanLyTinTuyenDungPage.jsx'
-import QuanLyUngVienPage from '../pages/DoanhNghiep/QuanLyUngVienPage.jsx'
-import LichPhongVanDNPage from '../pages/DoanhNghiep/LichPhongVanDNPage.jsx'
-import DanhGiaThucTapSinhPage from '../pages/DoanhNghiep/DanhGiaThucTapSinhPage.jsx'
-
-import GioiThieuCongTyPage from '../pages/GiangVien/GioiThieuCongTyPage.jsx'
-import DanhSachSVHuongDanPage from '../pages/GiangVien/DanhSachSVHuongDanPage.jsx'
-import TienDoThucTapSVPage from '../pages/GiangVien/TienDoThucTapSVPage.jsx'
-import ChamDiemCLOPage from '../pages/GiangVien/ChamDiemCLOPage.jsx'
-import ThongKeCLOPage from '../pages/Khoa/ThongKeCLOPage.jsx'
-import DuyetGioiThieuPage from '../pages/Khoa/DuyetGioiThieuPage.jsx'
-import PhanCongGVHDPage from '../pages/Khoa/PhanCongGVHDPage.jsx'
-import ThongBaoPage from '../pages/ThongBao/ThongBaoPage.jsx'
-import GoiYCongTyAIPage from '../pages/SinhVien/GoiYCongTyAIPage.jsx'
-import NotFoundPage from '../pages/NotFoundPage.jsx'
-import DashboardGVPage from '../pages/GiangVien/DashboardGVPage.jsx'
-import LichDeadlinePage from '../pages/GiangVien/LichDeadlinePage.jsx'
-import HoSoChuyenMonPage from '../pages/GiangVien/HoSoChuyenMonPage.jsx'
+const AuthPage = lazy(() => import('../pages/Auth/AuthPage.jsx'))
+const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage.jsx'))
+const AdminPage = lazy(() => import('../pages/Admin/AdminPage.jsx'))
+const KhoaPage = lazy(() => import('../pages/Khoa/KhoaPage.jsx'))
+const SinhVienTheoDotPage = lazy(() => import('../pages/Khoa/SinhVienTheoDotPage.jsx'))
+const PhanBoGVHDPage = lazy(() => import('../pages/Khoa/PhanBoGVHDPage.jsx'))
+const ThongKeBaoCaoPage = lazy(() => import('../pages/Khoa/ThongKeBaoCaoPage.jsx'))
+const AIPage = lazy(() => import('../pages/AI/AIPage.jsx'))
+const ChangePasswordPage = lazy(() => import('../pages/Account/ChangePasswordPage.jsx'))
+const DocumentsPage = lazy(() => import('../pages/Account/DocumentsPage.jsx'))
+const KhoaOperationsPage = lazy(() => import('../pages/Khoa/KhoaOperationsPage.jsx'))
+const KhoaDeadlinesPage = lazy(() => import('../pages/Khoa/KhoaDeadlinesPage.jsx'))
+const KhoaDoanhNghiepPage = lazy(() => import('../pages/Khoa/KhoaDoanhNghiepPage.jsx'))
+const KhoaCommitteePage = lazy(() => import('../pages/Khoa/KhoaCommitteePage.jsx'))
+const KhoaCriteriaPage = lazy(() => import('../pages/Khoa/KhoaCriteriaPage.jsx'))
+const MainLayout = lazy(() => import('../components/layout/MainLayout.jsx'))
+const DashboardSinhVienPage = lazy(() => import('../pages/SinhVien/DashboardSinhVienPage.jsx'))
+const HoSoNangLucPage = lazy(() => import('../pages/SinhVien/HoSoNangLucPage.jsx'))
+const DangKyThucTapPage = lazy(() => import('../pages/SinhVien/DangKyThucTapPage.jsx'))
+const LichTrinhPhongVanPage = lazy(() => import('../pages/SinhVien/LichTrinhPhongVanPage.jsx'))
+const NopTienDoSVPage = lazy(() => import('../pages/SinhVien/NopTienDoSVPage.jsx'))
+const EnterpriseLayout = lazy(() => import('../components/layout/EnterpriseLayout.jsx'))
+const EnterpriseDashboardPage = lazy(() => import('../pages/DoanhNghiep/EnterpriseDashboardPage.jsx'))
+const QuanLyTinTuyenDungPage = lazy(() => import('../pages/DoanhNghiep/QuanLyTinTuyenDungPage.jsx'))
+const QuanLyUngVienPage = lazy(() => import('../pages/DoanhNghiep/QuanLyUngVienPage.jsx'))
+const LichPhongVanDNPage = lazy(() => import('../pages/DoanhNghiep/LichPhongVanDNPage.jsx'))
+const DanhGiaThucTapSinhPage = lazy(() => import('../pages/DoanhNghiep/DanhGiaThucTapSinhPage.jsx'))
+const GioiThieuCongTyPage = lazy(() => import('../pages/GiangVien/GioiThieuCongTyPage.jsx'))
+const DanhSachSVHuongDanPage = lazy(() => import('../pages/GiangVien/DanhSachSVHuongDanPage.jsx'))
+const TienDoThucTapSVPage = lazy(() => import('../pages/GiangVien/TienDoThucTapSVPage.jsx'))
+const ChamDiemCLOPage = lazy(() => import('../pages/GiangVien/ChamDiemCLOPage.jsx'))
+const ThongKeCLOPage = lazy(() => import('../pages/Khoa/ThongKeCLOPage.jsx'))
+const DuyetGioiThieuPage = lazy(() => import('../pages/Khoa/DuyetGioiThieuPage.jsx'))
+const PhanCongGVHDPage = lazy(() => import('../pages/Khoa/PhanCongGVHDPage.jsx'))
+const ThongBaoPage = lazy(() => import('../pages/ThongBao/ThongBaoPage.jsx'))
+const GoiYCongTyAIPage = lazy(() => import('../pages/SinhVien/GoiYCongTyAIPage.jsx'))
+const NotFoundPage = lazy(() => import('../pages/NotFoundPage.jsx'))
+const DashboardGVPage = lazy(() => import('../pages/GiangVien/DashboardGVPage.jsx'))
+const LichDeadlinePage = lazy(() => import('../pages/GiangVien/LichDeadlinePage.jsx'))
+const HoSoChuyenMonPage = lazy(() => import('../pages/GiangVien/HoSoChuyenMonPage.jsx'))
 
 function Guard({ children, roles }) {
   const { user } = useAuth()
@@ -67,6 +70,7 @@ function RootRedirect() {
 
 export default function AppRoutes() {
   return (
+    <Suspense fallback={<div role="status" aria-live="polite" className="p-6 text-slate-600">Đang tải trang…</div>}>
     <Routes>
       {/* Public Route */}
       <Route path="/auth" element={<AuthPage />} />
@@ -86,26 +90,29 @@ export default function AppRoutes() {
       </Route>
 
       {/* Phân hệ Doanh nghiệp độc lập */}
-      <Route path="/doanh-nghiep" element={<Guard roles={['VT05', 'VT01', 'VT02']}><EnterpriseLayout /></Guard>}>
+      <Route path="/doanh-nghiep" element={<Guard roles={['VT05']}><EnterpriseLayout /></Guard>}>
         <Route index element={<EnterpriseDashboardPage />} />
         <Route path="tuyen-dung" element={<QuanLyTinTuyenDungPage />} />
         <Route path="ung-vien" element={<QuanLyUngVienPage />} />
         <Route path="phong-van" element={<LichPhongVanDNPage />} />
         <Route path="danh-gia" element={<DanhGiaThucTapSinhPage />} />
         <Route path="thong-bao" element={<ThongBaoPage />} />
+        <Route path="tai-lieu" element={<DocumentsPage />} />
       </Route>
       {/* Admin, Faculty & Lecturer Portal Routes (Wrapped with MainLayout & Guard) */}
       <Route element={<Guard><MainLayout /></Guard>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/admin" element={<Guard roles={['VT01']}><AdminPage /></Guard>} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
+        <Route path="/tai-lieu" element={<DocumentsPage />} />
         <Route path="/thong-bao" element={<ThongBaoPage />} />
 
         {/* Module Khoa */}
+        <Route path="/khoa/sinh-vien-theo-dot" element={<Guard roles={['VT02']}><SinhVienTheoDotPage /></Guard>} />
         <Route path="/khoa" element={<Guard roles={['VT02']}><KhoaPage /></Guard>} />
         <Route path="/khoa/dashboard" element={<Navigate to="/khoa/thong-ke-clo" replace />} />
         <Route path="/khoa/dot-thuc-tap" element={<Guard roles={['VT02']}><KhoaPage initialTab="dot" /></Guard>} />
-        <Route path="/khoa/doanh-nghiep" element={<Guard roles={['VT02']}><KhoaPage initialTab="ct" /></Guard>} />
+        <Route path="/khoa/doanh-nghiep" element={<Guard roles={['VT02']}><KhoaDoanhNghiepPage /></Guard>} />
         <Route path="/khoa/dang-ky" element={<Guard roles={['VT02']}><KhoaOperationsPage mode="registrations" /></Guard>} />
         <Route path="/khoa/phan-bo" element={<Guard roles={['VT02']}><PhanBoGVHDPage /></Guard>} />
         <Route path="/khoa/theo-doi" element={<Guard roles={['VT02']}><KhoaOperationsPage mode="progress" /></Guard>} />
@@ -117,6 +124,7 @@ export default function AppRoutes() {
         <Route path="/khoa/tieu-chi" element={<Guard roles={['VT02']}><KhoaCriteriaPage /></Guard>} />
         <Route path="/khoa/duyet-gioi-thieu" element={<Guard roles={['VT02']}><DuyetGioiThieuPage /></Guard>} />
         <Route path="/khoa/phan-cong" element={<Guard roles={['VT02']}><PhanCongGVHDPage /></Guard>} />
+        <Route path="/khoa/cham-diem" element={<Guard roles={['VT02']}><ChamDiemCLOPage /></Guard>} />
         <Route path="/khoa/thong-bao" element={<Guard roles={['VT02']}><ThongBaoPage /></Guard>} />
 
         {/* Module Giảng viên (Người 3) */}
@@ -124,7 +132,7 @@ export default function AppRoutes() {
         <Route path="/giang-vien/dashboard" element={<Guard roles={['VT03']}><DashboardGVPage /></Guard>} />
         <Route path="/giang-vien/sinh-vien" element={<Guard roles={['VT03']}><DanhSachSVHuongDanPage /></Guard>} />
         <Route path="/giang-vien/tien-do" element={<Guard roles={['VT03']}><TienDoThucTapSVPage /></Guard>} />
-        <Route path="/giang-vien/cham-diem" element={<Guard roles={['VT03']}><ChamDiemCLOPage /></Guard>} />
+        <Route path="/giang-vien/cham-diem" element={<Guard roles={['VT02', 'VT03']}><ChamDiemCLOPage /></Guard>} />
         <Route path="/giang-vien/gioi-thieu" element={<Guard roles={['VT03']}><GioiThieuCongTyPage /></Guard>} />
         <Route path="/giang-vien/lich-deadline" element={<Guard roles={['VT03']}><LichDeadlinePage /></Guard>} />
         <Route path="/giang-vien/ho-so" element={<Guard roles={['VT03']}><HoSoChuyenMonPage /></Guard>} />
@@ -145,5 +153,6 @@ export default function AppRoutes() {
       {/* Fallback */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
+    </Suspense>
   )
 }

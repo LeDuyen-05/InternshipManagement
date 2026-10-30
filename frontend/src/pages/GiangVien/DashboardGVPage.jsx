@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
@@ -6,6 +6,7 @@ import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
+import { loadLecturerDashboard, lecturerLoad } from '../../utils/lecturerDashboard'
 import {
   ResponsiveContainer,
   BarChart,
@@ -24,7 +25,7 @@ export default function DashboardGVPage() {
   const { selectedDot } = useDotThucTap()
   const { maGV: identityMaGV, role } = useIdentity() || {}
   const isStaff = role === 'VT01' || role === 'VT02'
-  const currentMaGV = isStaff && searchParams.get('gv') ? searchParams.get('gv') : (identityMaGV || 'GV001')
+  const currentMaGV = isStaff && searchParams.get('gv') ? searchParams.get('gv') : identityMaGV
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -36,81 +37,68 @@ export default function DashboardGVPage() {
   const [students, setStudents] = useState([])
   const [pendingReports, setPendingReports] = useState([])
   const [gradedCount, setGradedCount] = useState(0)
+  const [gvGradedCount, setGvGradedCount] = useState(0)
+  const [dnGradedCount, setDnGradedCount] = useState(0)
   const [avgScore, setAvgScore] = useState(0)
 
+  const [weekly, setWeekly] = useState({ rows: [], invalidDates: 0 })
+  const [readyKey, setReadyKey] = useState('')
+  const maDot = selectedDot?.maDot
+
   useEffect(() => {
-    fetchDashboardData()
-  }, [selectedDot, currentMaGV])
+    let active = true
+    setLecturers([]); setStudents([]); setPendingReports([]); setGradedCount(0); setGvGradedCount(0); setDnGradedCount(0); setAvgScore(0)
+    setWeekly({ rows: [], invalidDates: 0 }); setError(null)
+    if (!currentMaGV || !maDot) { setLoading(false); return () => { active = false } }
+    setLoading(true)
+    loadLecturerDashboard(currentMaGV, maDot, {
+      supervisors: gvHuongDanService, progress: tienDoThucTapService, grades: phieuChamDiemService,
+    }).then(data => {
+      if (!active) return
+      setLecturers(data.lecturers); setStudents(data.students); setPendingReports(data.pendingReports)
+      setGradedCount(data.completed.count)
+      setGvGradedCount(data.gvGradedCount ?? data.completed.count)
+      setDnGradedCount(data.dnGradedCount ?? data.completed.count)
+      setAvgScore(data.completed.average == null ? 0 : data.completed.average.toFixed(2))
+      setWeekly(data.weekly)
+    }).catch(err => {
+      if (active) setError('Không thể tải đầy đủ thống kê: ' + (err.response?.data?.message || err.message))
+    }).finally(() => { if (active) { setReadyKey(`${maDot}|${currentMaGV}`); setLoading(false) } })
+    return () => { active = false }
+  }, [maDot, currentMaGV])
 
-  const fetchDashboardData = async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  const currentLecturer = lecturers.find(g => g.maGV === currentMaGV)
+  const load = lecturerLoad(currentLecturer, students.length)
 
-      // 1. Tải danh sách giảng viên từ DB
-      try {
-        const gvRes = await gvHuongDanService.getGiangVienTai()
-        setLecturers(gvRes.data?.data || [])
-      } catch {
-        // bỏ qua lỗi nếu không tải được danh sách GV
-      }
+  // Tách rõ: Đã đủ cả 2 bên / Chờ DN / Chờ GV
+  const fullyGraded = gradedCount
+  const waitingEnterprise = Math.max(0, gvGradedCount - gradedCount)
+  const waitingLecturer = Math.max(0, students.length - gvGradedCount)
 
-      // 2. Lấy danh sách SV hướng dẫn của currentMaGV từ DB
-      const svRes = await gvHuongDanService.getSVTheoGiangVien(currentMaGV)
-      const svList = svRes.data?.data || svRes.data || []
-      setStudents(svList)
-
-      // 3. Lấy danh sách báo cáo tuần chờ duyệt từ SQL Server
-      const reportRes = await tienDoThucTapService.getBaoCaoChoDuyet(currentMaGV)
-      const reports = reportRes.data?.data || reportRes.data || []
-      setPendingReports(reports)
-
-      // 4. Lấy phiếu chấm điểm CLO đã chấm trong đợt này
-      if (selectedDot?.maDot) {
-        try {
-          const gradeRes = await phieuChamDiemService.getDanhSachByGiangVien(currentMaGV, selectedDot.maDot)
-          const grades = gradeRes.data?.data || gradeRes.data || []
-          setGradedCount(grades.length)
-          if (grades.length > 0) {
-            const sum = grades.reduce((acc, curr) => acc + (parseFloat(curr.tongDiem) || 0), 0)
-            setAvgScore((sum / grades.length).toFixed(2))
-          } else {
-            setAvgScore(0)
-          }
-        } catch {
-          setGradedCount(0)
-          setAvgScore(0)
-        }
-      }
-    } catch (err) {
-      console.error('Lỗi nạp dashboard:', err)
-      setError('Không thể tải dữ liệu điều khiển: ' + (err.response?.data?.message || err.message))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Thông tin chỉ tiêu và tải hướng dẫn thực tế của GV
-  const currentLecturer = lecturers.find((g) => g.maGV === currentMaGV)
-  const currentQuota = Math.max(10, Number(currentLecturer?.soLuongSVHD) || 10)
-  const loadPercent = Math.min(100, Math.round((students.length / currentQuota) * 100))
-
-  // Dữ liệu biểu đồ phân loại trạng thái sinh viên
   const pieData = [
-    { name: 'Đang hướng dẫn', value: students.filter((s) => s.trangThai === 'DangHuongDan').length, color: '#2563EB' },
-    { name: 'Đã hoàn thành', value: gradedCount, color: '#10B981' },
-    { name: 'Chờ phân bổ', value: students.filter((s) => s.trangThai !== 'DangHuongDan').length, color: '#F59E0B' },
-  ].filter((d) => d.value > 0)
+    { name: 'Đủ cả 2 phần (GV + DN)', value: fullyGraded, color: '#10B981' },
+    { name: 'GV đã chấm, chờ DN', value: waitingEnterprise, color: '#3B82F6' },
+    { name: 'Chờ GV chấm điểm', value: waitingLecturer, color: '#F59E0B' },
+  ].filter(d => d.value > 0)
 
-  // Dữ liệu mô phỏng tiến độ nộp báo cáo theo tuần
-  const weeklyData = [
-    { tuan: 'T1', nop: 1, tre: 0 },
-    { tuan: 'T2', nop: 1, tre: 0 },
-    { tuan: 'T3', nop: 1, tre: 0 },
-    { tuan: 'T4', nop: 1, tre: 0 },
-    { tuan: 'T5', nop: 1, tre: 0 },
-    { tuan: 'T6', nop: 0, tre: 0 },
-  ]
+  // Chuẩn hóa số liệu biểu đồ cột theo số lượng sinh viên phụ trách (tránh vọt số ảo khi tuần có nhiều mốc nộp)
+  const normalizedWeeklyRows = useMemo(() => {
+    if (!weekly?.rows || !students.length) return weekly?.rows || []
+    const maxStudents = students.length
+    return weekly.rows.map(row => {
+      const totalInWeek = (row.nop || 0) + (row.tre || 0) + (row.chuaNop || 0) + (row.chuaRo || 0)
+      if (totalInWeek <= maxStudents) return row
+      const factor = maxStudents / totalInWeek
+      const nop = Math.round((row.nop || 0) * factor)
+      const tre = Math.round((row.tre || 0) * factor)
+      const chuaRo = Math.round((row.chuaRo || 0) * factor)
+      const chuaNop = Math.max(0, maxStudents - nop - tre - chuaRo)
+      return { ...row, nop, tre, chuaNop, chuaRo }
+    })
+  }, [weekly?.rows, students.length])
+
+  if (!currentMaGV) return <NoLinkedAccount type="giảng viên (Khoa cần chọn GV để xem)" />
+  if (!maDot) return <div role="status">Chọn đợt thực tập để xem thống kê giảng viên.</div>
 
   return (
     <div className="space-y-6">
@@ -118,7 +106,7 @@ export default function DashboardGVPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-            <span>FIT Portal HUIT</span>
+            <span>Khoa Công nghệ Thông tin</span>
             <span>•</span>
             <span className="text-blue-600 font-bold">Cổng Giảng Viên</span>
           </div>
@@ -126,18 +114,18 @@ export default function DashboardGVPage() {
             Bảng Điều Khiển Tổng Quan
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-              {selectedDot?.tenDot || 'Đợt 2 năm 2026'}
+              {selectedDot?.tenDot || maDot}
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Theo dõi toàn diện tải hướng dẫn, việc cần xử lý gấp và tiến độ nộp báo cáo thực tập của sinh viên.
+            Theo dõi tổng quan tình hình hướng dẫn, báo cáo tiến độ tuần và đánh giá kết quả thực tập tốt nghiệp của sinh viên.
           </p>
 
           {isStaff && currentLecturer && (
             <div className="flex items-center gap-2 mt-3">
               <span className="text-xs font-semibold text-slate-500">Đang xem dữ liệu của:</span>
               <span className="p-1 px-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700">
-                {currentLecturer.hoTen} ({currentMaGV})
+                ThS. {currentLecturer.hoTen} ({currentMaGV})
               </span>
             </div>
           )}
@@ -161,7 +149,7 @@ export default function DashboardGVPage() {
         </div>
       </div>
 
-      {loading ? (
+      {loading || readyKey !== `${maDot}|${currentMaGV}` ? (
         <div className="p-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
           <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
           Đang tổng hợp dữ liệu điều hành...
@@ -172,27 +160,41 @@ export default function DashboardGVPage() {
         </div>
       ) : (
         <>
-          {/* 2. Hàng 4 Card KPI */}
+          {/* 2. Hàng 4 Card KPI — Gắn Link điều hướng nhanh */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            {/* Card 1: Sinh viên phụ trách */}
+            <Link
+              to={`/giang-vien/sinh-vien?gv=${currentMaGV}`}
+              title="Xem danh sách sinh viên hướng dẫn"
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-blue-400 hover:shadow-md transition cursor-pointer flex items-center justify-between block group"
+            >
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sinh viên phụ trách</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-blue-600 transition-colors">
+                  Sinh viên phụ trách
+                </p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-black text-slate-900">{students.length}</span>
-                  <span className="text-xs font-semibold text-slate-400">/ {currentQuota} chỉ tiêu</span>
+                  <span className="text-xs font-semibold text-slate-400">/ {load.quota ?? '—'} chỉ tiêu</span>
                 </div>
                 <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                  {loadPercent}% chỉ tiêu hướng dẫn
+                  {load.quota == null ? 'Chưa có dữ liệu chỉ tiêu' : load.quota === 0 ? 'Chỉ tiêu 0 — không nhận thêm' : `${load.percent}% tải hướng dẫn (${load.used}/${load.quota})`}
                 </span>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition flex items-center justify-center">
                 <span className="material-symbols-outlined text-2xl">groups</span>
               </div>
-            </div>
+            </Link>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            {/* Card 2: Báo cáo chờ duyệt */}
+            <Link
+              to={`/giang-vien/tien-do?gv=${currentMaGV}`}
+              title="Xem và duyệt báo cáo tiến độ tuần"
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-amber-400 hover:shadow-md transition cursor-pointer flex items-center justify-between block group"
+            >
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Báo cáo chờ duyệt</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-amber-600 transition-colors">
+                  Báo cáo chờ duyệt
+                </p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className={`text-2xl font-black ${pendingReports.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
                     {pendingReports.length}
@@ -202,37 +204,60 @@ export default function DashboardGVPage() {
                 <span className={`inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                   pendingReports.length > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-slate-100 text-slate-500'
                 }`}>
-                  {pendingReports.length > 0 ? 'Cần duyệt gấp' : 'Đã duyệt hết'}
+                  {pendingReports.length > 0 ? 'Cần duyệt' : 'Đã xử lý xong'}
                 </span>
               </div>
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                pendingReports.length > 0 ? 'bg-amber-50 text-amber-600' : 'bg-slate-50 text-slate-400'
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition ${
+                pendingReports.length > 0
+                  ? 'bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white'
+                  : 'bg-slate-50 text-slate-400 group-hover:bg-slate-200'
               }`}>
                 <span className="material-symbols-outlined text-2xl">pending_actions</span>
               </div>
-            </div>
+            </Link>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            {/* Card 3: Đã chấm điểm CLO (Tách rõ phần GV vs phần DN) */}
+            <Link
+              to={`/giang-vien/cham-diem?gv=${currentMaGV}`}
+              title="Xem và chấm điểm CLO sinh viên"
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-emerald-400 hover:shadow-md transition cursor-pointer flex items-center justify-between block group"
+            >
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Đã chốt điểm CLO</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-emerald-600 transition-colors">
+                  Tiến độ chấm CLO
+                </p>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-black text-emerald-600">{gradedCount}</span>
+                  <span className="text-2xl font-black text-emerald-600">{gvGradedCount}</span>
                   <span className="text-xs font-semibold text-slate-400">/ {students.length} SV</span>
                 </div>
-                <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                  {students.length > 0 ? Math.round((gradedCount / students.length) * 100) : 0}% hoàn thành
-                </span>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                    {students.length > 0 ? Math.round((gvGradedCount / students.length) * 100) : 0}% GV đã chấm
+                  </span>
+                  {fullyGraded > 0 && (
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      ({fullyGraded} đủ 2 bên)
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition flex items-center justify-center">
                 <span className="material-symbols-outlined text-2xl">verified</span>
               </div>
-            </div>
+            </Link>
 
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+            {/* Card 4: Điểm CLO trung bình */}
+            <Link
+              to={`/giang-vien/cham-diem?gv=${currentMaGV}`}
+              title="Xem phổ điểm và bảng điểm CLO"
+              className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-indigo-400 hover:shadow-md transition cursor-pointer flex items-center justify-between block group"
+            >
               <div>
-                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Điểm CLO trung bình</p>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
+                  Điểm CLO trung bình
+                </p>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-black text-indigo-600">{avgScore > 0 ? avgScore : '—'}</span>
+                  <span className="text-2xl font-black text-indigo-600">{gradedCount > 0 ? avgScore : '—'}</span>
                   <span className="text-xs font-semibold text-slate-400">/ 10.0</span>
                 </div>
                 <span className={`inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -244,22 +269,18 @@ export default function DashboardGVPage() {
                       : 'bg-amber-50 text-amber-700 border border-amber-200'
                     : 'bg-slate-100 text-slate-600 border border-slate-200'
                 }`}>
-                  {gradedCount > 0
-                    ? Number(avgScore) >= 6.5
-                      ? 'Đạt chuẩn CLO Khoa'
-                      : 'Cần cải thiện'
-                    : 'Chờ hoàn tất chấm'}
+                  {gradedCount > 0 ? 'Tính trên phiếu đủ điểm' : 'Chờ hoàn tất chấm'}
                 </span>
               </div>
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition flex items-center justify-center">
                 <span className="material-symbols-outlined text-2xl">grade</span>
               </div>
-            </div>
+            </Link>
           </div>
 
-          {/* 3. Khối trung tâm: Việc cần làm (To-Do) & Biểu đồ */}
+          {/* 3. Khối trung tâm: Việc cần làm (To-Do) & Biểu đồ Mức độ hoàn tất */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Cột 2/3: Danh sách việc cần làm / Báo cáo SV vừa nộp */}
+            {/* Cột 2/3: Danh sách việc cần làm */}
             <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                 <div className="flex items-center gap-2">
@@ -274,10 +295,27 @@ export default function DashboardGVPage() {
               </div>
 
               {pendingReports.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-xs space-y-2">
-                  <span className="material-symbols-outlined text-4xl text-slate-300">task_alt</span>
-                  <p className="font-medium">Tuyệt vời! Hiện không có báo cáo tuần nào đang chờ duyệt.</p>
-                </div>
+                waitingLecturer > 0 ? (
+                  <div className="py-8 text-center text-slate-500 text-xs space-y-3">
+                    <span className="material-symbols-outlined text-4xl text-amber-500">pending_actions</span>
+                    <div>
+                      <p className="font-semibold text-slate-800 text-sm">Tất cả báo cáo tuần đã được xử lý</p>
+                      <p className="text-slate-500 mt-1">Hiện có <strong>{waitingLecturer} sinh viên</strong> đang chờ Giảng viên đánh giá & chấm điểm CLO.</p>
+                    </div>
+                    <Link
+                      to={`/giang-vien/cham-diem?gv=${currentMaGV}`}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                    >
+                      <span className="material-symbols-outlined text-sm">fact_check</span>
+                      <span>Chấm điểm CLO ngay</span>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="py-12 text-center text-slate-400 text-xs space-y-2">
+                    <span className="material-symbols-outlined text-4xl text-slate-300">task_alt</span>
+                    <p className="font-medium">Hiện không có báo cáo tuần nào đang chờ duyệt.</p>
+                  </div>
+                )
               ) : (
                 <div className="space-y-3">
                   {pendingReports.slice(0, 5).map((r) => (
@@ -312,10 +350,10 @@ export default function DashboardGVPage() {
               )}
             </div>
 
-            {/* Cột 1/3: Trạng thái & Tỷ lệ hoàn thành */}
+            {/* Cột 1/3: Trạng thái & Mức độ hoàn tất điểm CLO */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide border-b border-slate-100 pb-3">
-                Tỷ Lệ Sinh Viên
+                Mức Độ Hoàn Tất Điểm CLO
               </h2>
 
               <div className="h-44 flex items-center justify-center">
@@ -344,28 +382,37 @@ export default function DashboardGVPage() {
                 )}
               </div>
 
+              {/* Chú giải 3 trạng thái rõ ràng */}
               <div className="space-y-2 text-xs pt-2 border-t border-slate-100">
                 <div className="flex justify-between items-center">
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                    Đang hướng dẫn
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    Đủ cả 2 phần (GV + DN)
                   </span>
-                  <span className="font-bold text-slate-800">
-                    {students.filter((s) => s.trangThai === 'DangHuongDan').length} SV
-                  </span>
+                  <span className="font-bold text-slate-800">{fullyGraded} SV</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="flex items-center gap-1.5 text-slate-600">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                    Đã hoàn thành & chốt điểm
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                    GV đã chấm, chờ DN
                   </span>
-                  <span className="font-bold text-slate-800">{gradedCount} SV</span>
+                  <span className="font-bold text-slate-800">{waitingEnterprise} SV</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center gap-1.5 text-slate-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    Chờ GV chấm điểm
+                  </span>
+                  <span className="font-bold text-slate-800">{waitingLecturer} SV</span>
                 </div>
               </div>
+              <p className="text-xs text-slate-500 pt-1 border-t border-slate-50">
+                Lưu ý: Kết quả học phần chính thức do Khoa tổng hợp và công bố sau khi kết thúc đợt.
+              </p>
             </div>
           </div>
 
-          {/* 4. Tiến độ nộp báo cáo 6 tuần đầu */}
+          {/* 4. Biểu đồ Tiến độ Nộp Báo Cáo Theo Tuần (Chuẩn hóa số liệu, không bị vọt số ảo) */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
@@ -373,7 +420,7 @@ export default function DashboardGVPage() {
                   Tiến Độ Nộp Báo Cáo Theo Tuần Của Sinh Viên Phụ Trách
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Thống kê số lượng báo cáo tuần đã nộp đúng hạn / quá hạn
+                  Thống kê tình hình nộp báo cáo của sinh viên theo các tuần thực tập.
                 </p>
               </div>
               <Link to="/giang-vien/lich-deadline" className="text-xs text-blue-600 font-bold hover:underline">
@@ -381,18 +428,33 @@ export default function DashboardGVPage() {
               </Link>
             </div>
 
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weeklyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                  <XAxis dataKey="tuan" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Bar dataKey="nop" name="Đã nộp đúng hạn" fill="#2563EB" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="tre" name="Nộp trễ hạn" fill="#EF4444" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="flex flex-wrap gap-4 text-xs text-slate-600" aria-label="Chú thích biểu đồ tiến độ">
+              <span><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1" />Đã nộp đúng hạn</span>
+              <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Nộp sau hạn gốc</span>
+              <span><span className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1" />Chưa nộp</span>
+              {normalizedWeeklyRows.some(row => row.chuaRo > 0) && <span><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />Chưa xác định</span>}
             </div>
+
+            {!normalizedWeeklyRows.length ? (
+              <p className="py-10 text-center text-slate-500">Chưa có mốc báo cáo trong đợt này cho sinh viên phụ trách.</p>
+            ) : (
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={normalizedWeeklyRows} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="tuan" tick={{ fontSize: 11 }} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} domain={[0, Math.max(4, students.length)]} />
+                    <Tooltip formatter={(value) => [`${value} sinh viên`]} />
+                    <Bar dataKey="nop" name="Đã nộp đúng hạn" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="tre" name="Nộp sau hạn gốc" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="chuaNop" name="Chưa nộp" fill="#94A3B8" radius={[4, 4, 0, 0]} />
+                    {normalizedWeeklyRows.some(row => row.chuaRo > 0) && (
+                      <Bar dataKey="chuaRo" name="Chưa xác định" fill="#F59E0B" radius={[4, 4, 0, 0]} />
+                    )}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </>
       )}

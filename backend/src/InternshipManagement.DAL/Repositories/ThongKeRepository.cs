@@ -5,6 +5,11 @@ namespace InternshipManagement.DAL.Repositories;
 
 public class ThongKeRepository : IThongKeRepository
 {
+    public Task<ChotDotThucTap?> GetChotDotAsync(string maDot) => _context.ChotDotThucTaps.AsNoTracking().SingleOrDefaultAsync(x => x.MaDot == maDot);
+    public async Task<IReadOnlyList<KhongHoanTatDot>> GetKhongHoanTatAsync(string maDot)
+        => await _context.KhongHoanTatDots.AsNoTracking().Where(x => x.MaDot == maDot && x.HieuLuc).ToListAsync();
+    public async Task<IReadOnlyList<TieuChi>> GetTieuChisAsync(string maDot) => await _context.TieuChis.AsNoTracking()
+        .Where(x => x.NhomDanhGia != null && _context.DotThucTaps.Any(d => d.MaSo == maDot && d.MaRubric == x.MaRubric)).ToListAsync();
     private readonly AppDbContext _context;
 
     public ThongKeRepository(AppDbContext context)
@@ -47,19 +52,17 @@ public class ThongKeRepository : IThongKeRepository
 
         if (!string.IsNullOrWhiteSpace(maDot))
         {
-            // Kiểm tra xem có sinh viên nào có phân bổ trong đợt này không
-            var hasPhanBoInDot = await _context.PhanBoThucTaps.AnyAsync(pb => pb.MaDot == maDot);
-            if (hasPhanBoInDot)
-            {
-                return await query
-                    .Where(s => s.PhanBoThucTaps.Any(pb => pb.MaDot == maDot))
-                    .OrderBy(s => s.MaSV)
-                    .ToListAsync();
-            }
+            var ids = _context.SinhVienThamGiaDots.Where(x => x.MaDot == maDot && x.DangThamGia).Select(x => x.MaSV)
+                .Union(_context.DangKyThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
+                .Union(_context.PhanBoThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSinhVien))
+                .Union(_context.DeXuatThucTapTuTims.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
+                .Union(_context.GVHuongDans.Where(x => x.MaDot == maDot).Select(x => x.MaSinhVien))
+                .Union(_context.TienDoThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
+                .Union(_context.PhieuChamDiems.Where(x => x.MaDot == maDot).Select(x => x.MaSV));
+            return await query.Where(x => ids.Contains(x.MaSV)).OrderBy(x => x.MaSV).ToListAsync();
         }
 
-        // Nếu đợt chưa phân bổ cụ thể hoặc không truyền mã đợt, lấy toàn bộ sinh viên
-        return await query.OrderBy(s => s.MaSV).ToListAsync();
+        return Array.Empty<SinhVien>();
     }
 
     public async Task<IReadOnlyList<GVHuongDan>> GetGVHuongDansAsync()

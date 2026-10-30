@@ -2,6 +2,7 @@
 
 export const PHAN_BO = {
   ChuaNhanViec: 'Chờ sinh viên xác nhận',
+  ChoKhoaDuyet: 'Chờ Khoa chốt phân bổ',
   DangThucTap: 'Đang thực tập',
   HoanThanh: 'Hoàn thành thực tập',
   Huy: 'Đã hủy',
@@ -29,6 +30,7 @@ export const CONG_TY = {
 export function trangThaiNguyenVong(nv) {
   if (nv.daTiepNhan) return { label: 'Trúng tuyển', tone: 'emerald' }
   if (nv.trangThai === 'TuChoi') {
+    if (nv.ketQuaPhongVan === 'Vang') return { label: 'Vắng/bỏ phỏng vấn', tone: 'rose' }
     return { label: nv.ketQuaPhongVan === 'KhongDat' ? 'Phỏng vấn không đạt' : 'Không được chọn', tone: 'rose' }
   }
   if (nv.trangThai === 'DaDuyet') {

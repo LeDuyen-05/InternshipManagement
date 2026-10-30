@@ -4,6 +4,7 @@ public class SVHuongDanDto
 {
     public string MaSo { get; set; } = default!;
     public string MaSV { get; set; } = default!;
+    public string? MaDot { get; set; }
     public string HoTen { get; set; } = default!;
     public string? Lop { get; set; }
     public string? ChuyenNganh { get; set; }

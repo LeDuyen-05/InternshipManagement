@@ -1,9 +1,8 @@
 namespace InternshipManagement.BLL.Services.Recommendation;
 
 /// <summary>
-/// Ranking model đúng phạm vi đã chốt: score chính là Cosine Similarity của hai vector TF-IDF.
-/// "Huấn luyện" ở đây là bước xây vocabulary/IDF trên tập dữ liệu huấn luyện và dùng score
-/// cosine để học thứ tự ưu tiên. Không bổ sung thuật toán ML thứ hai.
+/// Baseline TF-IDF/cosine, chưa phải mô hình Learning to Rank học từ nhãn.
+/// Train chỉ xây vocabulary/IDF; không dùng tên hàm này làm bằng chứng đã train/đánh giá LTR.
 /// </summary>
 public sealed class RankingModel
 {

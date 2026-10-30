@@ -1,11 +1,15 @@
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import Sidebar from './Sidebar'
 import Header from './Header'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
+import RoundLockNotice from '../common/RoundLockNotice'
+import ResponsiveNavigation from './ResponsiveNavigation'
 
 export default function MainLayout() {
   const { user } = useAuth()
+  const { roundLock } = useDotThucTap()
   
   // Ánh xạ mã vai trò (VT01..VT05) sang Role hiển thị của Sidebar
   const mapRole = (maVaiTro) => {
@@ -29,15 +33,18 @@ export default function MainLayout() {
   return (
     <div className="min-h-screen bg-slate-50 antialiased font-sans">
       {/* Sidebar cố định bên trái (w-64) */}
-      <Sidebar currentRole={currentRole} onRoleChange={setCurrentRole} />
+      <ResponsiveNavigation><Sidebar currentRole={currentRole} onRoleChange={setCurrentRole} /></ResponsiveNavigation>
 
       {/* Header cố định trên cùng (bắt đầu từ left-64) */}
       <Header currentRole={currentRole} />
 
       {/* Khu vực nội dung các trang (bắt đầu từ lề trái pl-64 và lề trên pt-16) */}
-      <main className="pl-64 pt-16 min-h-screen">
-        <div className="p-6 max-w-7xl mx-auto">
-          <Outlet context={{ currentRole }} />
+      <main className="lg:pl-64 pt-16 min-h-screen">
+        <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+          <RoundLockNotice lock={roundLock} />
+          <Suspense fallback={<div role="status" aria-live="polite" className="p-6 text-slate-600">Đang tải trang…</div>}>
+            <Outlet context={{ currentRole }} />
+          </Suspense>
         </div>
       </main>
     </div>

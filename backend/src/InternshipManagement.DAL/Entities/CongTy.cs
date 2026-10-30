@@ -12,6 +12,7 @@ public class CongTy
     public string? EmbeddingYeuCau { get; set; }
     /// <summary>Mã SV đã tự đề xuất doanh nghiệp này (null nếu do Khoa/GV đưa vào).</summary>
     public string? MaSVDeXuat { get; set; }
+    public bool ChiTiepNhanTuTim { get; set; }
 
 
     public ICollection<DaiDienDoanhNghiep> DaiDienDoanhNghieps { get; set; } = new List<DaiDienDoanhNghiep>();

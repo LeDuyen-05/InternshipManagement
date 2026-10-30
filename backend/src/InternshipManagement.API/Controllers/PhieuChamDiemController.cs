@@ -20,6 +20,7 @@ public class PhieuChamDiemController : ControllerBase
     }
 
     [HttpGet("tieu-chi")]
+    [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien},{Roles.DaiDienDN}")]
     public async Task<IActionResult> GetDanhSachTieuChi([FromQuery] string? maDot, [FromQuery] string? nhom)
     {
         var result = await _service.GetDanhSachTieuChiAsync(maDot, nhom);
@@ -27,9 +28,10 @@ public class PhieuChamDiemController : ControllerBase
     }
 
     [HttpGet("sinh-vien/{maSV}/dot/{maDot}")]
+    [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien}")]
     public async Task<IActionResult> GetPhieuChamBySinhVien(string maSV, string maDot)
     {
-        if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
+        if (!await _access.CanAccessStudentAsync(User, maSV, maDot)) return Forbid();
         var result = await _service.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
         if (result == null)
         {
@@ -62,6 +64,6 @@ public class PhieuChamDiemController : ControllerBase
     public async Task<IActionResult> ChamDiem([FromBody] LuuPhieuChamRequest request)
     {
         var result = await _service.LuuPhieuChamDiemAsync(request, User.MaGV(), User.IsStaff());
-        return Ok(new { success = true, data = result, message = "Lưu và chốt điểm CLO thành công!" });
+        return Ok(new { success = true, data = result, message = "Đã lưu điểm phần giảng viên. Khoa thực hiện chốt điểm và khóa đợt riêng." });
     }
 }

@@ -3,7 +3,7 @@ using InternshipManagement.DAL.Entities;
 namespace InternshipManagement.DAL.Repositories;
 
 /// <summary>Dữ liệu thô cho một dòng của bảng điểm theo mẫu Khoa.</summary>
-public record BangDiemNguon(SinhVien SinhVien, string? TenCongTy, string? MaGV, string? TenGV, PhieuChamDiem? Phieu);
+public record BangDiemNguon(SinhVien SinhVien, string? TenCongTy, string? MaGV, string? TenGV, PhieuChamDiem? Phieu, bool KhongHoanTat = false);
 
 public interface IPhieuChamDiemRepository : IRepository<PhieuChamDiem>
 {
@@ -20,6 +20,7 @@ public interface IPhieuChamDiemRepository : IRepository<PhieuChamDiem>
     /// Các trường MaGVHuongDan/MaDaiDien/NhanXetGV/NhanXetDN chỉ cập nhật khi khác null.
     /// </summary>
     Task<PhieuChamDiem> LuuPhieuChamDiemAsync(PhieuChamDiem phieu, IEnumerable<ChiTietChamDiem> chiTiets);
-    Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV);
+    Task<bool> CanEnterpriseGradeAsync(string maSV, string maDot, string maDaiDien);
+    Task<GVHuongDan?> GetActiveAssignmentAsync(string maSV, string maDot);
     Task<IReadOnlyList<BangDiemNguon>> GetBangDiemNguonAsync(string maDot, string? maGV);
 }

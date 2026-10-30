@@ -14,6 +14,9 @@ public class ThongKeTongQuanDto
 
     public int DaChamCLO { get; set; }
     public int ChuaChamCLO { get; set; }
+    public int KhongHoanTatDot { get; set; }
+    public int DangChamCLO { get; set; }
+    public int ChuaBatDauCham { get; set; }
     public double DiemTrungBinhCLO { get; set; }
     public int SoLuongDat { get; set; }
     public int SoLuongKhongDat { get; set; }
@@ -30,6 +33,7 @@ public class PhanBoDiemCLODto
 
 public class DiemChiTietCLODto
 {
+    public string MaTieuChi { get; set; } = "";
     public string MaCLO { get; set; } = default!;
     public string TenCLO { get; set; } = default!;
     public double DiemTrungBinh { get; set; }
@@ -60,6 +64,10 @@ public class SinhVienDiemCLODto
     public double? DiemCLO3 { get; set; }
     public double? DiemCLO4 { get; set; }
     public double? TongDiem { get; set; }
+    public double? DiemTamTinh { get; set; }
+    public bool DaDuDiem { get; set; }
+    public bool DaChamGV { get; set; }
+    public bool DaChamDN { get; set; }
     public string XepLoai { get; set; } = "Chưa có";
     public string KetQua { get; set; } = "Chưa chấm"; // "Đạt", "Không đạt", "Chưa chấm"
     public DateTime? NgayCham { get; set; }
@@ -68,6 +76,7 @@ public class SinhVienDiemCLODto
 
 public class DiemTieuChiSinhVienDto
 {
+    public string MaTieuChi { get; set; } = "";
     public string MaCLO { get; set; } = default!;
     public double DiemCham { get; set; }
     public double DiemToiDa { get; set; }
@@ -75,6 +84,8 @@ public class DiemTieuChiSinhVienDto
 
 public class ThongKeBaoCaoResponse
 {
+    public string TrangThaiChotDot { get; set; } = "ChuaChot";
+    public int PhienBanChotDot { get; set; }
     public string MaDot { get; set; } = default!;
     public string TenDot { get; set; } = default!;
     public ThongKeTongQuanDto TongQuan { get; set; } = new();

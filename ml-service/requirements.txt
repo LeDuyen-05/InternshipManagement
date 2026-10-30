@@ -1,6 +1,0 @@
-pandas>=2.2.3
-numpy>=1.26
-scikit-learn>=1.5.2
-joblib>=1.4
-SQLAlchemy>=2.0.32
-pyodbc>=5.2.0

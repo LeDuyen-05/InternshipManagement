@@ -2,18 +2,21 @@ namespace InternshipManagement.BLL.DTOs.GVHuongDan;
 
 public class PhanCongDonLeRequest
 {
+    public string MaDot { get; set; } = default!;
     public string MaGV { get; set; } = default!;
     public string MaSV { get; set; } = default!;
 }
 
 public class PhanCongHangLoatRequest
 {
+    public string MaDot { get; set; } = default!;
     public string MaGV { get; set; } = default!;
     public List<string> DanhSachMaSV { get; set; } = new();
 }
 
 public class DoiGiangVienRequest
 {
+    public string MaDot { get; set; } = default!;
     public string MaSo { get; set; } = default!;
     public string MaGVMoi { get; set; } = default!;
 }
@@ -46,11 +49,13 @@ public class TuDongPhanCongPreviewItem
 
 public class TuDongPhanCongConfirmRequest
 {
+    public string MaDot { get; set; } = default!;
     public List<PhanCongDonLeRequest> DanhSachPhanCong { get; set; } = new();
 }
 
 public class TuDongPhanCongResult
 {
+    public string MaDot { get; set; } = default!;
     public int TongSoSVChuaPhanCong { get; set; }
     public int SoLuongGhepThanhCong { get; set; }
     public int SoLuongKhongTheGhep { get; set; }

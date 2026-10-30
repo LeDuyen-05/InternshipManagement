@@ -1,3 +1,5 @@
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
 import { useState, useEffect, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
@@ -13,6 +15,7 @@ export default function LichDeadlinePage() {
 
   const [profile, setProfile] = useState(null)
   const [svList, setSvList] = useState([])
+  const pagination = usePagination(svList, JSON.stringify([currentMaGV, selectedDot?.maDot]))
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -24,7 +27,7 @@ export default function LichDeadlinePage() {
       setLoading(true)
       const [resProfile, resSV] = await Promise.all([
         gvHuongDanService.getProfile(currentMaGV),
-        gvHuongDanService.getSVTheoGiangVien(currentMaGV),
+        gvHuongDanService.getSVTheoGiangVien(currentMaGV, '', selectedDot?.maDot),
       ])
       setProfile(resProfile.data?.data || resProfile.data)
 
@@ -380,7 +383,7 @@ export default function LichDeadlinePage() {
           <p className="text-xs text-slate-500 italic">Chưa có sinh viên nào được phân công cho {profile?.hoTen || currentMaGV}.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {svList.map((sv, idx) => (
+            {pagination.items.map((sv, idx) => (
               <div
                 key={sv.maSV || idx}
                 className="p-3 rounded-xl border border-slate-200/70 bg-slate-50/50 hover:bg-white hover:border-blue-300 transition-all flex items-center justify-between gap-3 text-xs shadow-2xs"
@@ -404,6 +407,7 @@ export default function LichDeadlinePage() {
                 </div>
               </div>
             ))}
+            <div className="col-span-full pt-3 border-t border-slate-100"><Pagination pagination={pagination} label="sinh viên trong lịch hướng dẫn"/></div>
           </div>
         )}
       </div>

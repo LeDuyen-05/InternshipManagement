@@ -9,6 +9,8 @@ import { hoSoNangLucService } from '../../services/hoSoNangLucService'
 import { dangKyThucTapService } from '../../services/dangKyThucTapService'
 import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import { PHAN_BO } from '../../utils/trangThai'
+import { studentJourney } from '../../utils/studentJourney'
+import DanhSachDuKienPanel from '../../components/common/DanhSachDuKienPanel'
 
 export default function DashboardSinhVienPage() {
   const { user, maSV: currentMaSV } = useIdentity()
@@ -19,26 +21,33 @@ export default function DashboardSinhVienPage() {
   const [reports, setReports] = useState([])
   const [registrations, setRegistrations] = useState([])
   const [phieuDiem, setPhieuDiem] = useState(null)
+  const [dieuKien, setDieuKien] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!currentMaSV) {
+    let active = true
+    setProfile(null); setPlacement(null); setReports([]); setRegistrations([]); setPhieuDiem(null); setDieuKien(null)
+    if (!currentMaSV || !selectedDot?.maDot) {
       setLoading(false)
-      return
+      return () => { active = false }
     }
 
     const fetchData = async () => {
       setLoading(true)
       try {
-        const [profData, pbData, repData, dkData, diemData] = await Promise.allSettled([
+        const [profData, pbData, repData, dkData, diemData, dkDieuKien] = await Promise.allSettled([
           hoSoNangLucService.getHoSoBySinhVien(currentMaSV),
-          phongVanService.getPhanBoThucTap(currentMaSV),
+          phongVanService.getPhanBoThucTap(currentMaSV, selectedDot.maDot),
           tienDoThucTapService.getTienDoBySinhVien(currentMaSV, selectedDot?.maDot),
           dangKyThucTapService.getDangKyBySinhVien(currentMaSV),
           selectedDot?.maDot
             ? phieuChamDiemService.getPhieuChamBySinhVien(currentMaSV, selectedDot.maDot)
             : Promise.resolve(null),
+          selectedDot?.maDot
+            ? dangKyThucTapService.getDieuKien(selectedDot.maDot)
+            : Promise.resolve(null),
         ])
+        if (!active) return
 
         // Mọi số liệu trên bảng điều khiển đều theo đợt thực tập đang chọn
         const thuocDot = (x) => !selectedDot?.maDot || x?.maDot === selectedDot.maDot
@@ -51,13 +60,15 @@ export default function DashboardSinhVienPage() {
         if (dkData.status === 'fulfilled') setRegistrations((dkData.value || []).filter(thuocDot))
         // apiClient trả về response axios → body là { success, data }
         if (diemData.status === 'fulfilled') setPhieuDiem(diemData.value?.data?.data ?? null)
+        if (dkDieuKien.status === 'fulfilled') setDieuKien(dkDieuKien.value || null)
       } catch (err) {
         console.error('Lỗi khi tải dữ liệu bảng điều khiển:', err)
       } finally {
-        setLoading(false)
+        if (active) setLoading(false)
       }
     }
     fetchData()
+    return () => { active = false }
   }, [currentMaSV, selectedDot?.maDot])
 
   if (!currentMaSV) {
@@ -70,41 +81,61 @@ export default function DashboardSinhVienPage() {
   const percentProgress = totalSlots > 0 ? Math.round((approvedReports / totalSlots) * 100) : 0
 
   // Đánh giá tiến độ 4 giai đoạn
-  const g1Done = Boolean(profile && registrations.length > 0)
-  const g2Done = Boolean(placement)
-  const g3Done = Boolean(placement && approvedReports > 0)
+  const journey = studentJourney({ profile, placement, registrations, reports })
+  const g1Done = journey.profileReady
+  const g2Done = journey.placementReady
+  const g3Done = journey.reportsApproved
   const g4Done = Boolean(phieuDiem?.daDuDiem)
+  const daHoanThanhHocPhan = Boolean(dieuKien && !dieuKien.duocDangKy && dieuKien.lyDo?.includes('đạt học phần'))
   const daTrungTuyen = registrations.some((r) => r.daTiepNhan)
   const soHoSoDat = registrations.filter((r) => r.trangThai === 'DaDuyet' && !r.daTiepNhan).length
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 1. Top Banner */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-2xs">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
             HỆ THỐNG QUẢN LÝ THỰC TẬP TỐT NGHIỆP • KHOA CNTT
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight m-0">
             Bảng Điều Khiển Sinh Viên
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <p className="text-sm text-slate-500 mt-1 mb-0">
             Chào mừng {profile?.hoTen || user?.hoTen || user?.tenDangNhap || 'Sinh viên'} (MSSV: {currentMaSV})
             {selectedDot ? ` • ${selectedDot.tenDot}` : ''}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <Link
-            to="/sinh-vien/tien-do"
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold shadow-xs transition-all"
-          >
-            <span className="material-symbols-outlined text-[18px]">post_add</span>
-            Nộp báo cáo tiến độ
-          </Link>
+          {placement ? (
+            <Link
+              to="/sinh-vien/tien-do"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">post_add</span>
+              <span>Nộp báo cáo tiến độ</span>
+            </Link>
+          ) : daHoanThanhHocPhan ? (
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-2xs">
+              <span className="material-symbols-outlined text-[18px] text-emerald-600">verified</span>
+              <span>Đã hoàn thành học phần</span>
+            </span>
+          ) : (
+            <Link
+              to="/sinh-vien/dang-ky"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">how_to_vote</span>
+              <span>Đăng ký nguyện vọng</span>
+            </Link>
+          )}
         </div>
       </div>
+
+      {/* 2. Thông báo danh sách dự kiến */}
+      {selectedDot?.maDot && <DanhSachDuKienPanel key={selectedDot.maDot} maDot={selectedDot.maDot}/>}
 
       {loading ? (
         <div className="flex flex-col items-center justify-center p-16 bg-white rounded-xl border border-slate-200">
@@ -206,28 +237,78 @@ export default function DashboardSinhVienPage() {
                 </div>
               </div>
             </div>
-          ) : (
-            <div className="p-8 bg-white rounded-2xl border border-slate-200 text-center">
-              <div className="w-14 h-14 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
-                <span className="material-symbols-outlined text-3xl">domain_disabled</span>
+          ) : daHoanThanhHocPhan ? (
+            <div className="p-8 bg-white rounded-2xl border border-emerald-200/90 shadow-2xs text-center flex flex-col items-center">
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-3xl">school</span>
               </div>
-              <h3 className="text-lg font-bold text-slate-800">Chưa có quyết định phân bổ</h3>
-              <p className="text-slate-500 text-sm max-w-md mx-auto mt-1 mb-4">
-                Bạn chưa được phân bổ vào doanh nghiệp tiếp nhận thực tập trong đợt này. Vui lòng đăng ký nguyện vọng hoặc theo dõi thông báo từ Khoa.
+              <h3 className="text-lg font-bold text-slate-900 m-0">Đã hoàn thành học phần thực tập tốt nghiệp</h3>
+              <p className="text-slate-600 text-xs max-w-xl mx-auto mt-2 mb-6 leading-relaxed">
+                {dieuKien.lyDo}
               </p>
-              <Link
-                to="/sinh-vien/dang-ky"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700"
-              >
-                <span>Xem danh sách doanh nghiệp tuyển dụng</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  to="/sinh-vien/lich-trinh"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-xs transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">history_edu</span>
+                  <span>Xem lịch sử phân bổ</span>
+                </Link>
+                <Link
+                  to="/sinh-vien/ho-so"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">badge</span>
+                  <span>Hồ sơ năng lực cá nhân</span>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 bg-white rounded-2xl border border-slate-200/90 shadow-2xs text-center flex flex-col items-center">
+              <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-3xl">corporate_fare</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 m-0">
+                {registrations.length > 0 ? 'Đang trong quá trình xét duyệt nguyện vọng' : 'Chưa có quyết định phân bổ'}
+              </h3>
+              <p className="text-slate-500 text-xs max-w-lg mx-auto mt-1.5 mb-6 leading-relaxed">
+                {registrations.length > 0
+                  ? `Bạn đã đăng ký ${registrations.length}/3 nguyện vọng trong đợt này. Vui lòng theo dõi kết quả sơ tuyển hồ sơ và lịch phỏng vấn của doanh nghiệp.`
+                  : 'Bạn chưa được phân bổ vào doanh nghiệp tiếp nhận thực tập trong đợt này. Hãy tham gia đăng ký nguyện vọng vào các doanh nghiệp đang tuyển dụng hoặc đề xuất đơn vị tiếp nhận tự tìm.'}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  to="/sinh-vien/dang-ky"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-xs transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">domain</span>
+                  <span>{registrations.length > 0 ? 'Theo dõi nguyện vọng' : 'Xem doanh nghiệp tuyển dụng'}</span>
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </Link>
+                {registrations.length === 0 ? (
+                  <Link
+                    to="/sinh-vien/dang-ky?tab=tu-tim"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                    <span>Đề xuất nơi thực tập tự tìm</span>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/sinh-vien/lich-trinh"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">event_available</span>
+                    <span>Xem lịch phỏng vấn</span>
+                  </Link>
+                )}
+              </div>
             </div>
           )}
 
           {/* Academic KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 bg-white rounded-xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+            <div className="p-5 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between">
               <div className="flex items-center justify-between text-slate-500">
                 <span className="text-xs font-bold uppercase tracking-wider">Tiến độ báo cáo</span>
                 <span className="material-symbols-outlined text-blue-700 text-[22px]">timelapse</span>
@@ -239,7 +320,9 @@ export default function DashboardSinhVienPage() {
                 <div className="w-full bg-slate-100 h-2 rounded-full mt-3 overflow-hidden">
                   <div className="bg-blue-700 h-full rounded-full transition-all" style={{ width: `${percentProgress}%` }}></div>
                 </div>
-                <div className="text-xs text-slate-500 mt-1.5">Tỷ lệ hoàn thành: {percentProgress}%</div>
+                <div className="text-xs text-slate-500 mt-1.5">
+                  {totalSlots === 0 ? "Chờ phân bổ chính thức để mở mốc báo cáo" : `Tỷ lệ hoàn thành: ${percentProgress}%`}
+                </div>
               </div>
             </div>
 
@@ -250,13 +333,14 @@ export default function DashboardSinhVienPage() {
               </div>
               <div className="mt-3">
                 <div className="text-2xl font-extrabold text-indigo-900">
-                  {submittedReports} <span className="text-sm font-normal text-slate-400">chờ duyệt</span>
+                  {totalSlots === 0 ? '—' : submittedReports}
+                  {totalSlots > 0 && <span className="text-sm font-normal text-slate-400"> chờ duyệt</span>}
                 </div>
                 <div className="text-xs text-emerald-600 font-semibold mt-1">
-                  {approvedReports} báo cáo đã phê duyệt
+                  {totalSlots === 0 ? 'Chưa mở mốc tiến độ' : `${approvedReports} báo cáo đã phê duyệt`}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  {totalSlots === 0 ? 'Chưa có mốc tiến độ' : `${totalSlots - approvedReports - submittedReports} mốc chưa nộp`}
+                  {totalSlots === 0 ? 'Mở sau khi nhận quyết định tiếp nhận' : `${totalSlots - approvedReports - submittedReports} mốc chưa nộp`}
                 </div>
               </div>
             </div>
@@ -271,11 +355,17 @@ export default function DashboardSinhVienPage() {
                   {registrations.length} <span className="text-sm font-normal text-slate-400">/ 3</span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  {daTrungTuyen
-                    ? 'Đã trúng tuyển ✓'
-                    : soHoSoDat > 0
-                      ? `${soHoSoDat} hồ sơ đạt, chờ phỏng vấn`
-                      : 'Chưa có nguyện vọng được duyệt'}
+                  {daHoanThanhHocPhan
+                    ? 'Đã hoàn thành học phần ✓'
+                    : daTrungTuyen
+                      ? 'Đã trúng tuyển ✓'
+                      : soHoSoDat > 0
+                        ? `${soHoSoDat} hồ sơ đạt, chờ phỏng vấn`
+                        : registrations.length === 0
+                          ? 'Chưa đăng ký nguyện vọng nào'
+                          : registrations.some((r) => r.trangThai === 'ChoDuyet')
+                            ? `${registrations.filter((r) => r.trangThai === 'ChoDuyet').length} hồ sơ đang chờ xét duyệt`
+                            : 'Chưa có nguyện vọng được duyệt'}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">Tối đa 3 nguyện vọng/đợt</div>
               </div>
@@ -343,7 +433,7 @@ export default function DashboardSinhVienPage() {
                   </p>
                 </div>
                 <div className={`mt-3 text-xs font-bold ${g2Done ? 'text-emerald-700' : 'text-slate-400'}`}>
-                  {g2Done ? 'Đã hoàn thành ✓' : 'Chưa phân bổ'}
+                  {journey.placementLabel}
                 </div>
               </div>
 
@@ -365,7 +455,7 @@ export default function DashboardSinhVienPage() {
                 <div className={`mt-3 text-xs font-bold ${
                   g3Done ? 'text-emerald-700' : g2Done ? 'text-blue-700' : 'text-slate-400'
                 }`}>
-                  {g3Done ? 'Đang thực hiện tốt ✓' : g2Done ? 'Đang thực tập ⏳' : 'Chưa bắt đầu'}
+                  {g3Done ? 'Đã duyệt đủ mốc báo cáo ✓' : g2Done ? 'Đang cập nhật báo cáo' : 'Chưa bắt đầu'}
                 </div>
               </div>
 

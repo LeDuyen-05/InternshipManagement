@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { thongKeService } from '../services/thongKeService'
 import { useAuth } from './AuthContext'
+import { useRoundLock } from '../hooks/useRoundLock'
 
 // Danh sách các đợt thực tập chuẩn khớp với bảng DOTTHUCTAP trong SQL Server
 export const DANH_SACH_DOT_THUC_TAP = [
@@ -47,6 +48,7 @@ const DotThucTapContext = createContext(null)
 export function DotThucTapProvider({ children }) {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
   const [danhSachNamHoc, setDanhSachNamHoc] = useState(DANH_SACH_DOT_THUC_TAP)
 
   const [selectedDot, setSelectedDot] = useState(() => {
@@ -123,7 +125,7 @@ export function DotThucTapProvider({ children }) {
     return () => {
       isMounted = false
     }
-  }, [user])
+  }, [user, refreshVersion])
 
   // Đổi đợt thực tập và lưu vào localStorage
   const changeDot = (dot) => {
@@ -150,16 +152,19 @@ export function DotThucTapProvider({ children }) {
     }
   }
 
-  const isReadOnly = selectedDot?.trangThai === 'DaKetThuc'
+  const roundLock = useRoundLock(user ? selectedDot?.maDot : null)
+  const isReadOnly = selectedDot?.trangThai === 'DaKetThuc' || roundLock.structureBlocked
 
   return (
     <DotThucTapContext.Provider
       value={{
         loading,
+        refreshRounds: () => setRefreshVersion(v => v + 1),
         selectedDot,
         changeDot,
         resetToCurrentDot,
         isReadOnly,
+        roundLock,
         danhSachNamHoc,
         danhSachDot: danhSachNamHoc,
       }}

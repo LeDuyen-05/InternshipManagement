@@ -38,9 +38,13 @@ public class AuthService
 
         var check = _passwords.Verify(password, account.MatKhau);
         if (check == PasswordCheck.Failed) return null;
+        if (account.MaVaiTro == "VT05"
+            && await EnterpriseAccountPolicy.HasOtherActiveAccountAsync(_db, account.MaDaiDien, account.MaTaiKhoan))
+            throw new InvalidOperationException("Doanh nghiệp có nhiều tài khoản đại diện hoạt động hoặc liên kết không hợp lệ. Liên hệ QTV xác minh tài khoản được giữ quyền.");
         if (check == PasswordCheck.SuccessNeedsRehash)
         {
             account.MatKhau = _passwords.Hash(password);
+            account.SecurityStamp = Guid.NewGuid().ToString("N");
             await _db.SaveChangesAsync();
         }
         return account;
@@ -95,6 +99,15 @@ public class AuthService
             throw new InvalidOperationException("Mật khẩu cũ không đúng.");
 
         account.MatKhau = _passwords.Hash(request.MatKhauMoi);
+        account.SecurityStamp = Guid.NewGuid().ToString("N");
+        await _db.SaveChangesAsync();
+    }
+
+    public async Task RevokeSessionsAsync(string maTaiKhoan)
+    {
+        var account = await _db.TaiKhoans.FindAsync(maTaiKhoan)
+            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản.");
+        account.SecurityStamp = Guid.NewGuid().ToString("N");
         await _db.SaveChangesAsync();
     }
 
@@ -126,7 +139,7 @@ public class AuthService
         return ToProfileDto(account, hoTen);
     }
 
-    private async Task<string?> ResolveHoTenAsync(TaiKhoan account)
+    public async Task<string?> ResolveHoTenAsync(TaiKhoan account)
     {
         if (!string.IsNullOrEmpty(account.MaGV))
             return (await _db.GiangViens.FindAsync(account.MaGV))?.HoTen;

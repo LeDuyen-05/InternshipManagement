@@ -1,48 +1,32 @@
-﻿-- ============================================================
+-- ============================================================
 -- HỆ THỐNG QUẢN LÝ THỰC TẬP TỐT NGHIỆP
--- T-SQL Script - Tạo Cơ Sở Dữ Liệu
+-- T-SQL tạo CSDL TEST riêng QuanLyThucTap_WebTest; KHÔNG ghi vào QuanLyThucTap gốc.
 -- ============================================================
 
 USE master;
 GO
 
-IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'QuanLyThucTap')
+IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = N'QuanLyThucTap_WebTest')
 BEGIN
-    CREATE DATABASE QuanLyThucTap
+    CREATE DATABASE QuanLyThucTap_WebTest
     COLLATE Vietnamese_CI_AS;
 END
 GO
 
-USE QuanLyThucTap;
+USE QuanLyThucTap_WebTest;
 GO
 
 SET QUOTED_IDENTIFIER ON;
 GO
 
 -- ============================================================
--- XÓA CÁC BẢNG NẾU ĐÃ TỒN TẠI (theo thứ tự phụ thuộc FK)
--- ============================================================
-IF OBJECT_ID('THONGBAO',           'U') IS NOT NULL DROP TABLE THONGBAO;
-IF OBJECT_ID('TAIKHOAN',           'U') IS NOT NULL DROP TABLE TAIKHOAN;
-IF OBJECT_ID('CHITIETCHAMDIEM',    'U') IS NOT NULL DROP TABLE CHITIETCHAMDIEM;
-IF OBJECT_ID('PHIEUCHAMDIEM',      'U') IS NOT NULL DROP TABLE PHIEUCHAMDIEM;
-IF OBJECT_ID('TIEUCHI',            'U') IS NOT NULL DROP TABLE TIEUCHI;
-IF OBJECT_ID('TIENDOTHUCTAP',      'U') IS NOT NULL DROP TABLE TIENDOTHUCTAP;
-IF OBJECT_ID('HUONGDANDOANHNGHIEP','U') IS NOT NULL DROP TABLE HUONGDANDOANHNGHIEP;
-IF OBJECT_ID('PHONGVAN',           'U') IS NOT NULL DROP TABLE PHONGVAN;
-IF OBJECT_ID('PHANBOTHUCTAP',      'U') IS NOT NULL DROP TABLE PHANBOTHUCTAP;
-IF OBJECT_ID('DANGKYTHUCTAP',      'U') IS NOT NULL DROP TABLE DANGKYTHUCTAP;
-IF OBJECT_ID('GOIYCONGTY',         'U') IS NOT NULL DROP TABLE GOIYCONGTY;
-IF OBJECT_ID('HOSONANGLUC',        'U') IS NOT NULL DROP TABLE HOSONANGLUC;
-IF OBJECT_ID('GVHUONGDAN',         'U') IS NOT NULL DROP TABLE GVHUONGDAN;
-IF OBJECT_ID('GIOITHIEU',          'U') IS NOT NULL DROP TABLE GIOITHIEU;
-IF OBJECT_ID('DAIDIENDOANHNGHIEP', 'U') IS NOT NULL DROP TABLE DAIDIENDOANHNGHIEP;
-IF OBJECT_ID('DOTTHUCTAP',         'U') IS NOT NULL DROP TABLE DOTTHUCTAP;
-IF OBJECT_ID('CONGTY',             'U') IS NOT NULL DROP TABLE CONGTY;
-IF OBJECT_ID('VAITRO',             'U') IS NOT NULL DROP TABLE VAITRO;
-IF OBJECT_ID('THANGDIEM',           'U') IS NOT NULL DROP TABLE THANGDIEM;
-IF OBJECT_ID('SINHVIEN',           'U') IS NOT NULL DROP TABLE SINHVIEN;
-IF OBJECT_ID('GIANGVIEN',          'U') IS NOT NULL DROP TABLE GIANGVIEN;
+-- CHỈ KHỞI TẠO CSDL RỖNG. Chạy lại giữ nguyên dữ liệu đang test.
+-- Khi bị chặn, mở kết nối/query mới trước khi chạy script khác (NOEXEC ON).
+IF EXISTS (SELECT 1 FROM sys.tables)
+BEGIN
+    RAISERROR(N'CSDL đã có bảng. Dừng để bảo toàn dữ liệu; hãy dùng CSDL test rỗng mới.', 16, 1);
+    SET NOEXEC ON;
+END;
 GO
 
 -- ============================================================
@@ -120,6 +104,11 @@ CREATE TABLE DOTTHUCTAP (
     thoiGianKT      DATE            NOT NULL,
     trangThai       NVARCHAR(50)    NOT NULL DEFAULT N'ChuaBatDau',
     maRubric        NVARCHAR(40)    NOT NULL DEFAULT 'CNTT_CLO_V1',
+    HanDieuChinhNoiThucTap DATETIMEOFFSET NULL,
+    MoChamGV DATETIMEOFFSET NULL,
+    HanChamGV DATETIMEOFFSET NULL,
+    HanChamDN DATETIMEOFFSET NULL,
+    PhienBanThoiHan INT NOT NULL DEFAULT 0,
     CONSTRAINT PK_DOTTHUCTAP PRIMARY KEY (maSo),
     CONSTRAINT CK_DOTTHUCTAP_THOIGIAN  CHECK (thoiGianKT >= thoiGianBD),
     CONSTRAINT CK_DOTTHUCTAP_TRANGTHAI CHECK (trangThai IN (N'ChuaBatDau', N'DangDienRa', N'DaKetThuc'))
@@ -127,6 +116,49 @@ CREATE TABLE DOTTHUCTAP (
 GO
 
 -- ============================================================
+-- Danh sách SV tham gia đợt do Khoa chủ động thêm (không tự gán toàn bộ SV).
+CREATE TABLE NHATKYTHOIHAN (
+    MaNhatKy NVARCHAR(20) NOT NULL PRIMARY KEY,
+    MaDot NVARCHAR(20) NOT NULL,
+    Loai NVARCHAR(30) NOT NULL,
+    Truoc NVARCHAR(MAX) NOT NULL,
+    Sau NVARCHAR(MAX) NOT NULL,
+    LyDo NVARCHAR(1000) NOT NULL,
+    NguoiThucHien NVARCHAR(20) NOT NULL,
+    ThoiDiem DATETIMEOFFSET NOT NULL,
+    CONSTRAINT FK_NKTH_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo)
+);
+GO
+
+CREATE TABLE CONGTYTHEODOT (
+    MaGVGioiThieu NVARCHAR(20) NULL,
+    MaCongTy NVARCHAR(20) NOT NULL, MaDot NVARCHAR(20) NOT NULL,
+    ViTriTuyen NVARCHAR(500) NOT NULL, YeuCau NVARCHAR(MAX) NOT NULL,
+    SoLuongNhan INT NOT NULL, MoDangKy DATETIMEOFFSET NOT NULL, HanDangKy DATETIMEOFFSET NOT NULL,
+    HoatDong BIT NOT NULL DEFAULT 1, PhienBan INT NOT NULL DEFAULT 0,
+    CONSTRAINT PK_CONGTYTHEODOT PRIMARY KEY (MaCongTy,MaDot),
+    CONSTRAINT FK_CT_DOT_CT FOREIGN KEY (MaCongTy) REFERENCES CONGTY(maCongTy),
+    CONSTRAINT FK_CT_DOT_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+    CONSTRAINT FK_CT_DOT_GV FOREIGN KEY (MaGVGioiThieu) REFERENCES GIANGVIEN(maGV),
+    CONSTRAINT CK_CT_DOT_SOLUONG CHECK (SoLuongNhan > 0),
+    CONSTRAINT CK_CT_DOT_HAN CHECK (HanDangKy > MoDangKy)
+);
+GO
+
+CREATE TABLE SVTHAMGIADOT (
+    MaDot NVARCHAR(20) NOT NULL,
+    MaSV NVARCHAR(20) NOT NULL,
+    DangThamGia BIT NOT NULL CONSTRAINT DF_SVTGD_ACTIVE DEFAULT 1,
+    NgayThem DATETIMEOFFSET NOT NULL,
+    NguoiThem NVARCHAR(20) NOT NULL,
+    NgayCapNhat DATETIMEOFFSET NOT NULL,
+    NguoiCapNhat NVARCHAR(20) NOT NULL,
+    CONSTRAINT PK_SVTHAMGIADOT PRIMARY KEY (MaDot, MaSV),
+    CONSTRAINT FK_SVTGD_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+    CONSTRAINT FK_SVTGD_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV)
+);
+GO
+
 -- BẢNG 5: DAIDIENDOANHNGHIEP
 -- Lưu thông tin đại diện công ty tham gia hướng dẫn
 -- ============================================================
@@ -197,6 +229,11 @@ GO
 -- Lưu thông tin buổi phỏng vấn tuyển sinh viên thực tập
 -- ============================================================
 CREATE TABLE PHONGVAN (
+    MaDK NVARCHAR(20) NULL,
+    LyDoKetQua NVARCHAR(1000) NULL,
+    NguonKetQua NVARCHAR(20) NULL,
+    NguoiGhiKetQua NVARCHAR(20) NULL,
+    ThoiDiemKetQua DATETIMEOFFSET NULL,
     maPV        NVARCHAR(20)    NOT NULL,
     hinhThuc    NVARCHAR(100)   NULL,
     ngayPV      DATETIME2(0)    NOT NULL,   -- ngày + giờ phỏng vấn
@@ -206,7 +243,7 @@ CREATE TABLE PHONGVAN (
     CONSTRAINT PK_PHONGVAN PRIMARY KEY (maPV),
     CONSTRAINT FK_PV_DAIDIENDOANHNGHIEP FOREIGN KEY (maDaiDien) REFERENCES DAIDIENDOANHNGHIEP(maSo),
     CONSTRAINT FK_PV_SINHVIEN           FOREIGN KEY (maSV)      REFERENCES SINHVIEN(maSV),
-    CONSTRAINT CK_PV_KETQUA             CHECK (ketQua IN (N'Dat', N'KhongDat', N'ChuaCoKetQua', NULL))
+    CONSTRAINT CK_PV_KETQUA             CHECK (ketQua IN (N'Dat', N'KhongDat', N'Vang', N'ChuaCoKetQua'))
 );
 GO
 
@@ -215,6 +252,9 @@ GO
 -- Lưu nguyện vọng đăng ký thực tập của sinh viên
 -- ============================================================
 CREATE TABLE DANGKYTHUCTAP (
+    ViTriDangKy NVARCHAR(500) NULL,
+    YeuCauDangKy NVARCHAR(MAX) NULL,
+    LyDoKetThuc NVARCHAR(1000) NULL,
     maDK            NVARCHAR(20)    NOT NULL,
     ngayDangKy      DATE            NOT NULL,
     thuTuUuTien     INT             NOT NULL DEFAULT 1,
@@ -234,6 +274,26 @@ GO
 
 -- ============================================================
 -- BẢNG 12: PHANBOTHUCTAP
+ALTER TABLE PHONGVAN ADD CONSTRAINT FK_PV_DANGKY FOREIGN KEY (MaDK) REFERENCES DANGKYTHUCTAP(maDK);
+CREATE INDEX IX_PV_DANGKY ON PHONGVAN(MaDK);
+CREATE UNIQUE INDEX UQ_PV_DANGKY_CHO ON PHONGVAN(MaDK) WHERE MaDK IS NOT NULL AND ketQua = N'ChuaCoKetQua';
+GO
+
+CREATE TABLE NHATKYPHONGVAN (
+    MaNhatKy NVARCHAR(20) NOT NULL PRIMARY KEY,
+    MaPV NVARCHAR(20) NOT NULL,
+    MaDK NVARCHAR(20) NOT NULL,
+    KetQuaCu NVARCHAR(50) NULL,
+    KetQuaMoi NVARCHAR(50) NOT NULL,
+    LyDo NVARCHAR(1000) NOT NULL,
+    Nguon NVARCHAR(20) NOT NULL,
+    NguoiThucHien NVARCHAR(20) NOT NULL,
+    ThoiDiem DATETIMEOFFSET NOT NULL,
+    CONSTRAINT FK_NKPV_PV FOREIGN KEY (MaPV) REFERENCES PHONGVAN(maPV),
+    CONSTRAINT FK_NKPV_DK FOREIGN KEY (MaDK) REFERENCES DANGKYTHUCTAP(maDK)
+);
+GO
+
 -- Lưu kết quả phân bổ chính thức sinh viên vào công ty
 -- ============================================================
 CREATE TABLE PHANBOTHUCTAP (
@@ -247,11 +307,45 @@ CREATE TABLE PHANBOTHUCTAP (
     CONSTRAINT FK_PBTT_DOTTHUCTAP FOREIGN KEY (maDot)    REFERENCES DOTTHUCTAP(maSo),
     CONSTRAINT FK_PBTT_CONGTY     FOREIGN KEY (maCongTy) REFERENCES CONGTY(maCongTy),
     CONSTRAINT FK_PBTT_SINHVIEN   FOREIGN KEY (maSV)     REFERENCES SINHVIEN(maSV),
-    CONSTRAINT CK_PBTT_TRANGTHAI  CHECK (trangThai IN (N'ChuaNhanViec', N'DangThucTap', N'HoanThanh', N'Huy'))
+    daDuocKhoaDuyet BIT NOT NULL CONSTRAINT DF_PBTT_KHOADUYET DEFAULT 1,
+    ngaySVXacNhan DATETIME2 NULL,
+    ngayKhoaDuyet DATETIME2 NULL,
+    nguoiKhoaDuyet NVARCHAR(20) NULL,
+    LyDoHuy NVARCHAR(1000) NULL,
+    CanCuHuy NVARCHAR(1000) NULL,
+    NguoiHuy NVARCHAR(20) NULL,
+    NgayHuy DATETIMEOFFSET NULL,
+    TrangThaiXuLyLai NVARCHAR(30) NULL,
+    MaPhanBoTruoc NVARCHAR(20) NULL,
+    NguonPhanBo NVARCHAR(30) NULL,
+    NgayBatDauThucTap DATE NULL,
+    NgayKetThucThucTap DATE NULL,
+    PhienBanThoiGian INT NOT NULL DEFAULT 0,
+    CONSTRAINT FK_PBTT_TRUOC FOREIGN KEY (MaPhanBoTruoc) REFERENCES PHANBOTHUCTAP(maPB),
+    CONSTRAINT CK_PBTT_TRANGTHAI  CHECK (trangThai IN (N'ChuaNhanViec', N'ChoKhoaDuyet', N'DangThucTap', N'HoanThanh', N'Huy'))
 );
 GO
 
 -- ============================================================
+-- Nhật ký tiếp nhận hồ sơ trực tiếp, đặt hạn, hủy và phân bổ lại do Khoa xử lý.
+CREATE TABLE NHATKYDIEUCHINHTHUCTAP (
+    MaNhatKy NVARCHAR(20) NOT NULL PRIMARY KEY,
+    MaDot NVARCHAR(20) NOT NULL,
+    MaSV NVARCHAR(20) NULL,
+    MaPhanBo NVARCHAR(20) NULL,
+    Loai NVARCHAR(30) NOT NULL,
+    LyDo NVARCHAR(1000) NOT NULL,
+    CanCu NVARCHAR(1000) NOT NULL,
+    NoiDung NVARCHAR(2000) NOT NULL,
+    NguoiThucHien NVARCHAR(20) NOT NULL,
+    ThoiDiem DATETIMEOFFSET NOT NULL,
+    CONSTRAINT FK_NKDCTT_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+    CONSTRAINT FK_NKDCTT_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV),
+    CONSTRAINT FK_NKDCTT_PB FOREIGN KEY (MaPhanBo) REFERENCES PHANBOTHUCTAP(maPB)
+);
+CREATE INDEX IX_NKDCTT_DOT_SV ON NHATKYDIEUCHINHTHUCTAP(MaDot, MaSV, ThoiDiem);
+GO
+
 -- BẢNG 8: HUONGDANDOANHNGHIEP
 -- Ghi nhận đại diện doanh nghiệp hướng dẫn sinh viên
 -- (liên kết qua phân bổ thực tập)
@@ -275,15 +369,19 @@ GO
 -- ============================================================
 CREATE TABLE TIENDOTHUCTAP (
     maTienDo        NVARCHAR(20)    NOT NULL,
+    MaPhanBoLuuTru NVARCHAR(20) NULL,
     mocThoiGian     DATE            NOT NULL,
     noiDungBaoCao   NVARCHAR(MAX)   NULL,
-    ngayNop         DATE            NULL,
+    ngayNop         DATETIME2       NULL,
+    NopTre          BIT             NULL,
+    HanNopBoSung    DATETIMEOFFSET  NULL,
     trangThaiDuyet  NVARCHAR(50)    NOT NULL DEFAULT N'ChuaNop',
     nhanXet         NVARCHAR(1000)  NULL,
     nhanXetGV       NVARCHAR(500)   NULL,  
     maDot           NVARCHAR(20)    NOT NULL,
     maSV            NVARCHAR(20)    NOT NULL,
     CONSTRAINT PK_TIENDOTHUCTAP PRIMARY KEY (maTienDo),
+    CONSTRAINT FK_TDTT_LUUTRU FOREIGN KEY (MaPhanBoLuuTru) REFERENCES PHANBOTHUCTAP(maPB),
     CONSTRAINT FK_TDTT_DOTTHUCTAP FOREIGN KEY (maDot) REFERENCES DOTTHUCTAP(maSo),
     CONSTRAINT FK_TDTT_SINHVIEN   FOREIGN KEY (maSV)  REFERENCES SINHVIEN(maSV),
     CONSTRAINT CK_TDTT_TRANGTHAI  CHECK (trangThaiDuyet IN (N'ChuaNop', N'DaNop', N'DaDuyet', N'YeuCauSua'))
@@ -293,8 +391,8 @@ GO
 -- ============================================================
 -- BẢNG 15: TIEUCHI
 -- Danh sách tiêu chí chấm điểm (CLO) thực tập
--- nhomDanhGia: 'GV' = giảng viên hướng dẫn chấm, 'DN' = đơn vị thực tập chấm
---              (Phiếu nhận xét), NULL = tiêu chí cũ không còn sử dụng.
+-- nhomDanhGia: 'GV' = giảng viên hướng dẫn chấm (CLO1.1 - CLO3.4: 5.0đ),
+--              'DN' = đơn vị thực tập chấm qua phiếu nhận xét (CLO4.1 - CLO4.2: 5.0đ).
 -- ============================================================
 CREATE TABLE TIEUCHI (
     maTieuChi   NVARCHAR(20)    NOT NULL,
@@ -380,6 +478,7 @@ CREATE TABLE TAIKHOAN (
     trangThai   NVARCHAR(50)    NOT NULL DEFAULT N'HoatDong',
     email       NVARCHAR(200)   NULL,
     soDienThoai NVARCHAR(30)    NULL,
+    securityStamp NVARCHAR(32)   NOT NULL CONSTRAINT DF_TAIKHOAN_securityStamp DEFAULT (REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', '')),
     maVaiTro    NVARCHAR(20)    NOT NULL,
     maSV        NVARCHAR(20)    NULL,
     maGV        NVARCHAR(20)    NULL,
@@ -513,15 +612,7 @@ INSERT INTO VAITRO (maVaiTro, tenVaiTro, moTa) VALUES
     ('VT05', N'DaiDienDN',      N'Đại diện doanh nghiệp tiếp nhận và hướng dẫn sinh viên');
 GO
 
--- 2. Tiêu chí chấm điểm CLO (Tổng điểm tối đa = 10)
--- 2a. Tiêu chí theo rubric LEGACY_4TC
-INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa, maRubric, maCLO) VALUES
-    ('TC01', N'Thái độ và kỷ luật làm việc',        3.0, 'LEGACY_4TC', 'TC01'),
-    ('TC02', N'Năng lực chuyên môn và kỹ thuật',    4.0, 'LEGACY_4TC', 'TC02'),
-    ('TC03', N'Kỹ năng giao tiếp và làm việc nhóm', 2.0, 'LEGACY_4TC', 'TC03'),
-    ('TC04', N'Báo cáo và tài liệu thực tập',       1.0, 'LEGACY_4TC', 'TC04');
-
--- 2b. Tiêu chí theo rubric CNTT_CLO_V1 (File chấm điểm Khoa CNTT)
+-- 2. Tiêu chí chấm điểm CLO chuẩn Khoa CNTT (Duy nhất 1 bộ 11 tiêu chí CLO, Tổng điểm tối đa = 10)
 -- GVHD chấm CLO1.1 -> CLO3.4 (tối đa 5.0đ), DN chấm CLO4.1, CLO4.2 (tối đa 5.0đ)
 INSERT INTO TIEUCHI (maTieuChi, tenTieuChi, diemToiDa, nhomDanhGia, thuTu, maRubric, maCLO) VALUES
     ('CLO1.1', N'Xác định được mục tiêu, nội dung, ý nghĩa của công việc thực tập',                                   0.75, N'GV', 1,  'CNTT_CLO_V1', 'CLO1.1'),
@@ -544,7 +635,7 @@ INSERT INTO DOTTHUCTAP (maSo, tenDot, namHoc, thoiGianBD, thoiGianKT, trangThai,
     ('DOT03', N'Thực tập tốt nghiệp đợt 1 năm 2027', '2026-2027', '2027-01-10', '2027-05-25', N'ChuaBatDau',  'CNTT_CLO_V1');
 GO
 
--- 4. Giảng viên (soLuongSVHD được tự động cập nhật bởi trigger trg_GVHD_CapNhatSoLuong)
+-- 4. Giảng viên: chiTieuHD là hạn mức; tải thực tế đếm từ GVHUONGDAN theo đợt.
 INSERT INTO GIANGVIEN (maGV, hoTen, chuyenMon, soLuongSVHD, chiTieuHD) VALUES
     ('GV001', N'Nguyễn Văn An', N'Công nghệ phần mềm & Kiến trúc hệ thống', 0, 10),
     ('GV002', N'Trần Thị Bình', N'Hệ thống thông tin & Phân tích nghiệp vụ', 0, 10),
@@ -696,7 +787,10 @@ INSERT INTO GIOITHIEU (maSo, ngayGioiThieu, trangThaiKetNoi, maCongTy, maGV) VAL
     ('GT012', '2026-08-19', N'DaDuyet', 'CT015', 'GV004');
 GO
 
--- 11. Phân công giảng viên hướng dẫn (trigger sẽ cập nhật GIANGVIEN.soLuongSVHD)
+-- 11. Phân công giảng viên hướng dẫn
+-- Giữ phân công SV001-SV021 để bảo toàn liên kết phiếu điểm mẫu.
+-- SV022-SV030 đã có nơi thực tập nhưng chưa có GVHD, dùng để thử phân công thủ công/tự động.
+-- SV031 trở đi chưa đăng ký thực tập và chưa được phân công GVHD.
 INSERT INTO GVHUONGDAN (maSo, ngayPC, trangThai, maGV, maSV) VALUES
     ('PC001', '2026-02-02', N'HoanThanh', 'GV001', 'SV001'),
     ('PC002', '2026-02-02', N'HoanThanh', 'GV002', 'SV002'),
@@ -718,16 +812,7 @@ INSERT INTO GVHUONGDAN (maSo, ngayPC, trangThai, maGV, maSV) VALUES
     ('PC018', '2026-08-20', N'DangHuongDan', 'GV010', 'SV018'),
     ('PC019', '2026-08-20', N'DangHuongDan', 'GV005', 'SV019'),
     ('PC020', '2026-08-20', N'DangHuongDan', 'GV004', 'SV020'),
-    ('PC021', '2026-08-20', N'DangHuongDan', 'GV001', 'SV021'),
-    ('PC022', '2026-08-20', N'DangHuongDan', 'GV003', 'SV022'),
-    ('PC023', '2026-08-20', N'DangHuongDan', 'GV007', 'SV023'),
-    ('PC024', '2026-08-20', N'DangHuongDan', 'GV008', 'SV024'),
-    ('PC025', '2026-08-20', N'DangHuongDan', 'GV002', 'SV025'),
-    ('PC026', '2026-08-20', N'DangHuongDan', 'GV006', 'SV026'),
-    ('PC027', '2026-08-20', N'DangHuongDan', 'GV009', 'SV027'),
-    ('PC028', '2026-08-20', N'DangHuongDan', 'GV005', 'SV028'),
-    ('PC029', '2026-08-20', N'DangHuongDan', 'GV011', 'SV029'),
-    ('PC030', '2026-08-20', N'DangHuongDan', 'GV004', 'SV030');
+    ('PC021', '2026-08-20', N'DangHuongDan', 'GV001', 'SV021');
 GO
 
 -- 12. Đăng ký thực tập
@@ -1338,26 +1423,38 @@ GO
 -- ============================================================
 -- VIEW: Kết quả điểm thực tập của sinh viên
 -- ============================================================
+CREATE OR ALTER VIEW vw_DiemCLOHopLe AS
+SELECT p.maPhieu,
+ CASE WHEN COUNT(c.maSo)=r.SoTieuChi AND r.SoTieuChi>0 AND r.SoGV>0 AND r.SoDN>0 AND r.TongToiDa=10
+ AND COUNT(c.maSo)=SUM(CASE WHEN t.maRubric=d.maRubric AND c.diemCham BETWEEN 0 AND t.diemToiDa THEN 1 ELSE 0 END)
+ THEN ROUND(SUM(c.diemCham),1) ELSE NULL END AS TongDiemHopLe
+FROM PHIEUCHAMDIEM p JOIN DOTTHUCTAP d ON d.maSo=p.maDot
+CROSS APPLY (SELECT COUNT(*) SoTieuChi,SUM(CASE WHEN nhomDanhGia='GV' THEN 1 ELSE 0 END) SoGV,
+ SUM(CASE WHEN nhomDanhGia='DN' THEN 1 ELSE 0 END) SoDN,SUM(diemToiDa) TongToiDa FROM TIEUCHI WHERE maRubric=d.maRubric) r
+LEFT JOIN CHITIETCHAMDIEM c ON c.maPhieu=p.maPhieu LEFT JOIN TIEUCHI t ON t.maTieuChi=c.maTieuChi
+GROUP BY p.maPhieu,r.SoTieuChi,r.SoGV,r.SoDN,r.TongToiDa,d.maRubric;
+GO
+
 CREATE OR ALTER VIEW vw_KetQuaDiemThucTap AS
 SELECT
     sv.maSV,
     sv.hoTen                                AS TenSinhVien,
     sv.lop,
     d.tenDot,
-    pcd.tongDiem,
-    dbo.fn_QuyDoiThang4(pcd.tongDiem)       AS DiemThang4,
-    dbo.fn_QuyDoiDiemChu(pcd.tongDiem)      AS DiemChu,
-    dbo.fn_QuyDoiXepLoai(pcd.tongDiem)      AS XepLoai,
-    dbo.fn_QuyDoiKetQua(pcd.tongDiem)       AS KetQua,
+    clo.TongDiemHopLe AS tongDiem,
+    dbo.fn_QuyDoiThang4(clo.TongDiemHopLe)       AS DiemThang4,
+    dbo.fn_QuyDoiDiemChu(clo.TongDiemHopLe)      AS DiemChu,
+    dbo.fn_QuyDoiXepLoai(clo.TongDiemHopLe)      AS XepLoai,
+    dbo.fn_QuyDoiKetQua(clo.TongDiemHopLe)       AS KetQua,
     pcd.ngayCham,
     gv.hoTen                                AS GiangVienHuongDan,
     ct.tenCongTy                            AS CongTyThucTap
-FROM PHIEUCHAMDIEM pcd
+FROM PHIEUCHAMDIEM pcd JOIN vw_DiemCLOHopLe clo ON clo.maPhieu=pcd.maPhieu
 JOIN SINHVIEN     sv  ON sv.maSV      = pcd.maSV
 JOIN DOTTHUCTAP   d   ON d.maSo       = pcd.maDot
 LEFT JOIN GVHUONGDAN gvhd ON gvhd.maSo  = pcd.maGVHuongDan
 LEFT JOIN GIANGVIEN  gv   ON gv.maGV    = gvhd.maGV
-LEFT JOIN PHANBOTHUCTAP pb ON pb.maSV   = pcd.maSV AND pb.maDot = pcd.maDot
+LEFT JOIN PHANBOTHUCTAP pb ON pb.maSV   = pcd.maSV AND pb.maDot = pcd.maDot AND pb.trangThai <> N'Huy'
 LEFT JOIN CONGTY         ct ON ct.maCongTy = pb.maCongTy;
 GO
 
@@ -1456,9 +1553,7 @@ BEGIN
 
     DECLARE @tongDiem DECIMAL(5,2);
 
-    SELECT @tongDiem = SUM(ctcd.diemCham)
-    FROM CHITIETCHAMDIEM ctcd
-    WHERE ctcd.maPhieu = @maPhieu;
+    SELECT @tongDiem = TongDiemHopLe FROM vw_DiemCLOHopLe WHERE maPhieu = @maPhieu;
 
     UPDATE PHIEUCHAMDIEM
     SET tongDiem = @tongDiem,
@@ -1475,6 +1570,745 @@ BEGIN
 END;
 GO
 
-PRINT N'✅ Tạo cơ sở dữ liệu QuanLyThucTap thành công!';
-PRINT N'✅ Đã tạo 19 bảng, index, trigger, view, stored procedure và dữ liệu mẫu.';
+-- Phần dữ liệu kiểm thử mở rộng và thông báo hoàn tất ở cuối file.
+
 GO
+
+-- BEGIN GENERATED WEB TEST DATA
+-- Generated by scripts/database/Sync-TestSchema.ps1. Edit migration sources or fixtures, then sync.
+-- Migration: AccountSecurity
+IF COL_LENGTH('TAIKHOAN','securityStamp') IS NULL
+          ALTER TABLE TAIKHOAN ADD securityStamp NVARCHAR(32) NOT NULL
+              CONSTRAINT DF_TAIKHOAN_securityStamp DEFAULT (REPLACE(CONVERT(NVARCHAR(36), NEWID()), '-', '')) WITH VALUES;
+GO
+-- Migration: GVHuongDanRound
+IF COL_LENGTH('GVHUONGDAN', 'maDot') IS NULL
+            ALTER TABLE GVHUONGDAN ADD maDot NVARCHAR(20) NULL;
+GO
+UPDATE hd SET maDot = source.maDot
+        FROM GVHUONGDAN hd
+        JOIN (
+            SELECT maGVHuongDan, MIN(maDot) AS maDot
+            FROM PHIEUCHAMDIEM
+            WHERE maGVHuongDan IS NOT NULL
+            GROUP BY maGVHuongDan HAVING COUNT(DISTINCT maDot) = 1
+        ) source ON source.maGVHuongDan = hd.maSo
+        WHERE hd.maDot IS NULL;
+
+        UPDATE hd SET maDot = source.maDot
+        FROM GVHUONGDAN hd
+        JOIN (
+            SELECT maSV, MIN(maDot) AS maDot
+            FROM PHANBOTHUCTAP
+            GROUP BY maSV HAVING COUNT(DISTINCT maDot) = 1
+        ) source ON source.maSV = hd.maSV
+        WHERE hd.maDot IS NULL
+          AND NOT EXISTS (SELECT 1 FROM PHIEUCHAMDIEM p WHERE p.maGVHuongDan = hd.maSo);
+GO
+SET XACT_ABORT ON;
+        BEGIN TRANSACTION;
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_GVHD_DOTTHUCTAP')
+            ALTER TABLE GVHUONGDAN WITH CHECK ADD CONSTRAINT FK_GVHD_DOTTHUCTAP
+                FOREIGN KEY (maDot) REFERENCES DOTTHUCTAP(maSo);
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('GVHUONGDAN') AND name = 'UQ_GVHD_SV_ACTIVE')
+            DROP INDEX UQ_GVHD_SV_ACTIVE ON GVHUONGDAN;
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('GVHUONGDAN') AND name = 'IX_GVHUONGDAN_maSV' AND is_unique = 1)
+            DROP INDEX IX_GVHUONGDAN_maSV ON GVHUONGDAN;
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('GVHUONGDAN') AND name = 'UQ_GVHD_SV_DOT_ACTIVE')
+            CREATE UNIQUE INDEX UQ_GVHD_SV_DOT_ACTIVE ON GVHUONGDAN(maSV, maDot)
+                WHERE trangThai = N'DangHuongDan' AND maDot IS NOT NULL;
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('GVHUONGDAN') AND name = 'UQ_GVHD_LEGACY_ACTIVE')
+            CREATE UNIQUE INDEX UQ_GVHD_LEGACY_ACTIVE ON GVHUONGDAN(maSV)
+                WHERE trangThai = N'DangHuongDan' AND maDot IS NULL;
+        COMMIT TRANSACTION;
+GO
+-- Migration: ThucTapTuTim
+IF COL_LENGTH('CONGTY', 'chiTiepNhanTuTim') IS NULL
+            ALTER TABLE CONGTY ADD chiTiepNhanTuTim BIT NOT NULL CONSTRAINT DF_CT_TUTIM DEFAULT 0;
+GO
+IF OBJECT_ID(N'DEXUATTHUCTAPTUTIM', N'U') IS NULL
+        BEGIN
+            CREATE TABLE DEXUATTHUCTAPTUTIM (
+                MaHoSo NVARCHAR(20) NOT NULL CONSTRAINT PK_TUTIM PRIMARY KEY,
+                MaSV NVARCHAR(20) NOT NULL,
+                MaDot NVARCHAR(20) NOT NULL,
+                MaCongTy NVARCHAR(20) NULL,
+                TenCongTy NVARCHAR(200) NOT NULL,
+                DiaChi NVARCHAR(500) NOT NULL,
+                ViTri NVARCHAR(200) NOT NULL,
+                NguoiLienHe NVARCHAR(200) NOT NULL,
+                LienHe NVARCHAR(200) NOT NULL,
+                NgayBatDau DATETIME2 NOT NULL,
+                NgayKetThuc DATETIME2 NOT NULL,
+                TrangThai NVARCHAR(20) NOT NULL,
+                NgayGui DATETIME2 NOT NULL,
+                NgayDuyet DATETIME2 NULL,
+                NguoiDuyet NVARCHAR(20) NULL,
+                LyDo NVARCHAR(1000) NULL,
+                MaPhanBo NVARCHAR(20) NULL,
+                CONSTRAINT FK_TUTIM_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV),
+                CONSTRAINT FK_TUTIM_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+                CONSTRAINT FK_TUTIM_CT FOREIGN KEY (MaCongTy) REFERENCES CONGTY(maCongTy),
+                CONSTRAINT FK_TUTIM_PB FOREIGN KEY (MaPhanBo) REFERENCES PHANBOTHUCTAP(maPB),
+                CONSTRAINT CK_TUTIM_DATE CHECK (NgayKetThuc >= NgayBatDau),
+                CONSTRAINT CK_TUTIM_STATUS CHECK (TrangThai IN (N'ChoDuyet', N'DaDuyet', N'TuChoi'))
+            );
+        END;
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('DEXUATTHUCTAPTUTIM') AND name = 'UQ_TUTIM_CHO_DUYET')
+            CREATE UNIQUE INDEX UQ_TUTIM_CHO_DUYET ON DEXUATTHUCTAPTUTIM(MaSV, MaDot) WHERE TrangThai = N'ChoDuyet';
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('DEXUATTHUCTAPTUTIM') AND name = 'UQ_TUTIM_PHANBO')
+            CREATE UNIQUE INDEX UQ_TUTIM_PHANBO ON DEXUATTHUCTAPTUTIM(MaPhanBo) WHERE MaPhanBo IS NOT NULL;
+GO
+-- Migration: KhoaChotPhanBo
+IF COL_LENGTH('PHANBOTHUCTAP', 'daDuocKhoaDuyet') IS NULL
+            ALTER TABLE PHANBOTHUCTAP ADD daDuocKhoaDuyet BIT NOT NULL CONSTRAINT DF_PBTT_KHOADUYET DEFAULT 1 WITH VALUES;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'ngaySVXacNhan') IS NULL
+            ALTER TABLE PHANBOTHUCTAP ADD ngaySVXacNhan DATETIME2 NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'ngayKhoaDuyet') IS NULL
+            ALTER TABLE PHANBOTHUCTAP ADD ngayKhoaDuyet DATETIME2 NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'nguoiKhoaDuyet') IS NULL
+            ALTER TABLE PHANBOTHUCTAP ADD nguoiKhoaDuyet NVARCHAR(20) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('PHANBOTHUCTAP')
+                       AND name = 'CK_PBTT_TRANGTHAI' AND definition LIKE '%ChoKhoaDuyet%')
+        BEGIN
+            SET XACT_ABORT ON;
+            BEGIN TRANSACTION;
+            IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID('PHANBOTHUCTAP') AND name = 'CK_PBTT_TRANGTHAI')
+                ALTER TABLE PHANBOTHUCTAP DROP CONSTRAINT CK_PBTT_TRANGTHAI;
+            ALTER TABLE PHANBOTHUCTAP WITH CHECK ADD CONSTRAINT CK_PBTT_TRANGTHAI
+                CHECK (trangThai IN (N'ChuaNhanViec', N'ChoKhoaDuyet', N'DangThucTap', N'HoanThanh', N'Huy'));
+            COMMIT TRANSACTION;
+        END;
+GO
+-- Migration: SinhVienThamGiaDot
+IF OBJECT_ID(N'SVTHAMGIADOT', N'U') IS NULL
+        BEGIN
+            CREATE TABLE SVTHAMGIADOT (
+                MaDot NVARCHAR(20) NOT NULL,
+                MaSV NVARCHAR(20) NOT NULL,
+                DangThamGia BIT NOT NULL CONSTRAINT DF_SVTGD_ACTIVE DEFAULT 1,
+                NgayThem DATETIMEOFFSET NOT NULL,
+                NguoiThem NVARCHAR(20) NOT NULL,
+                NgayCapNhat DATETIMEOFFSET NOT NULL,
+                NguoiCapNhat NVARCHAR(20) NOT NULL,
+                CONSTRAINT PK_SVTHAMGIADOT PRIMARY KEY (MaDot, MaSV),
+                CONSTRAINT FK_SVTGD_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+                CONSTRAINT FK_SVTGD_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV)
+            );
+        END;
+GO
+-- Migration: DieuChinhNoiThucTap
+IF COL_LENGTH('DOTTHUCTAP', 'HanDieuChinhNoiThucTap') IS NULL
+            ALTER TABLE DOTTHUCTAP ADD HanDieuChinhNoiThucTap DATETIMEOFFSET NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'LyDoHuy') IS NULL ALTER TABLE PHANBOTHUCTAP ADD LyDoHuy NVARCHAR(1000) NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'CanCuHuy') IS NULL ALTER TABLE PHANBOTHUCTAP ADD CanCuHuy NVARCHAR(1000) NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'NguoiHuy') IS NULL ALTER TABLE PHANBOTHUCTAP ADD NguoiHuy NVARCHAR(20) NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'NgayHuy') IS NULL ALTER TABLE PHANBOTHUCTAP ADD NgayHuy DATETIMEOFFSET NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'TrangThaiXuLyLai') IS NULL ALTER TABLE PHANBOTHUCTAP ADD TrangThaiXuLyLai NVARCHAR(30) NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'MaPhanBoTruoc') IS NULL ALTER TABLE PHANBOTHUCTAP ADD MaPhanBoTruoc NVARCHAR(20) NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP', 'NguonPhanBo') IS NULL ALTER TABLE PHANBOTHUCTAP ADD NguonPhanBo NVARCHAR(30) NULL;
+        IF COL_LENGTH('TIENDOTHUCTAP', 'MaPhanBoLuuTru') IS NULL ALTER TABLE TIENDOTHUCTAP ADD MaPhanBoLuuTru NVARCHAR(20) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PBTT_TRUOC')
+            ALTER TABLE PHANBOTHUCTAP ADD CONSTRAINT FK_PBTT_TRUOC FOREIGN KEY (MaPhanBoTruoc) REFERENCES PHANBOTHUCTAP(maPB);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_TDTT_LUUTRU')
+            ALTER TABLE TIENDOTHUCTAP ADD CONSTRAINT FK_TDTT_LUUTRU FOREIGN KEY (MaPhanBoLuuTru) REFERENCES PHANBOTHUCTAP(maPB);
+        IF OBJECT_ID('NHATKYDIEUCHINHTHUCTAP', 'U') IS NULL
+        BEGIN
+            CREATE TABLE NHATKYDIEUCHINHTHUCTAP (
+                MaNhatKy NVARCHAR(20) NOT NULL PRIMARY KEY,
+                MaDot NVARCHAR(20) NOT NULL,
+                MaSV NVARCHAR(20) NULL,
+                MaPhanBo NVARCHAR(20) NULL,
+                Loai NVARCHAR(30) NOT NULL,
+                LyDo NVARCHAR(1000) NOT NULL,
+                CanCu NVARCHAR(1000) NOT NULL,
+                NoiDung NVARCHAR(2000) NOT NULL,
+                NguoiThucHien NVARCHAR(20) NOT NULL,
+                ThoiDiem DATETIMEOFFSET NOT NULL,
+                CONSTRAINT FK_NKDCTT_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+                CONSTRAINT FK_NKDCTT_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV),
+                CONSTRAINT FK_NKDCTT_PB FOREIGN KEY (MaPhanBo) REFERENCES PHANBOTHUCTAP(maPB)
+            );
+            CREATE INDEX IX_NKDCTT_DOT_SV ON NHATKYDIEUCHINHTHUCTAP(MaDot, MaSV, ThoiDiem);
+        END;
+GO
+-- Migration: InterviewOutcome
+IF COL_LENGTH('PHONGVAN', 'MaDK') IS NULL ALTER TABLE PHONGVAN ADD MaDK NVARCHAR(20) NULL;
+        IF COL_LENGTH('PHONGVAN', 'LyDoKetQua') IS NULL ALTER TABLE PHONGVAN ADD LyDoKetQua NVARCHAR(1000) NULL;
+        IF COL_LENGTH('PHONGVAN', 'NguonKetQua') IS NULL ALTER TABLE PHONGVAN ADD NguonKetQua NVARCHAR(20) NULL;
+        IF COL_LENGTH('PHONGVAN', 'NguoiGhiKetQua') IS NULL ALTER TABLE PHONGVAN ADD NguoiGhiKetQua NVARCHAR(20) NULL;
+        IF COL_LENGTH('PHONGVAN', 'ThoiDiemKetQua') IS NULL ALTER TABLE PHONGVAN ADD ThoiDiemKetQua DATETIMEOFFSET NULL;
+        IF COL_LENGTH('DANGKYTHUCTAP', 'LyDoKetThuc') IS NULL ALTER TABLE DANGKYTHUCTAP ADD LyDoKetThuc NVARCHAR(1000) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_PV_DANGKY')
+            ALTER TABLE PHONGVAN ADD CONSTRAINT FK_PV_DANGKY FOREIGN KEY (MaDK) REFERENCES DANGKYTHUCTAP(maDK);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('PHONGVAN') AND name = 'IX_PV_DANGKY')
+            CREATE INDEX IX_PV_DANGKY ON PHONGVAN(MaDK);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('PHONGVAN') AND name = 'UQ_PV_DANGKY_CHO')
+            CREATE UNIQUE INDEX UQ_PV_DANGKY_CHO ON PHONGVAN(MaDK) WHERE MaDK IS NOT NULL AND ketQua = N'ChuaCoKetQua';
+        IF OBJECT_ID('NHATKYPHONGVAN', 'U') IS NULL
+        CREATE TABLE NHATKYPHONGVAN (
+            MaNhatKy NVARCHAR(20) NOT NULL PRIMARY KEY,
+            MaPV NVARCHAR(20) NOT NULL,
+            MaDK NVARCHAR(20) NOT NULL,
+            KetQuaCu NVARCHAR(50) NULL,
+            KetQuaMoi NVARCHAR(50) NOT NULL,
+            LyDo NVARCHAR(1000) NOT NULL,
+            Nguon NVARCHAR(20) NOT NULL,
+            NguoiThucHien NVARCHAR(20) NOT NULL,
+            ThoiDiem DATETIMEOFFSET NOT NULL,
+            CONSTRAINT FK_NKPV_PV FOREIGN KEY (MaPV) REFERENCES PHONGVAN(maPV),
+            CONSTRAINT FK_NKPV_DK FOREIGN KEY (MaDK) REFERENCES DANGKYTHUCTAP(maDK)
+        );
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PV_KETQUA' AND definition LIKE '%Vang%')
+        BEGIN
+            IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_PV_KETQUA')
+                ALTER TABLE PHONGVAN DROP CONSTRAINT CK_PV_KETQUA;
+            ALTER TABLE PHONGVAN WITH NOCHECK ADD CONSTRAINT CK_PV_KETQUA CHECK
+                (ketQua IN (N'ChuaCoKetQua', N'Dat', N'KhongDat', N'Vang'));
+        END;
+GO
+-- Migration: InterviewCorrection
+IF COL_LENGTH('PHONGVAN','PhienBan') IS NULL ALTER TABLE PHONGVAN ADD PhienBan INT NOT NULL DEFAULT 0;
+        IF COL_LENGTH('PHONGVAN','MaPVTruoc') IS NULL ALTER TABLE PHONGVAN ADD MaPVTruoc NVARCHAR(20) NULL;
+        IF COL_LENGTH('DANGKYTHUCTAP','MaPVKetThuc') IS NULL ALTER TABLE DANGKYTHUCTAP ADD MaPVKetThuc NVARCHAR(20) NULL;
+        IF COL_LENGTH('NHATKYPHONGVAN','Loai') IS NULL ALTER TABLE NHATKYPHONGVAN ADD Loai NVARCHAR(20) NOT NULL DEFAULT 'KetQua';
+        IF COL_LENGTH('NHATKYPHONGVAN','MaPVMoi') IS NULL ALTER TABLE NHATKYPHONGVAN ADD MaPVMoi NVARCHAR(20) NULL;
+        IF COL_LENGTH('NHATKYPHONGVAN','NoiDungCu') IS NULL ALTER TABLE NHATKYPHONGVAN ADD NoiDungCu NVARCHAR(MAX) NULL;
+        IF COL_LENGTH('NHATKYPHONGVAN','NoiDungMoi') IS NULL ALTER TABLE NHATKYPHONGVAN ADD NoiDungMoi NVARCHAR(MAX) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_PV_TRUOC')
+            ALTER TABLE PHONGVAN ADD CONSTRAINT FK_PV_TRUOC FOREIGN KEY (MaPVTruoc) REFERENCES PHONGVAN(maPV);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_DK_PV_KETTHUC')
+            ALTER TABLE DANGKYTHUCTAP ADD CONSTRAINT FK_DK_PV_KETTHUC FOREIGN KEY (MaPVKetThuc) REFERENCES PHONGVAN(maPV);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID('PHONGVAN') AND name='UQ_PV_THAYTHE')
+            CREATE UNIQUE INDEX UQ_PV_THAYTHE ON PHONGVAN(MaPVTruoc) WHERE MaPVTruoc IS NOT NULL;
+        -- Backfill only a uniquely linked, audited negative result with its exact generated closing reason.
+        UPDATE d SET MaPVKetThuc=p.maPV FROM DANGKYTHUCTAP d JOIN PHONGVAN p ON p.MaDK=d.maDK
+        WHERE d.MaPVKetThuc IS NULL AND d.trangThai=N'TuChoi' AND p.ketQua IN (N'KhongDat',N'Vang')
+          AND d.LyDoKetThuc=LEFT(CASE WHEN p.ketQua=N'Vang' THEN N'Vắng/bỏ phỏng vấn: ' ELSE N'Phỏng vấn không đạt: ' END+ISNULL(p.LyDoKetQua,N''),1000)
+          AND (SELECT COUNT(*) FROM PHONGVAN p2 WHERE p2.MaDK=d.maDK)=1
+          AND EXISTS (SELECT 1 FROM NHATKYPHONGVAN n WHERE n.MaPV=p.maPV AND n.MaDK=d.maDK AND n.KetQuaMoi=p.ketQua);
+GO
+-- Migration: ThoiHan
+IF COL_LENGTH('DOTTHUCTAP', 'MoChamGV') IS NULL ALTER TABLE DOTTHUCTAP ADD MoChamGV DATETIMEOFFSET NULL;
+        IF COL_LENGTH('DOTTHUCTAP', 'HanChamGV') IS NULL ALTER TABLE DOTTHUCTAP ADD HanChamGV DATETIMEOFFSET NULL;
+        IF COL_LENGTH('DOTTHUCTAP', 'HanChamDN') IS NULL ALTER TABLE DOTTHUCTAP ADD HanChamDN DATETIMEOFFSET NULL;
+        IF COL_LENGTH('DOTTHUCTAP', 'PhienBanThoiHan') IS NULL ALTER TABLE DOTTHUCTAP ADD PhienBanThoiHan INT NOT NULL CONSTRAINT DF_DOT_THOIHAN DEFAULT 0;
+        IF COL_LENGTH('TIENDOTHUCTAP', 'NopTre') IS NULL ALTER TABLE TIENDOTHUCTAP ADD NopTre BIT NULL;
+        IF COL_LENGTH('TIENDOTHUCTAP', 'HanNopBoSung') IS NULL ALTER TABLE TIENDOTHUCTAP ADD HanNopBoSung DATETIMEOFFSET NULL;
+        IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('TIENDOTHUCTAP') AND name = 'ngayNop' AND system_type_id = TYPE_ID('date'))
+            ALTER TABLE TIENDOTHUCTAP ALTER COLUMN ngayNop DATETIME2 NULL;
+        IF OBJECT_ID('NHATKYTHOIHAN', 'U') IS NULL
+        CREATE TABLE NHATKYTHOIHAN (
+            MaNhatKy NVARCHAR(20) NOT NULL PRIMARY KEY,
+            MaDot NVARCHAR(20) NOT NULL,
+            Loai NVARCHAR(30) NOT NULL,
+            Truoc NVARCHAR(MAX) NOT NULL,
+            Sau NVARCHAR(MAX) NOT NULL,
+            LyDo NVARCHAR(1000) NOT NULL,
+            NguoiThucHien NVARCHAR(20) NOT NULL,
+            ThoiDiem DATETIMEOFFSET NOT NULL,
+            CONSTRAINT FK_NKTH_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo)
+        );
+GO
+-- Migration: ConfirmationDeadline
+IF COL_LENGTH('DOTTHUCTAP', 'HanXacNhanSV') IS NULL
+            ALTER TABLE DOTTHUCTAP ADD HanXacNhanSV DATETIMEOFFSET NULL;
+        IF COL_LENGTH('DOTTHUCTAP', 'PhienBanXacNhan') IS NULL
+            ALTER TABLE DOTTHUCTAP ADD PhienBanXacNhan INT NOT NULL CONSTRAINT DF_DOT_XACNHAN DEFAULT 0;
+GO
+-- Migration: PlacementPeriod
+IF COL_LENGTH('PHANBOTHUCTAP','NgayBatDauThucTap') IS NULL ALTER TABLE PHANBOTHUCTAP ADD NgayBatDauThucTap DATE NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP','NgayKetThucThucTap') IS NULL ALTER TABLE PHANBOTHUCTAP ADD NgayKetThucThucTap DATE NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP','PhienBanThoiGian') IS NULL ALTER TABLE PHANBOTHUCTAP ADD PhienBanThoiGian INT NOT NULL CONSTRAINT DF_PB_THOIGIAN DEFAULT 0;
+GO
+-- Migration: CompanyRound
+IF COL_LENGTH('DANGKYTHUCTAP','ViTriDangKy') IS NULL ALTER TABLE DANGKYTHUCTAP ADD ViTriDangKy NVARCHAR(500) NULL;
+        IF COL_LENGTH('DANGKYTHUCTAP','YeuCauDangKy') IS NULL ALTER TABLE DANGKYTHUCTAP ADD YeuCauDangKy NVARCHAR(MAX) NULL;
+        IF OBJECT_ID('CONGTYTHEODOT','U') IS NULL
+        CREATE TABLE CONGTYTHEODOT (
+            MaCongTy NVARCHAR(20) NOT NULL, MaDot NVARCHAR(20) NOT NULL,
+            ViTriTuyen NVARCHAR(500) NOT NULL, YeuCau NVARCHAR(MAX) NOT NULL,
+            SoLuongNhan INT NOT NULL, MoDangKy DATETIMEOFFSET NOT NULL, HanDangKy DATETIMEOFFSET NOT NULL,
+            HoatDong BIT NOT NULL DEFAULT 1, PhienBan INT NOT NULL DEFAULT 0,
+            CONSTRAINT PK_CONGTYTHEODOT PRIMARY KEY (MaCongTy,MaDot),
+            CONSTRAINT FK_CT_DOT_CT FOREIGN KEY (MaCongTy) REFERENCES CONGTY(maCongTy),
+            CONSTRAINT FK_CT_DOT_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+            CONSTRAINT CK_CT_DOT_SOLUONG CHECK (SoLuongNhan > 0),
+            CONSTRAINT CK_CT_DOT_HAN CHECK (HanDangKy > MoDangKy)
+        );
+GO
+IF COL_LENGTH('CONGTYTHEODOT','MaGVGioiThieu') IS NULL ALTER TABLE CONGTYTHEODOT ADD MaGVGioiThieu NVARCHAR(20) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_CT_DOT_GV')
+            ALTER TABLE CONGTYTHEODOT ADD CONSTRAINT FK_CT_DOT_GV FOREIGN KEY (MaGVGioiThieu) REFERENCES GIANGVIEN(maGV);
+GO
+-- Migration: CompanyPosition
+IF OBJECT_ID('VITRITHEODOT','U') IS NULL
+        CREATE TABLE VITRITHEODOT (
+            MaViTri NVARCHAR(40) NOT NULL PRIMARY KEY,
+            MaCongTy NVARCHAR(20) NOT NULL, MaDot NVARCHAR(20) NOT NULL,
+            TenViTri NVARCHAR(500) NOT NULL, YeuCau NVARCHAR(MAX) NOT NULL,
+            SoLuongNhan INT NOT NULL CHECK (SoLuongNhan > 0), HoatDong BIT NOT NULL DEFAULT 1,
+            CONSTRAINT UQ_VT_SCOPE UNIQUE (MaViTri,MaCongTy,MaDot),
+            CONSTRAINT FK_VT_KEHOACH FOREIGN KEY (MaCongTy,MaDot) REFERENCES CONGTYTHEODOT(MaCongTy,MaDot)
+        );
+        IF COL_LENGTH('DANGKYTHUCTAP','MaViTri') IS NULL ALTER TABLE DANGKYTHUCTAP ADD MaViTri NVARCHAR(40) NULL;
+        IF COL_LENGTH('PHANBOTHUCTAP','MaViTri') IS NULL ALTER TABLE PHANBOTHUCTAP ADD MaViTri NVARCHAR(40) NULL;
+GO
+-- Only the first conversion creates a position and links existing records. Restarts never relink external/new records.
+        DECLARE @Converted TABLE (MaViTri NVARCHAR(40),MaCongTy NVARCHAR(20),MaDot NVARCHAR(20));
+        INSERT INTO VITRITHEODOT (MaViTri,MaCongTy,MaDot,TenViTri,YeuCau,SoLuongNhan,HoatDong)
+        OUTPUT inserted.MaViTri,inserted.MaCongTy,inserted.MaDot INTO @Converted
+        SELECT CONVERT(NVARCHAR(36),NEWID()),c.MaCongTy,c.MaDot,c.ViTriTuyen,c.YeuCau,c.SoLuongNhan,1
+        FROM CONGTYTHEODOT c WHERE NOT EXISTS (SELECT 1 FROM VITRITHEODOT v WHERE v.MaCongTy=c.MaCongTy AND v.MaDot=c.MaDot);
+        UPDATE d SET MaViTri=v.MaViTri FROM DANGKYTHUCTAP d JOIN @Converted v ON d.maCongTy=v.MaCongTy AND d.maDot=v.MaDot WHERE d.MaViTri IS NULL;
+        UPDATE p SET MaViTri=v.MaViTri FROM PHANBOTHUCTAP p JOIN @Converted v ON p.maCongTy=v.MaCongTy AND p.maDot=v.MaDot
+        WHERE p.MaViTri IS NULL AND ISNULL(p.NguonPhanBo,'') <> 'TiepNhanBenNgoai';
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_DK_VITRI')
+            ALTER TABLE DANGKYTHUCTAP ADD CONSTRAINT FK_DK_VITRI FOREIGN KEY (MaViTri,maCongTy,maDot) REFERENCES VITRITHEODOT(MaViTri,MaCongTy,MaDot);
+        IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name='FK_PB_VITRI')
+            ALTER TABLE PHANBOTHUCTAP ADD CONSTRAINT FK_PB_VITRI FOREIGN KEY (MaViTri,maCongTy,maDot) REFERENCES VITRITHEODOT(MaViTri,MaCongTy,MaDot);
+        IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_PB_VITRI' AND object_id=OBJECT_ID('PHANBOTHUCTAP'))
+            CREATE INDEX IX_PB_VITRI ON PHANBOTHUCTAP(MaViTri,maCongTy,maDot,trangThai);
+GO
+-- Migration: ChotDot
+IF OBJECT_ID('CHOTDOTTHUCTAP','U') IS NULL
+        CREATE TABLE CHOTDOTTHUCTAP (
+            MaDot NVARCHAR(20) NOT NULL PRIMARY KEY REFERENCES DOTTHUCTAP(maSo),
+            TrangThai NVARCHAR(20) NOT NULL, PhienBan INT NOT NULL DEFAULT 0,
+            HanMoLai DATETIMEOFFSET NULL, NguoiCapNhat NVARCHAR(20) NULL,
+            NgayCapNhat DATETIMEOFFSET NOT NULL, LyDo NVARCHAR(1000) NOT NULL
+        );
+        IF OBJECT_ID('KHONGHOANTATDOT','U') IS NULL
+        CREATE TABLE KHONGHOANTATDOT (
+            MaDot NVARCHAR(20) NOT NULL REFERENCES DOTTHUCTAP(maSo),
+            MaSV NVARCHAR(20) NOT NULL REFERENCES SINHVIEN(maSV), HieuLuc BIT NOT NULL DEFAULT 1,
+            LyDo NVARCHAR(1000) NOT NULL, CanCu NVARCHAR(1000) NOT NULL,
+            NguoiXacNhan NVARCHAR(20) NOT NULL, NgayXacNhan DATETIMEOFFSET NOT NULL,
+            CONSTRAINT PK_KHONGHOANTATDOT PRIMARY KEY(MaDot,MaSV)
+        );
+        IF OBJECT_ID('NHATKYCHOTDOT','U') IS NULL
+        CREATE TABLE NHATKYCHOTDOT (
+            MaNhatKy NVARCHAR(32) NOT NULL PRIMARY KEY, MaDot NVARCHAR(20) NOT NULL REFERENCES DOTTHUCTAP(maSo),
+            PhienBan INT NOT NULL, Loai NVARCHAR(30) NOT NULL, NguoiThucHien NVARCHAR(20) NOT NULL,
+            ThoiDiem DATETIMEOFFSET NOT NULL, LyDo NVARCHAR(1000) NOT NULL, NoiDung NVARCHAR(MAX) NOT NULL
+        );
+GO
+-- Migration: DocumentStorage
+IF OBJECT_ID('STORED_DOCUMENT','U') IS NULL
+        CREATE TABLE STORED_DOCUMENT (
+            Id NVARCHAR(32) NOT NULL PRIMARY KEY, Kind NVARCHAR(30) NOT NULL, ResourceId NVARCHAR(40) NOT NULL,
+            RoundId NVARCHAR(20) NULL, ActorId NVARCHAR(20) NOT NULL, RequestId NVARCHAR(32) NOT NULL,
+            ObjectKey NVARCHAR(120) NOT NULL, FileName NVARCHAR(200) NOT NULL, ContentType NVARCHAR(100) NOT NULL,
+            Size BIGINT NOT NULL, Sha256 NVARCHAR(64) NOT NULL, State NVARCHAR(20) NOT NULL,
+            StorageId NVARCHAR(64) NOT NULL, CleanedAt DATETIMEOFFSET NULL, CleanedBy NVARCHAR(20) NULL,
+            CreatedAt DATETIMEOFFSET NOT NULL, LastAttemptAt DATETIMEOFFSET NOT NULL, ReadyAt DATETIMEOFFSET NULL,
+            CONSTRAINT UQ_DOCUMENT_REQUEST UNIQUE(ActorId, RequestId),
+            CONSTRAINT UQ_DOCUMENT_OBJECT UNIQUE(ObjectKey),
+            CONSTRAINT CK_DOCUMENT_SIZE CHECK(Size > 0),
+            CONSTRAINT CK_DOCUMENT_STATE CHECK(State IN ('Uploading','Ready','Failed'))
+        );
+        IF NOT EXISTS(SELECT 1 FROM sys.indexes WHERE name='IX_DOCUMENT_RESOURCE' AND object_id=OBJECT_ID('STORED_DOCUMENT'))
+            CREATE INDEX IX_DOCUMENT_RESOURCE ON STORED_DOCUMENT(Kind,ResourceId,State);
+        IF COL_LENGTH('STORED_DOCUMENT','StorageId') IS NULL
+            ALTER TABLE STORED_DOCUMENT ADD StorageId NVARCHAR(64) NOT NULL CONSTRAINT DF_DOCUMENT_STORAGEID DEFAULT N'';
+        IF COL_LENGTH('STORED_DOCUMENT','CleanedAt') IS NULL ALTER TABLE STORED_DOCUMENT ADD CleanedAt DATETIMEOFFSET NULL;
+        IF COL_LENGTH('STORED_DOCUMENT','CleanedBy') IS NULL ALTER TABLE STORED_DOCUMENT ADD CleanedBy NVARCHAR(20) NULL;
+        IF COL_LENGTH('STORED_DOCUMENT','LastAttemptAt') IS NULL ALTER TABLE STORED_DOCUMENT ADD LastAttemptAt DATETIMEOFFSET NULL;
+        IF EXISTS(SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('STORED_DOCUMENT') AND name='LastAttemptAt' AND is_nullable=1)
+        BEGIN
+            EXEC(N'UPDATE STORED_DOCUMENT SET LastAttemptAt=CreatedAt WHERE LastAttemptAt IS NULL');
+            EXEC(N'ALTER TABLE STORED_DOCUMENT ALTER COLUMN LastAttemptAt DATETIMEOFFSET NOT NULL');
+        END;
+GO
+-- Migration: LanHoTro
+IF COL_LENGTH('DOTTHUCTAP','TrangThaiDanhSachNoi') IS NULL
+            ALTER TABLE DOTTHUCTAP ADD TrangThaiDanhSachNoi NVARCHAR(20) NOT NULL
+                CONSTRAINT DF_DOT_DANHSACHNOI DEFAULT N'ChuaCongBo';
+GO
+IF OBJECT_ID(N'LANHOTROTHUCTAP', N'U') IS NULL
+        BEGIN
+            CREATE TABLE LANHOTROTHUCTAP (
+                MaLan NVARCHAR(32) NOT NULL PRIMARY KEY,
+                MaDot NVARCHAR(20) NOT NULL,
+                TenLan NVARCHAR(200) NOT NULL,
+                NgayHoTro DATETIME2 NOT NULL,
+                TrangThai NVARCHAR(20) NOT NULL,
+                MaLanTruoc NVARCHAR(32) NULL,
+                PhienBan INT NOT NULL,
+                DanhSachJson NVARCHAR(MAX) NOT NULL,
+                NhatKyJson NVARCHAR(MAX) NOT NULL,
+                CONSTRAINT FK_LANHOTRO_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo)
+            );
+            CREATE INDEX IX_LANHOTRO_DOT_NGAY ON LANHOTROTHUCTAP(MaDot, NgayHoTro);
+        END;
+GO
+-- Migration: CongBoDanhSach
+IF OBJECT_ID(N'CONGBODANHSACHTHUCTAP', N'U') IS NULL
+        BEGIN
+            CREATE TABLE CONGBODANHSACHTHUCTAP (
+                MaCongBo NVARCHAR(32) NOT NULL PRIMARY KEY,
+                MaDot NVARCHAR(20) NOT NULL,
+                PhienBan INT NOT NULL,
+                TieuDe NVARCHAR(200) NOT NULL,
+                NoiDung NVARCHAR(2000) NOT NULL,
+                HanPhanHoi DATETIMEOFFSET NOT NULL,
+                NgayCongBo DATETIMEOFFSET NOT NULL,
+                NguoiCongBo NVARCHAR(20) NOT NULL,
+                DanhSachJson NVARCHAR(MAX) NOT NULL,
+                CONSTRAINT FK_CBDS_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo),
+                CONSTRAINT UQ_CBDS_VERSION UNIQUE (MaDot, PhienBan)
+            );
+        END;
+GO
+IF OBJECT_ID(N'PHANHOIDANHSACHTHUCTAP', N'U') IS NULL
+        BEGIN
+            CREATE TABLE PHANHOIDANHSACHTHUCTAP (
+                MaPhanHoi NVARCHAR(32) NOT NULL PRIMARY KEY,
+                MaDot NVARCHAR(20) NOT NULL,
+                MaCongBo NVARCHAR(32) NOT NULL,
+                MaSV NVARCHAR(20) NOT NULL,
+                LanPhanHoi INT NOT NULL,
+                ThongTinDung BIT NOT NULL,
+                NoiDung NVARCHAR(2000) NOT NULL,
+                NguoiGui NVARCHAR(20) NOT NULL,
+                NgayGui DATETIMEOFFSET NOT NULL,
+                CONSTRAINT FK_PHDS_CB FOREIGN KEY (MaCongBo) REFERENCES CONGBODANHSACHTHUCTAP(MaCongBo),
+                CONSTRAINT FK_PHDS_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV),
+                CONSTRAINT UQ_PHDS_LAN UNIQUE (MaCongBo, MaSV, LanPhanHoi)
+            );
+        END;
+GO
+-- Migration: XuLyDanhSach
+IF COL_LENGTH('KHONGHOANTATDOT','TruocChotDanhSach') IS NULL
+            ALTER TABLE KHONGHOANTATDOT ADD TruocChotDanhSach BIT NOT NULL CONSTRAINT DF_KHT_TRUOCCHOT DEFAULT 0;
+GO
+IF COL_LENGTH('PHANHOIDANHSACHTHUCTAP','ThongTinMoiJson') IS NULL
+            ALTER TABLE PHANHOIDANHSACHTHUCTAP ADD ThongTinMoiJson NVARCHAR(MAX) NULL,
+                ThongTinCuJson NVARCHAR(MAX) NULL, PhienBanThongTin INT NOT NULL CONSTRAINT DF_PHDS_INFO DEFAULT 0;
+        IF COL_LENGTH('PHANBOTHUCTAP','TenCongTyXacNhan') IS NULL
+            ALTER TABLE PHANBOTHUCTAP ADD TenCongTyXacNhan NVARCHAR(500) NULL, DiaChiCongTyXacNhan NVARCHAR(1000) NULL,
+                MaSoThueCongTyXacNhan NVARCHAR(30) NULL;
+GO
+IF OBJECT_ID(N'XULYPHANHOIDANHSACH', N'U') IS NULL
+            CREATE TABLE XULYPHANHOIDANHSACH (
+                MaXuLy NVARCHAR(32) NOT NULL PRIMARY KEY,
+                MaDot NVARCHAR(20) NOT NULL REFERENCES DOTTHUCTAP(maSo),
+                MaPhanHoi NVARCHAR(32) NOT NULL UNIQUE REFERENCES PHANHOIDANHSACHTHUCTAP(MaPhanHoi),
+                ChapThuan BIT NOT NULL, LyDo NVARCHAR(2000) NOT NULL, NguoiXuLy NVARCHAR(20) NOT NULL,
+                NgayXuLy DATETIMEOFFSET NOT NULL, ThongTinCuJson NVARCHAR(MAX) NOT NULL, ThongTinMoiJson NVARCHAR(MAX) NOT NULL
+            );
+        IF OBJECT_ID(N'DANHSACHTHUCTAPCHINHTHUC', N'U') IS NULL
+            CREATE TABLE DANHSACHTHUCTAPCHINHTHUC (
+                MaDot NVARCHAR(20) NOT NULL PRIMARY KEY REFERENCES DOTTHUCTAP(maSo),
+                MaCongBo NVARCHAR(32) NOT NULL REFERENCES CONGBODANHSACHTHUCTAP(MaCongBo),
+                PhienBanRaSoat INT NOT NULL, DanhSachJson NVARCHAR(MAX) NOT NULL,
+                LyDo NVARCHAR(2000) NOT NULL, NguoiChot NVARCHAR(20) NOT NULL, NgayChot DATETIMEOFFSET NOT NULL
+            );
+GO
+-- Fixtures v1, 29/10/2026. Chỉ nạp cùng schema mới, không chạy riêng lên CSDL đang dùng.
+-- Mọi hạn mới tính theo ngày nạp UTC+7; giờ PV lưu giờ địa phương theo hợp đồng API.
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+DECLARE @now DATETIMEOFFSET = SYSDATETIMEOFFSET() AT TIME ZONE 'SE Asia Standard Time';
+DECLARE @today DATE = CONVERT(DATE,@now);
+DECLARE @local DATETIME2 = CONVERT(DATETIME2,@now);
+
+-- Hoàn thiện liên kết của bộ dữ liệu cũ; không tự tạo kế hoạch cho toàn danh mục DN.
+INSERT INTO SVTHAMGIADOT (MaDot,MaSV,NgayThem,NguoiThem,NgayCapNhat,NguoiCapNhat)
+SELECT s.maDot,s.maSV,@now,'TK002',@now,'TK002' FROM (
+ SELECT maDot,maSV FROM PHANBOTHUCTAP UNION SELECT maDot,maSV FROM DANGKYTHUCTAP
+ UNION SELECT 'DOT02',maSV FROM SINHVIEN WHERE maSV IN ('SV031','SV032','SV033','SV034','SV035')
+) s WHERE NOT EXISTS (SELECT 1 FROM SVTHAMGIADOT r WHERE r.MaDot=s.maDot AND r.MaSV=s.maSV);
+INSERT INTO CONGTYTHEODOT (MaCongTy,MaDot,ViTriTuyen,YeuCau,SoLuongNhan,MoDangKy,HanDangKy,HoatDong)
+SELECT c.maCongTy,d.maSo,c.viTriTuyen,c.yeuCau,
+ CASE WHEN c.soLuongNhan < used.N THEN used.N ELSE c.soLuongNhan END,
+ DATEADD(DAY,-30,CONVERT(DATETIMEOFFSET,d.thoiGianBD)),CONVERT(DATETIMEOFFSET,d.thoiGianBD),0
+FROM CONGTY c CROSS JOIN DOTTHUCTAP d
+CROSS APPLY (SELECT COUNT(*) N FROM PHANBOTHUCTAP p WHERE p.maCongTy=c.maCongTy AND p.maDot=d.maSo AND p.trangThai<>'Huy') used
+WHERE EXISTS(SELECT 1 FROM DANGKYTHUCTAP a WHERE a.maDot=d.maSo AND a.maCongTy=c.maCongTy)
+ OR EXISTS(SELECT 1 FROM PHANBOTHUCTAP p WHERE p.maDot=d.maSo AND p.maCongTy=c.maCongTy);
+INSERT INTO VITRITHEODOT (MaViTri,MaCongTy,MaDot,TenViTri,YeuCau,SoLuongNhan,HoatDong)
+SELECT CONCAT('OLD_',MaDot,'_',MaCongTy),MaCongTy,MaDot,ViTriTuyen,YeuCau,SoLuongNhan,0 FROM CONGTYTHEODOT;
+UPDATE d SET MaViTri=v.MaViTri,ViTriDangKy=v.TenViTri,YeuCauDangKy=v.YeuCau
+FROM DANGKYTHUCTAP d JOIN VITRITHEODOT v ON v.MaCongTy=d.maCongTy AND v.MaDot=d.maDot;
+UPDATE p SET MaViTri=v.MaViTri,NguonPhanBo='DangKyOnline',ngayKhoaDuyet=p.ngayPhanBo,nguoiKhoaDuyet='TK002'
+FROM PHANBOTHUCTAP p JOIN VITRITHEODOT v ON v.MaCongTy=p.maCongTy AND v.MaDot=p.maDot;
+UPDATE p SET MaDK=d.maDK FROM PHONGVAN p JOIN DAIDIENDOANHNGHIEP r ON r.maSo=p.maDaiDien
+JOIN DANGKYTHUCTAP d ON d.maSV=p.maSV AND d.maCongTy=r.maCongTy AND d.trangThai='DaDuyet';
+-- Sửa thứ tự thời gian cũ: được tiếp nhận sau PV, trước phân công GV; không làm mất giờ.
+UPDATE p SET ngayPV=DATEADD(HOUR,9,CONVERT(DATETIME2,DATEADD(DAY,1,d.ngayDangKy)))
+FROM PHONGVAN p JOIN DANGKYTHUCTAP d ON d.maDK=p.MaDK;
+UPDATE p SET ngayPhanBo=DATEADD(DAY,2,d.ngayDangKy),ngaySVXacNhan=DATEADD(DAY,2,d.ngayDangKy),
+ ngayKhoaDuyet=DATEADD(DAY,2,d.ngayDangKy)
+FROM PHANBOTHUCTAP p JOIN DANGKYTHUCTAP d ON d.maSV=p.maSV AND d.maDot=p.maDot AND d.maCongTy=p.maCongTy AND d.trangThai='DaDuyet';
+UPDATE h SET ngayPC=DATEADD(DAY,1,p.ngayPhanBo) FROM GVHUONGDAN h JOIN PHANBOTHUCTAP p ON p.maSV=h.maSV AND p.maDot=h.maDot;
+UPDATE GIANGVIEN SET soLuongSVHD=chiTieuHD;
+
+-- 12 đợt riêng cho các biên thời gian/trạng thái; TEST_RONG tuyệt đối không có SV.
+INSERT INTO DOTTHUCTAP (maSo,tenDot,namHoc,thoiGianBD,thoiGianKT,trangThai,maRubric,
+ HanXacNhanSV,MoChamGV,HanChamGV,HanChamDN,HanDieuChinhNoiThucTap) VALUES
+('TEST_MOI',N'[TEST] Đăng ký, phỏng vấn, bố trí trước đợt','TEST',DATEADD(DAY,14,@today),DATEADD(DAY,104,@today),'DangDienRa','CNTT_CLO_V1',DATEADD(DAY,10,@now),NULL,DATEADD(DAY,120,@now),DATEADD(DAY,120,@now),DATEADD(DAY,12,@now)),
+('TEST_DANG',N'[TEST] Đang thực tập: tiến độ và CLO','TEST',DATEADD(DAY,-30,@today),DATEADD(DAY,60,@today),'DangDienRa','CNTT_CLO_V1',NULL,DATEADD(DAY,-5,@now),DATEADD(DAY,90,@now),DATEADD(DAY,90,@now),DATEADD(DAY,15,@now)),
+('TEST_HAN',N'[TEST] Quá hạn xác nhận, còn giữ chỗ','TEST',DATEADD(DAY,14,@today),DATEADD(DAY,104,@today),'DangDienRa','CNTT_CLO_V1',DATEADD(DAY,-1,@now),NULL,NULL,NULL,DATEADD(DAY,10,@now)),
+('TEST_KT',N'[TEST] Hết lịch, chưa chốt: thiếu điểm / không hoàn tất','TEST',DATEADD(DAY,-120,@today),DATEADD(DAY,-1,@today),'DaKetThuc','CNTT_CLO_V1',NULL,DATEADD(DAY,-10,@now),DATEADD(DAY,14,@now),DATEADD(DAY,14,@now),NULL),
+('TEST_KHOA',N'[TEST] Đã chốt khóa ghi','TEST',DATEADD(DAY,-120,@today),DATEADD(DAY,-10,@today),'DaKetThuc','CNTT_CLO_V1',NULL,NULL,DATEADD(DAY,14,@now),DATEADD(DAY,14,@now),NULL),
+('TEST_MOLAI',N'[TEST] Mở lại điểm, báo cáo còn hạn','TEST',DATEADD(DAY,-120,@today),DATEADD(DAY,-10,@today),'DaKetThuc','CNTT_CLO_V1',NULL,NULL,DATEADD(DAY,14,@now),DATEADD(DAY,14,@now),NULL),
+('TEST_HETMO',N'[TEST] Hết hạn mở lại, chờ chốt lại','TEST',DATEADD(DAY,-120,@today),DATEADD(DAY,-10,@today),'DaKetThuc','CNTT_CLO_V1',NULL,NULL,DATEADD(DAY,14,@now),DATEADD(DAY,14,@now),NULL),
+('TEST_RONG',N'[TEST] Đợt trống không lấy toàn danh mục','TEST',DATEADD(DAY,14,@today),DATEADD(DAY,104,@today),'ChuaBatDau','CNTT_CLO_V1',NULL,NULL,NULL,NULL,NULL),
+('TEST_CHOTDS',N'[TEST] Chốt danh sách trước ngày bắt đầu','TEST',DATEADD(DAY,14,@today),DATEADD(DAY,104,@today),'ChuaBatDau','CNTT_CLO_V1',NULL,NULL,NULL,NULL,NULL),
+('TEST_DUKIEN',N'[TEST] Công bố dự kiến và phản hồi','TEST',DATEADD(DAY,14,@today),DATEADD(DAY,104,@today),'ChuaBatDau','CNTT_CLO_V1',NULL,NULL,NULL,NULL,NULL),
+('TEST_CHUACHAM',N'[TEST] Chưa tới lịch mở chấm GV','TEST',DATEADD(DAY,-30,@today),DATEADD(DAY,60,@today),'DangDienRa','CNTT_CLO_V1',NULL,DATEADD(DAY,7,@now),DATEADD(DAY,90,@now),DATEADD(DAY,90,@now),NULL),
+('TEST_HETCHAM',N'[TEST] Hết hạn chấm không tự khóa đợt','TEST',DATEADD(DAY,-120,@today),DATEADD(DAY,-10,@today),'DaKetThuc','CNTT_CLO_V1',NULL,NULL,DATEADD(DAY,-1,@now),DATEADD(DAY,-1,@now),NULL);
+
+-- DN được duyệt/chưa duyệt/ngừng nhận/chỉ tiếp nhận ngoài, đầu mối GV còn/hết tải.
+INSERT INTO CONGTY (maCongTy,tenCongTy,viTriTuyen,thoiGian,soLuongNhan,yeuCau,trangThai,chiTiepNhanTuTim) VALUES
+('WCT01',N'[TEST] Công nghệ Sao Việt',N'Backend / Frontend',N'Theo kế hoạch đợt',30,N'C#, SQL Server, React, Git','DaDuyet',0),
+('WCT02',N'[TEST] Vị trí đầy, tổng còn',N'QA',N'Theo đợt',10,N'Test case, SQL','DaDuyet',0),
+('WCT03',N'[TEST] Tổng trần đầy',N'Fullstack',N'Theo đợt',1,N'C#, React','DaDuyet',0),
+('WCT04',N'[TEST] Kế hoạch ngừng nhận',N'Data',N'Theo đợt',5,N'Python, SQL','DaDuyet',0),
+('WCT05',N'[TEST] Kế hoạch hết hạn',N'DevOps',N'Theo đợt',5,N'Docker, CI/CD','DaDuyet',0),
+('WCT06',N'[TEST] Kế hoạch chưa mở',N'Mobile',N'Theo đợt',5,N'Flutter','DaDuyet',0),
+('WCT07',N'[TEST] Chỉ tiếp nhận bên ngoài',N'Tiếp nhận ngoài',N'Theo hồ sơ',20,N'Theo hồ sơ xác minh','DaDuyet',1),
+('WCT08',N'[TEST] Đề xuất DN chờ duyệt',N'AI Intern',N'Theo đề xuất',3,N'Python, NLP','ChoDuyet',0),
+('WCT09',N'[TEST] Đề xuất DN từ chối',N'Web Intern',N'Theo đề xuất',3,N'JavaScript','TuChoi',0),
+('WCT10',N'[TEST] Danh mục chưa có kế hoạch',N'Business Analyst',N'Chưa có kế hoạch',5,N'Phân tích nghiệp vụ','DaDuyet',0);
+INSERT INTO GIANGVIEN (maGV,hoTen,chuyenMon,soLuongSVHD,chiTieuHD) VALUES
+('WGV01',N'[TEST] Nguyễn Minh Anh',N'C#, SQL Server, React',30,30),
+('WGV02',N'[TEST] Trần Thu Hà',N'Python, AI, Data',1,1),
+('WGV03',N'[TEST] Lê Đức Nam',N'Kiểm thử, DevOps',0,0);
+INSERT INTO DAIDIENDOANHNGHIEP (maSo,hoTen,chucVu,email,thongTinLienHe,maCongTy)
+SELECT CONCAT('WDD',RIGHT(maCongTy,2)),CONCAT(N'Đại diện test ',RIGHT(maCongTy,2)),N'Người hướng dẫn',CONCAT('dn',RIGHT(maCongTy,2),'@example.test'),'0900000000',maCongTy
+FROM CONGTY WHERE maCongTy LIKE 'WCT%';
+INSERT INTO TAIKHOAN (maTaiKhoan,tenDangNhap,matKhau,trangThai,maVaiTro,maGV,maDaiDien,email)
+SELECT CONCAT('WTK_',maGV),CONCAT('testgv',RIGHT(maGV,2)),(SELECT matKhau FROM TAIKHOAN WHERE maTaiKhoan='TK001'),'HoatDong','VT03',maGV,NULL,CONCAT(maGV,'@example.test') FROM GIANGVIEN WHERE maGV LIKE 'WGV%'
+UNION ALL SELECT CONCAT('WTK_',maSo),CONCAT('testdn',RIGHT(maSo,2)),(SELECT matKhau FROM TAIKHOAN WHERE maTaiKhoan='TK001'),'HoatDong','VT05',NULL,maSo,email FROM DAIDIENDOANHNGHIEP WHERE maSo LIKE 'WDD%' AND maSo<>'WDD10';
+INSERT INTO GIOITHIEU (maSo,ngayGioiThieu,trangThaiKetNoi,maCongTy,maGV) VALUES
+('WGT08',@today,'DangXem','WCT08','WGV01'),('WGT09',@today,'TuChoi','WCT09','WGV02');
+
+-- Mỗi tài khoản testsv01..50 trùng số WX001..050; tên ghi rõ trạng thái để dễ tìm.
+DECLARE @students TABLE (N INT PRIMARY KEY,Scenario NVARCHAR(100));
+INSERT INTO @students VALUES
+(1,N'Chưa có hồ sơ năng lực'),(2,N'Hồ sơ năng lực đủ, chưa đăng ký'),(3,N'Đơn chờ duyệt'),(4,N'PV tương lai'),(5,N'PV đã tới giờ chưa kết quả'),
+(6,N'PV đạt, giữ chỗ chờ SV xác nhận'),(7,N'SV xác nhận, chờ Khoa duyệt'),(8,N'PV không đạt có căn cứ'),(9,N'Vắng PV có căn cứ'),(10,N'SV tự rút hồ sơ'),
+(11,N'Hết 3 lượt toàn đợt'),(12,N'PV xếp lại giữ buổi cũ'),(13,N'Tự tìm chờ duyệt'),(14,N'Tự tìm bị từ chối'),(15,N'Tự tìm được công nhận'),
+(16,N'Bố trí trực tiếp chưa có GV'),(17,N'Vị trí đầy tổng còn'),(18,N'Tổng chỉ tiêu DN đầy'),(19,N'Đã hủy nơi và đã bố trí lại'),(20,N'Quá hạn xác nhận còn giữ chỗ'),
+(21,N'Tiến độ đủ 4 trạng thái'),(22,N'Quá hạn chưa nộp'),(23,N'Mở hạn bổ sung còn hiệu lực'),(24,N'Hết hạn bổ sung'),(25,N'Chưa lập phiếu điểm'),
+(26,N'Chỉ có điểm DN'),(27,N'Chỉ có điểm GV'),(28,N'Đủ điểm CLO đạt'),(29,N'Đủ điểm CLO không đạt'),(30,N'Đủ điểm toàn bộ bằng 0'),
+(31,N'Tổng điểm cũ nhưng thiếu tiêu chí'),(32,N'Phiếu chưa có chi tiết'),(33,N'Có nơi chưa có GV'),(34,N'Giảng viên đầu mối hết tải'),(35,N'Ngày riêng sau khi đợt bắt đầu bị khóa'),
+(36,N'Tự tìm đã công nhận, thời gian riêng'),(37,N'Hồ sơ năng lực tối giản'),(38,N'Tài khoản bị khóa'),(39,N'Tài khoản chưa kích hoạt'),(40,N'Đã có GV, chặn sửa qua PV'),
+(41,N'Hết lịch còn thiếu điểm chặn chốt'),(42,N'Không hoàn tất có căn cứ'),(43,N'Hết lịch đủ điểm chờ Khoa chốt'),(44,N'Hết lịch chưa có nơi chưa xác nhận'),(45,N'Đợt đã khóa'),
+(46,N'Đợt đang mở lại'),(47,N'Hết hạn mở lại'),(48,N'Danh sách chính thức trước đợt'),(49,N'Danh sách dự kiến có phản hồi'),(50,N'Đã rút khỏi danh sách đợt');
+INSERT INTO SINHVIEN (maSV,hoTen,lop,khoaHoc,gpa,kyNang,chuyenNganh,congNghe,duAnDaThucHien)
+SELECT CONCAT('WX',RIGHT(CONCAT('000',N),3)),CONCAT(N'Test ',RIGHT(CONCAT('00',N),2),N' — ',Scenario),
+ CASE WHEN N%2=0 THEN '14DHTH01' ELSE '14DHTH02' END,'2023-2027',CASE WHEN N=37 THEN NULL ELSE 3.2 END,
+ CASE WHEN N IN (1,37) THEN NULL ELSE N'C#, SQL, JavaScript, Python, làm việc nhóm' END,N'Công nghệ phần mềm',
+ CASE WHEN N IN (1,37) THEN NULL ELSE N'ASP.NET Core, React, SQL Server, Git' END,
+ CASE WHEN N IN (1,37) THEN NULL ELSE N'Xây dựng API và website quản lý thư viện' END FROM @students;
+INSERT INTO TAIKHOAN (maTaiKhoan,tenDangNhap,matKhau,trangThai,maVaiTro,maSV,email)
+SELECT CONCAT('WTK_SV',RIGHT(CONCAT('00',N),2)),CONCAT('testsv',RIGHT(CONCAT('00',N),2)),
+ (SELECT matKhau FROM TAIKHOAN WHERE maTaiKhoan='TK001'),CASE N WHEN 38 THEN 'BiKhoa' WHEN 39 THEN 'ChuaKichHoat' ELSE 'HoatDong' END,
+ 'VT04',CONCAT('WX',RIGHT(CONCAT('000',N),3)),CONCAT('testsv',N,'@example.test') FROM @students;
+INSERT INTO HOSONANGLUC (maHoSo,NDHoSo,ngayCapNhat,maSV)
+SELECT CONCAT('WHS',RIGHT(CONCAT('000',N),3)),CASE WHEN N=37 THEN N'Sinh viên CNTT' ELSE N'C#, ASP.NET Core, React, SQL Server, Python. Dự án API quản lý thư viện, Git, kiểm thử đơn vị.' END,@today,CONCAT('WX',RIGHT(CONCAT('000',N),3)) FROM @students WHERE N<>1;
+INSERT INTO SVTHAMGIADOT (MaDot,MaSV,DangThamGia,NgayThem,NguoiThem,NgayCapNhat,NguoiCapNhat)
+SELECT CASE WHEN N=20 THEN 'TEST_HAN' WHEN N<=19 THEN 'TEST_MOI' WHEN N<=40 THEN 'TEST_DANG'
+ WHEN N<=44 THEN 'TEST_KT' WHEN N=45 THEN 'TEST_KHOA' WHEN N=46 THEN 'TEST_MOLAI' WHEN N=47 THEN 'TEST_HETMO'
+ WHEN N=48 THEN 'TEST_CHOTDS' WHEN N=49 THEN 'TEST_DUKIEN' ELSE 'TEST_MOI' END,
+ CONCAT('WX',RIGHT(CONCAT('000',N),3)),CASE WHEN N=50 THEN 0 ELSE 1 END,DATEADD(DAY,-10,@now),'TK002',@now,'TK002' FROM @students;
+INSERT INTO SVTHAMGIADOT (MaDot,MaSV,NgayThem,NguoiThem,NgayCapNhat,NguoiCapNhat) VALUES
+('TEST_CHUACHAM','WX021',@now,'TK002',@now,'TK002'),('TEST_HETCHAM','WX021',@now,'TK002',@now,'TK002');
+
+INSERT INTO CONGTYTHEODOT (MaCongTy,MaDot,ViTriTuyen,YeuCau,SoLuongNhan,MoDangKy,HanDangKy,HoatDong,MaGVGioiThieu)
+SELECT c.maCongTy,r.maSo,c.viTriTuyen,c.yeuCau,CASE c.maCongTy WHEN 'WCT02' THEN 10 WHEN 'WCT03' THEN 1 ELSE 30 END,
+ CASE WHEN c.maCongTy='WCT06' THEN DATEADD(DAY,3,@now) ELSE DATEADD(DAY,-10,@now) END,
+ CASE WHEN c.maCongTy='WCT05' THEN DATEADD(DAY,-1,@now) ELSE DATEADD(DAY,10,@now) END,
+ CASE WHEN c.maCongTy='WCT04' THEN 0 ELSE 1 END,
+ CASE WHEN c.maCongTy='WCT01' THEN 'WGV01' WHEN c.maCongTy='WCT02' THEN 'WGV02' ELSE NULL END
+FROM CONGTY c CROSS JOIN DOTTHUCTAP r WHERE c.maCongTy BETWEEN 'WCT01' AND 'WCT06' AND r.maSo LIKE 'TEST_%' AND r.maSo<>'TEST_RONG';
+INSERT INTO VITRITHEODOT (MaViTri,MaCongTy,MaDot,TenViTri,YeuCau,SoLuongNhan,HoatDong)
+SELECT CONCAT(MaDot,'_',MaCongTy,'_A'),MaCongTy,MaDot,
+ CASE WHEN MaCongTy='WCT01' THEN N'Backend .NET Intern' ELSE ViTriTuyen END,
+ CASE WHEN MaCongTy='WCT01' THEN N'C#, ASP.NET Core, SQL Server, REST API, Git, unit test' ELSE YeuCau END,
+ CASE WHEN MaCongTy IN ('WCT02','WCT03') THEN 1 ELSE 30 END,1 FROM CONGTYTHEODOT WHERE MaDot LIKE 'TEST_%';
+INSERT INTO VITRITHEODOT (MaViTri,MaCongTy,MaDot,TenViTri,YeuCau,SoLuongNhan,HoatDong) VALUES
+('TEST_MOI_WCT01_B','WCT01','TEST_MOI',N'Frontend React Intern',N'React, JavaScript, HTML, CSS, API, Git',2,1),
+('TEST_MOI_WCT01_OFF','WCT01','TEST_MOI',N'Vị trí đã ngừng',N'Không nhận mới',3,0),
+('TEST_MOI_WCT03_B','WCT03','TEST_MOI',N'Vị trí còn nhưng tổng đầy',N'React',5,1);
+
+-- Đơn, PV và kết quả có audit, đủ 3 lượt gồm rớt/rút; không chế tạo điểm AI.
+INSERT INTO DANGKYTHUCTAP (maDK,ngayDangKy,thuTuUuTien,trangThai,maSV,maCongTy,maDot,MaViTri,ViTriDangKy,YeuCauDangKy,LyDoKetThuc)
+SELECT CONCAT('WDK',RIGHT(CONCAT('000',s.N),3)),DATEADD(DAY,-5,@today),1,
+ CASE WHEN s.N IN (8,9,10,11) THEN 'TuChoi' WHEN s.N=3 THEN 'ChoDuyet' ELSE 'DaDuyet' END,
+ CONCAT('WX',RIGHT(CONCAT('000',s.N),3)),'WCT01','TEST_MOI',v.MaViTri,v.TenViTri,v.YeuCau,
+ CASE s.N WHEN 8 THEN N'Phỏng vấn không đạt: Chưa đáp ứng kỹ năng SQL; biên bản test PV08'
+ WHEN 9 THEN N'Vắng/bỏ phỏng vấn: DN xác minh không tham dự; biên bản test PV09'
+ WHEN 10 THEN N'Sinh viên chủ động rút hồ sơ, đơn test R10' WHEN 11 THEN N'Không đạt PV lần 1, biên bản test R11' ELSE NULL END
+FROM @students s JOIN VITRITHEODOT v ON v.MaViTri='TEST_MOI_WCT01_A' WHERE s.N BETWEEN 3 AND 12;
+INSERT INTO DANGKYTHUCTAP (maDK,ngayDangKy,thuTuUuTien,trangThai,maSV,maCongTy,maDot,MaViTri,ViTriDangKy,YeuCauDangKy,LyDoKetThuc)
+SELECT CONCAT('WDK011_',RIGHT(c.MaCongTy,2)),DATEADD(DAY,-4,@today),CASE c.MaCongTy WHEN 'WCT02' THEN 2 ELSE 3 END,'TuChoi','WX011',c.MaCongTy,c.MaDot,v.MaViTri,v.TenViTri,v.YeuCau,N'Đã rút/không đạt theo hồ sơ kiểm thử'
+FROM CONGTYTHEODOT c JOIN VITRITHEODOT v ON v.MaCongTy=c.MaCongTy AND v.MaDot=c.MaDot WHERE c.MaDot='TEST_MOI' AND c.MaCongTy IN ('WCT02','WCT04');
+INSERT INTO PHONGVAN (maPV,hinhThuc,ngayPV,ketQua,maDaiDien,maSV,MaDK,LyDoKetQua,NguonKetQua,NguoiGhiKetQua,ThoiDiemKetQua)
+SELECT CONCAT('WPV',RIGHT(CONCAT('000',s.N),3)),N'Trực tuyến',CASE WHEN s.N=4 THEN DATEADD(DAY,2,@local) ELSE DATEADD(DAY,-2,@local) END,
+ CASE WHEN s.N IN (4,5) THEN 'ChuaCoKetQua' WHEN s.N IN (6,7) THEN 'Dat' WHEN s.N=9 THEN 'Vang' ELSE 'KhongDat' END,
+ 'WDD01',CONCAT('WX',RIGHT(CONCAT('000',s.N),3)),CONCAT('WDK',RIGHT(CONCAT('000',s.N),3)),
+ CASE WHEN s.N=9 THEN N'DN xác minh không tham dự; biên bản test PV09' WHEN s.N IN (8,11,12) THEN N'Chưa đáp ứng kỹ năng SQL; biên bản test PV08' WHEN s.N IN (6,7) THEN N'Đạt phỏng vấn, DN xác nhận tiếp nhận' ELSE NULL END,
+ CASE WHEN s.N IN (4,5) THEN NULL ELSE 'DoanhNghiep' END,CASE WHEN s.N IN (4,5) THEN NULL ELSE 'WTK_WDD01' END,
+ CASE WHEN s.N IN (4,5) THEN NULL ELSE DATEADD(DAY,-1,@now) END
+FROM @students s WHERE s.N BETWEEN 4 AND 12 AND s.N<>10;
+INSERT INTO NHATKYPHONGVAN (MaNhatKy,MaPV,MaDK,KetQuaCu,KetQuaMoi,LyDo,Nguon,NguoiThucHien,ThoiDiem)
+SELECT CONCAT('WNK_',maPV),maPV,MaDK,'ChuaCoKetQua',ketQua,LyDoKetQua,NguonKetQua,NguoiGhiKetQua,ThoiDiemKetQua FROM PHONGVAN WHERE maPV LIKE 'WPV%' AND ketQua<>'ChuaCoKetQua';
+UPDATE d SET MaPVKetThuc=p.maPV FROM DANGKYTHUCTAP d JOIN PHONGVAN p ON p.MaDK=d.maDK WHERE d.maDK IN ('WDK008','WDK009','WDK011');
+INSERT INTO PHONGVAN (maPV,hinhThuc,ngayPV,ketQua,maDaiDien,maSV,MaDK,MaPVTruoc)
+VALUES ('WPV012_NEW',N'Trực tuyến',DATEADD(DAY,2,@local),'ChuaCoKetQua','WDD01','WX012','WDK012','WPV012');
+INSERT INTO NHATKYPHONGVAN (MaNhatKy,MaPV,MaDK,KetQuaCu,KetQuaMoi,LyDo,Nguon,NguoiThucHien,ThoiDiem,Loai,MaPVMoi,NoiDungCu,NoiDungMoi)
+VALUES ('WNK_RESCHEDULE','WPV012','WDK012','KhongDat','ChuaCoKetQua',N'Xếp lại theo xác minh DN: lỗi kết nối buổi cũ','DoanhNghiep','WTK_WDD01',@now,'XepLai','WPV012_NEW',N'{"MaPV":"WPV012"}',N'{"MaPV":"WPV012_NEW"}');
+
+-- Phân bổ tạm, chờ duyệt, chính thức, đã hủy và nối nơi cũ; ngoài không ép JD.
+INSERT INTO PHANBOTHUCTAP (maPB,ngayPhanBo,trangThai,maDot,maCongTy,maSV,MaViTri,daDuocKhoaDuyet,ngaySVXacNhan,ngayKhoaDuyet,nguoiKhoaDuyet,NguonPhanBo)
+SELECT CONCAT('WPB',RIGHT(CONCAT('000',s.N),3),CASE r.MaDot WHEN 'TEST_CHUACHAM' THEN '_CC' WHEN 'TEST_HETCHAM' THEN '_HC' ELSE '' END),DATEADD(DAY,-1,@today),
+ CASE s.N WHEN 6 THEN 'ChuaNhanViec' WHEN 7 THEN 'ChoKhoaDuyet' WHEN 20 THEN 'ChuaNhanViec' ELSE 'DangThucTap' END,r.MaDot,
+ CASE WHEN s.N IN (15,36) THEN 'WCT07' WHEN s.N=17 THEN 'WCT02' WHEN s.N=18 THEN 'WCT03' ELSE 'WCT01' END,r.MaSV,
+ CASE WHEN s.N IN (15,16,19,36) THEN NULL ELSE CONCAT(r.MaDot,'_',CASE s.N WHEN 17 THEN 'WCT02' WHEN 18 THEN 'WCT03' ELSE 'WCT01' END,'_A') END,
+ CASE WHEN s.N IN (6,7,20) THEN 0 ELSE 1 END,CASE WHEN s.N IN (6,20) THEN NULL ELSE DATEADD(DAY,-1,@local) END,
+ CASE WHEN s.N IN (6,7,20) THEN NULL ELSE DATEADD(DAY,-1,@local) END,CASE WHEN s.N IN (6,7,20) THEN NULL ELSE 'TK002' END,
+ CASE WHEN s.N IN (15,36) THEN 'TiepNhanBenNgoai' WHEN s.N IN (16,19) THEN 'KhoaBoTri' ELSE 'DangKyOnline' END
+FROM @students s JOIN SVTHAMGIADOT r ON r.MaSV=CONCAT('WX',RIGHT(CONCAT('000',s.N),3))
+WHERE s.N IN (6,7,15,16,17,18,19,20) OR (s.N BETWEEN 21 AND 49 AND s.N NOT IN (42,44));
+-- Các phân bổ của WX021 ở 3 đợt có hậu tố _CC/_HC riêng.
+UPDATE p SET ngayPhanBo=DATEADD(DAY,-2,d.thoiGianBD),ngaySVXacNhan=DATEADD(DAY,-2,d.thoiGianBD),ngayKhoaDuyet=DATEADD(DAY,-2,d.thoiGianBD)
+FROM PHANBOTHUCTAP p JOIN DOTTHUCTAP d ON d.maSo=p.maDot WHERE p.maPB LIKE 'WPB%' AND d.thoiGianBD<@today;
+INSERT INTO PHANBOTHUCTAP (maPB,ngayPhanBo,trangThai,maDot,maCongTy,maSV,daDuocKhoaDuyet,NguonPhanBo,LyDoHuy,CanCuHuy,NguoiHuy,NgayHuy,TrangThaiXuLyLai)
+VALUES ('WPB019_OLD',DATEADD(DAY,-5,@today),'Huy','TEST_MOI','WCT04','WX019',1,'KhoaBoTri',N'DN dừng tiếp nhận',N'Biên bản kiểm thử DC19','TK002',DATEADD(DAY,-2,@now),'CanBoTriLai');
+UPDATE PHANBOTHUCTAP SET MaPhanBoTruoc='WPB019_OLD' WHERE maPB='WPB019';
+INSERT INTO NHATKYDIEUCHINHTHUCTAP (MaNhatKy,MaDot,MaSV,MaPhanBo,Loai,LyDo,CanCu,NoiDung,NguoiThucHien,ThoiDiem) VALUES
+('WDC019_OLD','TEST_MOI','WX019','WPB019_OLD','Huy',N'DN dừng tiếp nhận',N'Biên bản kiểm thử DC19',N'Hủy nơi cũ, giữ lịch sử','TK002',DATEADD(DAY,-2,@now)),
+('WDC019_NEW','TEST_MOI','WX019','WPB019','PhanBoLai',N'Khoa đã tìm nơi thay thế',N'Biên bản kiểm thử DC19B',N'Bố trí lại WCT01, liên kết WPB019_OLD','TK002',@now);
+UPDATE PHANBOTHUCTAP SET NgayBatDauThucTap=DATEADD(DAY,-20,@today),NgayKetThucThucTap=DATEADD(DAY,70,@today) WHERE maPB IN ('WPB035','WPB036');
+INSERT INTO DEXUATTHUCTAPTUTIM (MaHoSo,MaSV,MaDot,MaCongTy,TenCongTy,DiaChi,ViTri,NguoiLienHe,LienHe,NgayBatDau,NgayKetThuc,TrangThai,NgayGui,NgayDuyet,NguoiDuyet,LyDo,MaPhanBo)
+SELECT CONCAT('WTT',RIGHT(s.maSV,3)),s.maSV,r.MaDot,CASE WHEN s.maSV='WX013' THEN NULL ELSE 'WCT07' END,
+ N'Doanh nghiệp tiếp nhận ngoài test',N'123 Đường Thử Nghiệm, TP.HCM',N'Thực tập lập trình',N'Nguyễn Đầu Mối','daumoi@example.test',
+ CASE WHEN s.maSV='WX036' THEN DATEADD(DAY,-20,@today) ELSE d.thoiGianBD END,
+ CASE WHEN s.maSV='WX036' THEN DATEADD(DAY,70,@today) ELSE d.thoiGianKT END,
+ CASE s.maSV WHEN 'WX013' THEN 'ChoDuyet' WHEN 'WX014' THEN 'TuChoi' ELSE 'DaDuyet' END,DATEADD(DAY,-5,@local),
+ CASE WHEN s.maSV='WX013' THEN NULL ELSE DATEADD(DAY,-1,@local) END,CASE WHEN s.maSV='WX013' THEN NULL ELSE 'TK002' END,
+ CASE WHEN s.maSV='WX014' THEN N'Thiếu xác nhận tiếp nhận từ DN; cần bổ sung hồ sơ' WHEN s.maSV IN ('WX015','WX036') THEN N'Khoa đã xác minh theo giấy tiếp nhận mẫu test' ELSE NULL END,
+ CASE s.maSV WHEN 'WX015' THEN 'WPB015' WHEN 'WX036' THEN 'WPB036' ELSE NULL END
+FROM SINHVIEN s JOIN SVTHAMGIADOT r ON r.MaSV=s.maSV JOIN DOTTHUCTAP d ON d.maSo=r.MaDot WHERE s.maSV IN ('WX013','WX014','WX015','WX036');
+INSERT INTO GVHUONGDAN (maSo,ngayPC,trangThai,maGV,maSV,maDot)
+SELECT CONCAT('WHD',RIGHT(p.maSV,3),CASE p.maDot WHEN 'TEST_CHUACHAM' THEN '_CC' WHEN 'TEST_HETCHAM' THEN '_HC' ELSE '' END),p.ngayPhanBo,'DangHuongDan',
+ CASE WHEN p.maSV='WX034' THEN 'WGV02' ELSE 'WGV01' END,p.maSV,p.maDot
+FROM PHANBOTHUCTAP p WHERE p.maPB LIKE 'WPB%' AND p.trangThai<>'Huy' AND p.maSV NOT IN ('WX006','WX007','WX015','WX016','WX017','WX018','WX019','WX020','WX033');
+INSERT INTO HUONGDANDOANHNGHIEP (maSo,ngayBD,vaiTro,maPB,maDaiDien)
+SELECT CONCAT('WDN',RIGHT(p.maSV,3),CASE p.maDot WHEN 'TEST_CHUACHAM' THEN '_CC' WHEN 'TEST_HETCHAM' THEN '_HC' ELSE '' END),p.ngayPhanBo,N'Người hướng dẫn thực tập',p.maPB,
+ CONCAT('WDD',RIGHT(p.maCongTy,2)) FROM PHANBOTHUCTAP p WHERE p.maPB LIKE 'WPB%' AND p.trangThai='DangThucTap';
+
+-- Báo cáo đang mở, đã nộp/duyệt/yêu cầu sửa, quá hạn và bổ sung riêng có audit.
+INSERT INTO TIENDOTHUCTAP (maTienDo,mocThoiGian,noiDungBaoCao,ngayNop,trangThaiDuyet,nhanXetGV,maDot,maSV,NopTre,HanNopBoSung) VALUES
+('WTD021_A',DATEADD(DAY,3,@today),NULL,NULL,'ChuaNop',NULL,'TEST_DANG','WX021',NULL,NULL),
+('WTD021_B',DATEADD(DAY,-1,@today),N'Hoàn thành API đăng nhập và kiểm thử.',DATEADD(DAY,-2,@local),'DaNop',NULL,'TEST_DANG','WX021',0,NULL),
+('WTD021_C',DATEADD(DAY,-8,@today),N'Phân tích yêu cầu, thiết kế CSDL.',DATEADD(DAY,-9,@local),'DaDuyet',N'Đạt yêu cầu tuần.','TEST_DANG','WX021',0,NULL),
+('WTD021_D',DATEADD(DAY,2,@today),N'Bản nháp báo cáo tuần cần bổ sung.',DATEADD(DAY,-1,@local),'YeuCauSua',N'Bổ sung kết quả test và nhật ký công việc.','TEST_DANG','WX021',0,NULL),
+('WTD022',DATEADD(DAY,-3,@today),NULL,NULL,'ChuaNop',NULL,'TEST_DANG','WX022',NULL,NULL),
+('WTD023',DATEADD(DAY,-3,@today),NULL,NULL,'ChuaNop',NULL,'TEST_DANG','WX023',NULL,DATEADD(DAY,2,@now)),
+('WTD024',DATEADD(DAY,-5,@today),NULL,NULL,'ChuaNop',NULL,'TEST_DANG','WX024',NULL,DATEADD(DAY,-1,@now)),
+('WTD019_OLD',DATEADD(DAY,-2,@today),N'Báo cáo nơi cũ được lưu nguyên lịch sử.',DATEADD(DAY,-3,@local),'DaNop',NULL,'TEST_MOI','WX019',0,NULL),
+('WTD045',DATEADD(DAY,-12,@today),N'Báo cáo đã lưu trước chốt.',DATEADD(DAY,-13,@local),'DaDuyet',N'Đã duyệt.','TEST_KHOA','WX045',0,NULL),
+('WTD046',DATEADD(DAY,-12,@today),N'Báo cáo cần sửa khi mở lại.',DATEADD(DAY,-13,@local),'YeuCauSua',N'Bổ sung kết luận.','TEST_MOLAI','WX046',0,DATEADD(DAY,2,@now)),
+('WTD047',DATEADD(DAY,-12,@today),N'Báo cáo giữ nguyên khi hết mở lại.',DATEADD(DAY,-13,@local),'DaDuyet',N'Đã duyệt.','TEST_HETMO','WX047',0,NULL);
+UPDATE TIENDOTHUCTAP SET MaPhanBoLuuTru='WPB019_OLD' WHERE maTienDo='WTD019_OLD';
+INSERT INTO NHATKYTHOIHAN (MaNhatKy,MaDot,Loai,Truoc,Sau,LyDo,NguoiThucHien,ThoiDiem) VALUES
+('WTH023','TEST_DANG','HanNopBoSung',N'{"MaTienDo":"WTD023","HanNopBoSung":null}',
+ (SELECT 'WTD023' MaTienDo,DATEADD(DAY,2,@now) HanNopBoSung FOR JSON PATH,WITHOUT_ARRAY_WRAPPER),N'SV đã trình bày trực tiếp, Khoa chấp thuận theo biên bản test BS23','TK002',@now),
+('WTH024','TEST_DANG','HanNopBoSung',N'{"MaTienDo":"WTD024","HanNopBoSung":null}',
+ (SELECT 'WTD024' MaTienDo,DATEADD(DAY,-1,@now) HanNopBoSung FOR JSON PATH,WITHOUT_ARRAY_WRAPPER),N'Gia hạn cá biệt theo biên bản test BS24, nay đã hết hạn','TK002',DATEADD(DAY,-3,@now));
+
+-- CLO: đủ 11, chỉ DN, chỉ GV, thiếu 1 có TongDiem cũ, trống và 0 nhập rõ.
+INSERT INTO PHIEUCHAMDIEM (maPhieu,tongDiem,ngayCham,maDot,maSV,maHuongDanDN,maGVHuongDan,nhanXetGV,nhanXetDN,daDoiChieuPhieuDN)
+SELECT CONCAT('WPC',RIGHT(p.maSV,3)),CASE WHEN p.maSV='WX031' THEN 9 ELSE NULL END,@today,p.maDot,p.maSV,
+ dn.maDaiDien,hd.maSo,N'Nhận xét GV mẫu kiểm thử',N'Nhận xét DN mẫu kiểm thử',0
+FROM PHANBOTHUCTAP p JOIN GVHUONGDAN hd ON hd.maSV=p.maSV AND hd.maDot=p.maDot
+JOIN HUONGDANDOANHNGHIEP dn ON dn.maPB=p.maPB
+WHERE p.maSV IN ('WX026','WX027','WX028','WX029','WX030','WX031','WX032','WX041','WX043','WX045','WX046','WX047');
+INSERT INTO CHITIETCHAMDIEM (maSo,diemCham,maPhieu,maTieuChi)
+SELECT CONCAT('WCD',RIGHT(p.maSV,3),'_',t.maTieuChi),
+ CASE WHEN p.maSV='WX030' THEN 0 WHEN p.maSV='WX029' THEN ROUND(t.diemToiDa*0.3,2) ELSE t.diemToiDa END,p.maPhieu,t.maTieuChi
+FROM PHIEUCHAMDIEM p JOIN DOTTHUCTAP d ON d.maSo=p.maDot JOIN TIEUCHI t ON t.maRubric=d.maRubric
+WHERE p.maPhieu LIKE 'WPC%' AND p.maSV<>'WX032'
+ AND (p.maSV<>'WX026' OR t.nhomDanhGia='DN') AND (p.maSV NOT IN ('WX027','WX041') OR t.nhomDanhGia='GV')
+ AND (p.maSV<>'WX031' OR t.maTieuChi<>'CLO4.2');
+UPDATE p SET tongDiem=(SELECT SUM(c.diemCham) FROM CHITIETCHAMDIEM c WHERE c.maPhieu=p.maPhieu)
+FROM PHIEUCHAMDIEM p WHERE p.maPhieu LIKE 'WPC%' AND p.maSV<>'WX031';
+INSERT INTO KHONGHOANTATDOT (MaDot,MaSV,HieuLuc,LyDo,CanCu,NguoiXacNhan,NgayXacNhan)
+VALUES ('TEST_KT','WX042',1,N'SV xin dừng thực tập vì lý do cá nhân',N'Đơn xác nhận kiểm thử KHT42','TK002',@now);
+INSERT INTO CHOTDOTTHUCTAP (MaDot,TrangThai,PhienBan,HanMoLai,NguoiCapNhat,NgayCapNhat,LyDo) VALUES
+('TEST_KHOA','DaChot',1,NULL,'TK002',DATEADD(DAY,-3,@now),N'Đợt mẫu đã đủ điểm, Khoa chốt để test khóa ghi'),
+('TEST_MOLAI','MoLai',2,DATEADD(DAY,3,@now),'TK002',DATEADD(DAY,-1,@now),N'Mở lại sửa sai theo biên bản kiểm thử'),
+('TEST_HETMO','MoLai',2,DATEADD(DAY,-1,@now),'TK002',DATEADD(DAY,-3,@now),N'Hạn mở lại kiểm thử đã hết');
+INSERT INTO NHATKYCHOTDOT (MaNhatKy,MaDot,PhienBan,Loai,NguoiThucHien,ThoiDiem,LyDo,NoiDung)
+SELECT CONCAT('WCHOT_',p.maDot),p.maDot,1,'Chot','TK002',DATEADD(DAY,-5,@now),N'Quyết định mẫu test, không phải quyết định thật',
+ (SELECT s.maSV MaSV,s.hoTen HoTen,p.tongDiem TongDiem FROM SINHVIEN s WHERE s.maSV=p.maSV FOR JSON PATH)
+FROM PHIEUCHAMDIEM p WHERE p.maDot IN ('TEST_KHOA','TEST_MOLAI','TEST_HETMO');
+INSERT INTO NHATKYCHOTDOT (MaNhatKy,MaDot,PhienBan,Loai,NguoiThucHien,ThoiDiem,LyDo,NoiDung)
+SELECT CONCAT('WOPEN_',MaDot),MaDot,2,'MoLai','TK002',NgayCapNhat,LyDo,(SELECT HanMoLai FOR JSON PATH,WITHOUT_ARRAY_WRAPPER) FROM CHOTDOTTHUCTAP WHERE TrangThai='MoLai';
+
+-- Hồ sơ PV đã có học vụ: dùng testsv40 để thử chặn sửa qua luồng phỏng vấn.
+INSERT INTO DANGKYTHUCTAP (maDK,ngayDangKy,thuTuUuTien,trangThai,maSV,maCongTy,maDot,MaViTri,ViTriDangKy,YeuCauDangKy)
+SELECT 'WDK040',DATEADD(DAY,-35,@today),1,'DaDuyet','WX040','WCT01','TEST_DANG',MaViTri,TenViTri,YeuCau FROM VITRITHEODOT WHERE MaViTri='TEST_DANG_WCT01_A';
+INSERT INTO PHONGVAN (maPV,hinhThuc,ngayPV,ketQua,maDaiDien,maSV,MaDK,LyDoKetQua,NguonKetQua,NguoiGhiKetQua,ThoiDiemKetQua)
+VALUES ('WPV040',N'Trực tuyến',DATEADD(DAY,-34,@local),'Dat','WDD01','WX040','WDK040',N'DN đã xác nhận tiếp nhận, sau đó Khoa phân GV','DoanhNghiep','WTK_WDD01',DATEADD(DAY,-33,@now));
+INSERT INTO NHATKYPHONGVAN (MaNhatKy,MaPV,MaDK,KetQuaCu,KetQuaMoi,LyDo,Nguon,NguoiThucHien,ThoiDiem)
+VALUES ('WNK_WPV040','WPV040','WDK040','ChuaCoKetQua','Dat',N'DN đã xác nhận tiếp nhận','DoanhNghiep','WTK_WDD01',DATEADD(DAY,-33,@now));
+INSERT INTO NHATKYDIEUCHINHTHUCTAP (MaNhatKy,MaDot,MaSV,MaPhanBo,Loai,LyDo,CanCu,NoiDung,NguoiThucHien,ThoiDiem)
+VALUES ('WDC035_TIME','TEST_DANG','WX035','WPB035','ThoiGian',N'SV cá biệt lệch lịch đợt, đã điều chỉnh trước khi bắt đầu',N'Biên bản kiểm thử TG35',N'Ngày riêng bắt đầu muộn hơn khung đợt 10 ngày','TK002',DATEADD(DAY,-35,@now));
+
+-- Công bố dự kiến, phản hồi chờ xử lý và danh sách chính thức có snapshot đúng DTO.
+DECLARE @snap NVARCHAR(MAX);
+SELECT @snap=(SELECT s.maSV MaSV,s.hoTen HoTen,s.lop Lop,CAST(1 AS BIT) CoNoiThucTap,p.maPB MaPhanBo,
+ p.maCongTy MaCongTy,c.tenCongTy TenCongTy,N'Backend .NET Intern' ViTri,d.thoiGianBD NgayBatDau,d.thoiGianKT NgayKetThuc,N'Đã có nơi thực tập' TinhTrang
+ FROM PHANBOTHUCTAP p JOIN SINHVIEN s ON s.maSV=p.maSV JOIN CONGTY c ON c.maCongTy=p.maCongTy JOIN DOTTHUCTAP d ON d.maSo=p.maDot WHERE p.maPB='WPB049' FOR JSON PATH);
+INSERT INTO CONGBODANHSACHTHUCTAP (MaCongBo,MaDot,PhienBan,TieuDe,NoiDung,HanPhanHoi,NgayCongBo,NguoiCongBo,DanhSachJson) VALUES
+('WCB_DUKIEN','TEST_DUKIEN',1,N'[TEST] Danh sách dự kiến',N'Sinh viên kiểm tra và phản hồi thông tin.',DATEADD(DAY,5,@now),DATEADD(DAY,-1,@now),'TK002',@snap);
+INSERT INTO PHANHOIDANHSACHTHUCTAP (MaPhanHoi,MaDot,MaCongBo,MaSV,LanPhanHoi,ThongTinDung,NoiDung,NguoiGui,NgayGui,ThongTinCuJson,ThongTinMoiJson)
+VALUES ('WPH049','TEST_DUKIEN','WCB_DUKIEN','WX049',1,0,N'Đề nghị bổ sung địa chỉ công ty theo giấy tiếp nhận.','WTK_SV49',@now,
+ JSON_QUERY(@snap,'$[0]'),N'{"TenCongTy":"[TEST] Công nghệ Sao Việt","DiaChi":"123 Đường Thử Nghiệm, TP.HCM","MaSoThue":""}');
+UPDATE DOTTHUCTAP SET TrangThaiDanhSachNoi='DuKien' WHERE maSo='TEST_DUKIEN';
+SELECT @snap=(SELECT s.maSV MaSV,s.hoTen HoTen,s.lop Lop,CAST(1 AS BIT) CoNoiThucTap,p.maPB MaPhanBo,
+ p.maCongTy MaCongTy,c.tenCongTy TenCongTy,N'Backend .NET Intern' ViTri,d.thoiGianBD NgayBatDau,d.thoiGianKT NgayKetThuc,N'Đã có nơi thực tập' TinhTrang
+ FROM PHANBOTHUCTAP p JOIN SINHVIEN s ON s.maSV=p.maSV JOIN CONGTY c ON c.maCongTy=p.maCongTy JOIN DOTTHUCTAP d ON d.maSo=p.maDot WHERE p.maPB='WPB048' FOR JSON PATH);
+INSERT INTO CONGBODANHSACHTHUCTAP (MaCongBo,MaDot,PhienBan,TieuDe,NoiDung,HanPhanHoi,NgayCongBo,NguoiCongBo,DanhSachJson) VALUES
+('WCB_CHOTDS','TEST_CHOTDS',1,N'[TEST] Danh sách đã rà soát',N'Danh sách mẫu kiểm thử chốt chính thức.',DATEADD(DAY,-1,@now),DATEADD(DAY,-3,@now),'TK002',@snap);
+INSERT INTO DANHSACHTHUCTAPCHINHTHUC (MaDot,MaCongBo,PhienBanRaSoat,DanhSachJson,LyDo,NguoiChot,NgayChot)
+VALUES ('TEST_CHOTDS','WCB_CHOTDS',0,@snap,N'Khoa đã rà soát theo biên bản kiểm thử DS48','TK002',@now);
+UPDATE DOTTHUCTAP SET TrangThaiDanhSachNoi='ChinhThuc' WHERE maSo='TEST_CHOTDS';
+INSERT INTO LANHOTROTHUCTAP (MaLan,MaDot,TenLan,NgayHoTro,TrangThai,PhienBan,DanhSachJson,NhatKyJson)
+SELECT 'WLAN01','TEST_MOI',N'[TEST] Hỗ trợ SV hết lượt/chưa có nơi',DATEADD(DAY,1,@local),'Nhap',0,
+ (SELECT maSV MaSV,hoTen HoTen,lop Lop,'ChuaGhiNhan' KetQua,N'' GhiChu FROM SINHVIEN WHERE maSV IN ('WX001','WX002','WX011') FOR JSON PATH),N'[]';
+
+-- Bản đồ tài khoản và kịch bản truy vấn ngay trong SSMS.
+CREATE TABLE WEBTEST_KICHBAN (
+ MaKichBan NVARCHAR(20) NOT NULL PRIMARY KEY,MaSV NVARCHAR(20) NOT NULL,
+ TenDangNhap NVARCHAR(50) NOT NULL,MaDot NVARCHAR(20) NOT NULL,MoTa NVARCHAR(200) NOT NULL,
+ NgayTao DATETIMEOFFSET NOT NULL,CONSTRAINT FK_WEBTEST_SV FOREIGN KEY (MaSV) REFERENCES SINHVIEN(maSV),
+ CONSTRAINT FK_WEBTEST_DOT FOREIGN KEY (MaDot) REFERENCES DOTTHUCTAP(maSo)
+);
+INSERT INTO WEBTEST_KICHBAN
+SELECT CONCAT('DATA-',RIGHT(CONCAT('00',s.N),2)),r.MaSV,CONCAT('testsv',RIGHT(CONCAT('00',s.N),2)),r.MaDot,s.Scenario,@now
+FROM @students s JOIN SVTHAMGIADOT r ON r.MaSV=CONCAT('WX',RIGHT(CONCAT('000',s.N),3)) WHERE r.MaDot NOT IN ('TEST_CHUACHAM','TEST_HETCHAM');
+INSERT INTO THONGBAO (maThongBao,tieuDe,noiDung,ngayTao,maNguoiGui,nguoiGui,doiTuong,maDot,ghim) VALUES
+('WTB_ALL',N'[TEST] Hướng dẫn thực tập Khoa CNTT',N'Thông báo thử hiển thị chung; không phải thông báo chính thức.',@local,'TK002',N'Khoa CNTT','ALL',NULL,1),
+('WTB_SV',N'[TEST] Sinh viên đăng ký và xác nhận nơi',N'Thông báo dành cho sinh viên đúng đợt TEST_MOI.',@local,'TK002',N'Khoa CNTT','SinhVien','TEST_MOI',0),
+('WTB_GV',N'[TEST] Giảng viên theo dõi tiến độ',N'Thông báo dành cho giảng viên đợt TEST_DANG.',@local,'TK002',N'Khoa CNTT','GiangVien','TEST_DANG',0);
+-- Không seed STORED_DOCUMENT Ready giả, URL CV giả hay kết quả LTR/TF-IDF giả.
+COMMIT TRANSACTION;
+GO
+PRINT N'Đã tạo schema hiện hành và dữ liệu test. Mật khẩu mẫu: 123456. Xem WEBTEST_KICHBAN và database/README_WEB_TEST.md.';
+GO
+-- END GENERATED WEB TEST DATA

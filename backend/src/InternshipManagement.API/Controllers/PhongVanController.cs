@@ -19,6 +19,7 @@ public class PhongVanController : ControllerBase
     }
 
     [HttpGet("sinhvien/{maSV}")]
+    [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien}")]
     public async Task<IActionResult> GetLichPhongVan(string maSV)
     {
         if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
@@ -27,10 +28,11 @@ public class PhongVanController : ControllerBase
     }
 
     [HttpGet("phan-bo/sinhvien/{maSV}")]
-    public async Task<IActionResult> GetPhanBoThucTap(string maSV)
+    [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien}")]
+    public async Task<IActionResult> GetPhanBoThucTap(string maSV, [FromQuery] string? maDot)
     {
-        if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
-        var result = await _service.GetPhanBoBySinhVienAsync(maSV);
+        if (!await _access.CanAccessStudentAsync(User, maSV, maDot)) return Forbid();
+        var result = await _service.GetPhanBoBySinhVienAsync(maSV, maDot);
         if (result == null) return NotFound(new { success = false, message = "Sinh viên chưa có quyết định phân bổ tiếp nhận." });
         return Ok(result);
     }

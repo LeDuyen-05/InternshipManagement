@@ -26,6 +26,7 @@ public class AuthController : ControllerBase
         if (account is null)
             return Unauthorized(new { message = "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản chưa được kích hoạt/bị khóa." });
 
+        var hoTen = await _service.ResolveHoTenAsync(account);
         return Ok(new LoginResponse(
             _jwt.Create(account),
             account.MaTaiKhoan,
@@ -36,7 +37,8 @@ public class AuthController : ControllerBase
             account.MaGV,
             account.MaDaiDien,
             account.Email,
-            account.SoDienThoai));
+            account.SoDienThoai,
+            hoTen));
     }
 
     [AllowAnonymous]
@@ -81,5 +83,9 @@ public class AuthController : ControllerBase
 
     [Authorize]
     [HttpPost("logout")]
-    public IActionResult Logout() => Ok(new { message = "Đăng xuất thành công. Client xóa JWT." });
+    public async Task<IActionResult> Logout()
+    {
+        await _service.RevokeSessionsAsync(User.MaTaiKhoan() ?? "");
+        return Ok(new { message = "Đã đăng xuất và thu hồi các phiên đăng nhập của tài khoản." });
+    }
 }

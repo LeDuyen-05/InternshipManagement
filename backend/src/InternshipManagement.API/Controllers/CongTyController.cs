@@ -1,6 +1,7 @@
 using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.DTOs.DangKyThucTap;
 using InternshipManagement.BLL.Services.DangKyThucTap;
+using InternshipManagement.BLL.Services.Admin;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,13 +19,13 @@ public class CongTyController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetDanhSachTuyenDung()
+    public async Task<IActionResult> GetDanhSachTuyenDung([FromQuery] string? maDot, [FromServices] CompanyRoundService rounds)
     {
-        var list = await _service.GetDanhSachCongTyTuyenDungAsync();
+        var list = await rounds.AvailableAsync(maDot);
         return Ok(list);
     }
 
-    /// <summary>Các doanh nghiệp sinh viên đang đăng nhập đã tự đề xuất, kèm trạng thái Khoa duyệt.</summary>
+
     [HttpGet("de-xuat/cua-toi")]
     [Authorize(Roles = Roles.SinhVien)]
     public async Task<IActionResult> GetDeXuatCuaToi()

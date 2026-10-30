@@ -1,5 +1,39 @@
 # ML Service — Gợi ý công ty thực tập (chạy dạng script offline)
 
+## Cấu trúc thư mục (29/10/2026)
+
+```text
+ml-service/
+  src/
+    inference/    # Suy luận, scorer HTTP và gợi ý batch cũ
+    training/     # Huấn luyện và đóng gói Colab
+    datasets/     # Chuẩn bị và đóng gói dữ liệu
+    evaluation/   # Đánh giá, đối chiếu JD
+    common/       # data_pipeline, db, services và đường dẫn dùng chung
+  requirements/   # Các bộ thư viện theo mục đích
+  tests/          # Kiểm thử tự động
+  data/           # Dữ liệu đầu vào có quản lý trong source
+  data_raw/       # Dữ liệu thô local (Git bỏ qua)
+  output/         # Model, cache và kết quả sinh ra (Git bỏ qua)
+  reports/        # Báo cáo kiểm chứng, giữ lịch sử
+  .venv/          # Môi trường Python local (Git bỏ qua)
+```
+
+Các lệnh dưới chạy từ `ml-service/`. Thiết lập đường dẫn module trước khi chạy:
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path src).Path + [IO.Path]::PathSeparator + (Resolve-Path src/common).Path
+.venv/Scripts/python.exe -m unittest discover -s tests
+```
+
+`src/common` giữ tên module `data_pipeline` để đọc các bộ biến đổi joblib đã bàn giao; không sửa hoặc train lại model chỉ vì đổi thư mục. Cài thư viện scorer bằng `pip install -r requirements/requirements-inference-v3.txt`. Script `../scripts/ai/Manage-LtrRuntime.ps1` tự thiết lập đường dẫn module và chạy `src/inference/serve_inference_v3.py`. Cache encoder nằm trong `output/inference_runtime_cache/`.
+
+Báo cáo parity mới sau thay đổi import được lưu riêng tại `reports/inference_layout_20261029/parity.json`; giữ nguyên báo cáo ngày 28/10 và gói Chi.
+
+**Bước 2 ngày 28/10:** có `serve_inference_v3.py` phục vụ scorer loopback cho backend; xem [cấu hình, timeout/fallback và giới hạn](../docs/ai/TICH_HOP_LTR_BACKEND.md). Hai API/web đã nối có cấu hình, mặc định tắt; ghi chú “chưa nối” của bước 1 bên dưới là lịch sử. Không dùng script cũ ghi GOIYCONGTY thay dịch vụ mới.
+
+**28/10/2026:** bước suy luận từ văn bản mới dùng đúng model Chi nằm ở `inference_v3.py`; xem hướng dẫn và kiểm chứng parity (tài liệu cũ đã xóa). Dùng `requirements-inference-v3.txt` trong môi trường riêng. CLI thử nghiệm không ghi CSDL và chưa nối runtime web; các script ghi GOIYCONGTY bên dưới là luồng cũ, không chạy thay bộ suy luận mới.
+
 Gồm 2 phần:
 
 | Phần | Script | Phụ trách |
@@ -12,7 +46,7 @@ Gồm 2 phần:
 cd ml-service
 python -m venv venv
 venv\Scripts\activate          # Linux/macOS: source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements/requirements.txt
 ```
 Cần **ODBC Driver 17 hoặc 18 for SQL Server** (script tự chọn driver mới nhất có trên máy).
 Mặc định kết nối `localhost\SQLEXPRESS`, CSDL `QuanLyThucTap`; đổi bằng biến môi trường:
@@ -22,11 +56,12 @@ set ML_ODBC_CONNECTION=DRIVER={ODBC Driver 18 for SQL Server};SERVER=localhost\S
 
 ## Phần A — Pipeline dữ liệu
 ```bash
-python run_data_pipeline.py                          # đọc SQL Server → output/
-python run_data_pipeline.py --export-csv data_raw    # lưu thêm dữ liệu thô ra CSV (gửi cho thành viên khác)
-python run_data_pipeline.py --source csv --csv-dir data_raw   # chạy offline, không cần SQL Server
-python run_data_pipeline.py --synthetic 300          # thêm 300 hồ sơ SV ảo để tăng cỡ mẫu
-python run_data_pipeline.py --write-db               # ghi vector vào HOSONANGLUC.embeddingHoSo / CONGTY.embeddingYeuCau
+python -m datasets.run_data_pipeline                          # đọc SQL Server → output/
+python -m datasets.run_data_pipeline --export-csv data_raw    # lưu thêm dữ liệu thô ra CSV (gửi cho thành viên khác)
+python -m datasets.run_data_pipeline --source csv --csv-dir data_raw   # chạy offline, không cần SQL Server
+python -m datasets.run_data_pipeline --synthetic 300          # thêm 300 hồ sơ SV ảo để tăng cỡ mẫu
+python -m datasets.run_data_pipeline --write-db               # ghi vector vào HOSONANGLUC.embeddingHoSo / CONGTY.embeddingYeuCau
+$env:PYTHONPATH = (Resolve-Path src).Path + [IO.Path]::PathSeparator + (Resolve-Path src/common).Path
 python -m unittest discover -s tests                 # kiểm thử tiền xử lý & gán nhãn
 ```
 
@@ -71,7 +106,7 @@ Nhãn (thang 0–3, dùng trực tiếp làm relevance cho NDCG@K):
 Giải nén vào `data_raw/du-lieu-train/` (gồm `ho_so_sv_an_danh.csv`, `jd_tong_hop.csv`, `nhan_0_3.csv`;
 thư mục này không đưa lên git), rồi chạy:
 ```bash
-python run_external_pipeline.py      # → output/external/
+python -m datasets.run_external_pipeline      # → output/external/
 ```
 Tiền xử lý (`data_pipeline/external_dataset.py`):
 - **Ẩn danh lại**: 72/237 hồ sơ gốc còn số điện thoại, ngày sinh, mảnh họ tên cạnh `[TEN]` → thay bằng
@@ -102,6 +137,6 @@ học lại luật và NDCG cao giả. Dùng embedding/`tfidf_cosine`/`lsa_cosin
 
 ## Phần B/C — Gợi ý Top-K
 ```bash
-python generate_recommendations.py   # TF-IDF + cosine → ghi bảng GOIYCONGTY
+python -m inference.generate_recommendations   # TF-IDF + cosine → ghi bảng GOIYCONGTY
 ```
 Backend C# (`RecommendationService`) tính gợi ý trực tiếp lúc chạy; script này dùng để batch/đánh giá offline.

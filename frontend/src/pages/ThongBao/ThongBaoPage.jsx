@@ -1,8 +1,11 @@
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import apiClient from '../../services/api'
+import DocumentAttachments from '../../components/common/DocumentAttachments'
 
 export default function ThongBaoPage() {
   const location = useLocation()
@@ -196,6 +199,7 @@ export default function ThongBaoPage() {
     return matchCategory && matchKeyword
   })
 
+  const pagination = usePagination(filtered, JSON.stringify([currentRole, selectedDot?.maDot, activeCategory, activeTarget, keyword]))
   return (
     <div className="space-y-6">
       {/* 1. Header Trang theo Role */}
@@ -364,7 +368,7 @@ export default function ThongBaoPage() {
             <p className="mt-2 text-sm font-medium">Không tìm thấy thông báo nào phù hợp bộ lọc.</p>
           </div>
         ) : (
-          filtered.map((item) => {
+          pagination.items.map((item) => {
             const isRead = readIds.has(item.id)
             const isUnread = item.isNew && !isRead
 
@@ -424,6 +428,7 @@ export default function ThongBaoPage() {
                     </p>
 
                     {/* Tệp đính kèm / Link Google Drive nếu có */}
+                    <DocumentAttachments key={item.id} kind="Notification" resourceId={item.id} title="Tệp đính kèm thông báo" readOnly={user?.maVaiTro !== 'VT02'} defer />
                     {item.attachment && (() => {
                       const rawUrl = item.attachment.trim()
                       const finalUrl = rawUrl.startsWith('http://') || rawUrl.startsWith('https://')
@@ -482,6 +487,7 @@ export default function ThongBaoPage() {
         )}
       </div>
 
+<Pagination pagination={pagination} label="thông báo"/>
       {/* Modal Đăng Thông Báo Mới (Dành cho Cán bộ Khoa / Quản trị) */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150">
@@ -509,7 +515,7 @@ export default function ThongBaoPage() {
               {/* Chọn đối tượng nhận */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  Gửi thông báo cho ai? (Đối tượng nhận) <span className="text-rose-500">*</span>:
+                  Đối tượng nhận thông báo <span className="text-rose-500">*</span>:
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[

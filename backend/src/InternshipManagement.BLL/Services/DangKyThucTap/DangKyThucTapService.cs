@@ -118,13 +118,15 @@ public class DangKyThucTapService : IDangKyThucTapService
         return list.Select(d => new DangKyThucTapDto
         {
             DaTiepNhan = phanBos.Any(p => p.MaCongTy == d.MaCongTy && p.MaDot == d.MaDot),
-            KetQuaPhongVan = phongVans.Where(p => p.MaCongTy == d.MaCongTy)
+            LyDoKetThuc = d.LyDoKetThuc,
+            KetQuaPhongVan = phongVans.Where(p => p.MaDK == d.MaDK || (p.MaDK == null && p.MaCongTy == d.MaCongTy && list.Count(a => a.MaCongTy == d.MaCongTy) == 1))
                 .OrderByDescending(p => p.NgayPV).Select(p => p.KetQua).FirstOrDefault(),
             MaDK = d.MaDK,
             MaSV = d.MaSV,
             MaCongTy = d.MaCongTy,
+            MaViTri = d.MaViTri,
             TenCongTy = d.CongTy?.TenCongTy ?? d.MaCongTy,
-            ViTriTuyen = d.CongTy?.ViTriTuyen,
+            ViTriTuyen = d.ViTriDangKy ?? d.CongTy?.ViTriTuyen,
             MaDot = d.MaDot,
             TenDot = d.DotThucTap?.TenDot,
             NgayDangKy = d.NgayDangKy,
@@ -154,7 +156,7 @@ public class DangKyThucTapService : IDangKyThucTapService
             if (pb.MaDot == maDot)
                 return $"Bạn đã trúng tuyển tại {tenCongTy} trong đợt này nên không thể {hanhDong}.";
 
-            if (pb.TrangThai is "ChuaNhanViec" or "DangThucTap")
+            if (pb.TrangThai is "ChuaNhanViec" or "ChoKhoaDuyet" or "DangThucTap")
                 return $"Bạn đang có quyết định thực tập tại {tenCongTy} ({tenDot}) nên không thể {hanhDong} ở đợt khác.";
 
             if (pb.TrangThai == "HoanThanh")
@@ -193,6 +195,8 @@ public class DangKyThucTapService : IDangKyThucTapService
 
         if (congTy.TrangThai != "DaDuyet")
             throw new InvalidOperationException("Chỉ có thể đăng ký các doanh nghiệp đã được phê duyệt.");
+        if (congTy.ChiTiepNhanTuTim)
+            throw new InvalidOperationException("Công ty này chỉ ghi nhận nơi thực tập tự tìm, không mở đăng ký nguyện vọng.");
 
         var dot = await _dangKyRepo.GetDotAsync(request.MaDot)
             ?? throw new NotFoundException("DotThucTap", request.MaDot);
@@ -222,32 +226,29 @@ public class DangKyThucTapService : IDangKyThucTapService
         if (hasApproved)
             throw new InvalidOperationException("Sinh viên đã có một nguyện vọng được phê duyệt trong đợt này.");
 
-        if ((congTy.SoLuongNhan ?? 0) > 0
-            && await _dangKyRepo.CountDaTiepNhanAsync(congTy.MaCongTy, request.MaDot) >= congTy.SoLuongNhan)
-            throw new InvalidOperationException($"Doanh nghiệp \"{congTy.TenCongTy}\" đã đủ chỉ tiêu tiếp nhận nên đã đóng tuyển trong đợt này.");
-
         var maDK = DAL.Common.IdGenerator.New("DK");
         var dangKy = new DAL.Entities.DangKyThucTap
         {
             MaDK = maDK,
             MaSV = request.MaSV,
             MaCongTy = request.MaCongTy,
+            MaViTri = request.MaViTri,
             MaDot = request.MaDot,
             NgayDangKy = DateTime.Now,
             ThuTuUuTien = request.ThuTuUuTien,
             TrangThai = "ChoDuyet"
         };
 
-        await _dangKyRepo.AddAsync(dangKy);
-        await _dangKyRepo.SaveChangesAsync();
+        await _dangKyRepo.AddWithinLimitAsync(dangKy, MaxNguyenVong);
 
         return new DangKyThucTapDto
         {
             MaDK = dangKy.MaDK,
             MaSV = dangKy.MaSV,
             MaCongTy = dangKy.MaCongTy,
+            MaViTri = dangKy.MaViTri,
             TenCongTy = congTy.TenCongTy,
-            ViTriTuyen = congTy.ViTriTuyen,
+            ViTriTuyen = dangKy.ViTriDangKy ?? congTy.ViTriTuyen,
             MaDot = dangKy.MaDot,
             TenDot = dot.TenDot,
             NgayDangKy = dangKy.NgayDangKy,
@@ -269,11 +270,20 @@ public class DangKyThucTapService : IDangKyThucTapService
                 throw new InvalidOperationException("Chỉ có thể hủy đăng ký khi ở trạng thái Chờ duyệt.");
             // Doanh nghiệp đã xếp lịch phỏng vấn → hủy nguyện vọng sẽ làm lịch phỏng vấn mất căn cứ
             var phongVans = await _dangKyRepo.GetKetQuaPhongVanAsync(dangKy.MaSV);
-            if (phongVans.Any(p => p.MaCongTy == dangKy.MaCongTy))
+            if (phongVans.Any(p => p.MaDK == dangKy.MaDK || (p.MaDK == null && p.MaCongTy == dangKy.MaCongTy)))
                 throw new InvalidOperationException("Doanh nghiệp đã xếp lịch phỏng vấn cho nguyện vọng này, không thể tự hủy. Vui lòng liên hệ doanh nghiệp hoặc Khoa.");
         }
 
-        _dangKyRepo.Delete(dangKy);
+        if (await _dangKyRepo.SinhVienDaDuocTiepNhanAsync(dangKy.MaSV, dangKy.MaDot))
+            throw new InvalidOperationException("Đã có nơi tiếp nhận trong đợt; thay đổi phải xử lý ở luồng nơi thực tập.");
+        if (dangKy.TrangThai == "TuChoi")
+        {
+            if (isStaff && dangKy.MaPVKetThuc != null) { dangKy.MaPVKetThuc = null; dangKy.LyDoKetThuc = "Khoa kết thúc nguyện vọng; không mở lại từ lịch PV cũ."; await _dangKyRepo.SaveChangesAsync(); }
+            return true;
+        }
+        dangKy.MaPVKetThuc = null;
+        dangKy.TrangThai = "TuChoi";
+        dangKy.LyDoKetThuc = isStaff ? "Khoa kết thúc nguyện vọng; không xóa lịch sử/lượt đăng ký." : "Sinh viên rút nguyện vọng trước khi có lịch phỏng vấn.";
         await _dangKyRepo.SaveChangesAsync();
         return true;
     }

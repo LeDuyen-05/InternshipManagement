@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>InternshipManagement.API</RootNamespace>
+    <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
@@ -13,5 +14,9 @@
   <ItemGroup>
     <ProjectReference Include="..\InternshipManagement.BLL\InternshipManagement.BLL.csproj" />
     <ProjectReference Include="..\InternshipManagement.DAL\InternshipManagement.DAL.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Update="appsettings.R2.private.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <Content Update="appsettings.Inference.private.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>

@@ -9,6 +9,15 @@ public class DotThucTap
     public DateTime ThoiGianKT { get; set; }
     public string TrangThai { get; set; } = "ChuaBatDau";
     public string MaRubric { get; set; } = "CNTT_CLO_V1";
+    public DateTimeOffset? HanDieuChinhNoiThucTap { get; set; }
+    public DateTimeOffset? MoChamGV { get; set; }
+    public DateTimeOffset? HanChamGV { get; set; }
+    public DateTimeOffset? HanChamDN { get; set; }
+    public int PhienBanThoiHan { get; set; }
+    public DateTimeOffset? HanXacNhanSV { get; set; }
+    public int PhienBanXacNhan { get; set; }
+    // WEB-02 sẽ cập nhật qua luồng công bố/chốt, không nhận từ form sửa đợt chung.
+    public string TrangThaiDanhSachNoi { get; set; } = "ChuaCongBo";
 
     public ICollection<DangKyThucTap> DangKyThucTaps { get; set; } = new List<DangKyThucTap>();
     public ICollection<PhanBoThucTap> PhanBoThucTaps { get; set; } = new List<PhanBoThucTap>();

@@ -10,6 +10,6 @@ public record RegisterRequest(
     string? MaSV = null,
     string? MaGV = null,
     string? MaDaiDien = null);
-public record LoginResponse(string Token, string MaTaiKhoan, string TenDangNhap, string MaVaiTro, string TenVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? Email, string? SoDienThoai);
+public record LoginResponse(string Token, string MaTaiKhoan, string TenDangNhap, string MaVaiTro, string TenVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? Email, string? SoDienThoai, string? HoTen = null);
 public record AccountProfileDto(string MaTaiKhoan, string TenDangNhap, string MaVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? Email, string? SoDienThoai, string? HoTen);
 public record UpdateOwnProfileRequest(string? Email, string? SoDienThoai);

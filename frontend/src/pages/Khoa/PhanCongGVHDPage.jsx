@@ -1,12 +1,24 @@
-import { useState, useEffect } from 'react'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
+import { summarizeAssignmentResult } from '../../utils/phanCongResult'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
+import apiClient from '../../services/api'
 
 export default function PhanCongGVHDPage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('phan-cong') // 'phan-cong' | 'lich-su'
+  const { selectedDot, loading: roundLoading, roundLock } = useDotThucTap()
+  const maDot = selectedDot?.maDot || ''
+  const canEditRound = !roundLoading && !roundLock.structureBlocked && ['ChuaBatDau', 'DangDienRa'].includes(selectedDot?.trangThai)
+  const roundRef = useRef(maDot)
+  roundRef.current = maDot
+  const loadVersion = useRef(null)
+  const [loadedMaDot, setLoadedMaDot] = useState('')
   const [sinhViens, setSinhViens] = useState([])
   const [giangViens, setGiangViens] = useState([])
+  const [assignmentSummary, setAssignmentSummary] = useState({ assigned: 0, total: 0 })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
@@ -46,32 +58,83 @@ export default function PhanCongGVHDPage() {
   const [modalMsg, setModalMsg] = useState(null) // { type: 'success' | 'error', text: '' }
 
   // Tải dữ liệu ban đầu
-  const loadData = async () => {
+  const loadData = useCallback(async ({ preserveFeedback = false } = {}) => {
+    if (!maDot || roundRef.current !== maDot) return
+    const version = Symbol()
+    loadVersion.current = version
     try {
       setLoading(true)
-      setError(null)
-      const [resSv, resGv] = await Promise.all([
-        gvHuongDanService.getSVChuaPhanCong(svKeyword),
-        gvHuongDanService.getGiangVienTai(),
+      if (!preserveFeedback) {
+        setError(null)
+      }
+      const [resSv, resGv, resSummary] = await Promise.all([
+        gvHuongDanService.getSVChuaPhanCong('', maDot),
+        gvHuongDanService.getGiangVienTai(maDot),
+        apiClient.get('/khoa/phan-cong', { params: { maDot } }),
       ])
 
+      if (roundRef.current !== maDot || version !== loadVersion.current) return
+
       if (resSv.data?.success) {
-        setSinhViens(resSv.data.data || [])
+        const availableStudents = resSv.data.data || []
+        setSinhViens(availableStudents)
+        setSelectedSvList((current) => current.filter((maSV) => availableStudents.some((sv) => sv.maSV === maSV)))
       }
       if (resGv.data?.success) {
         setGiangViens(resGv.data.data || [])
       }
+      setAssignmentSummary({ assigned: resSummary.data.assigned, total: resSummary.data.students.length })
+      setLoadedMaDot(maDot)
     } catch (err) {
-      setError(err.response?.data?.message || err.message || 'Không thể tải dữ liệu phân công')
+      if (roundRef.current !== maDot || version !== loadVersion.current) return
+      const message = err.response?.data?.message || err.message || 'Không thể tải dữ liệu phân công'
+      setError((current) => preserveFeedback && current ? `${current} ${message}` : message)
     } finally {
-      setLoading(false)
+      if (roundRef.current === maDot && version === loadVersion.current) setLoading(false)
     }
-  }
+  }, [maDot])
 
   useEffect(() => {
     setSelectedSvList([])
+    setSelectedGvList([])
+    setSinhViens([])
+    setGiangViens([])
+    setAssignmentSummary({ assigned: 0, total: 0 })
+    setLoadedMaDot('')
+    setShowAutoModal(false)
+    setShowBatchSplitModal(false)
+    setSelectedGvForView(null)
+    setAutoPreviewData(null)
+    setBatchSplitPreview(null)
+    setSuccessMsg('')
     loadData()
-  }, [svKeyword])
+    return () => { loadVersion.current = null }
+  }, [loadData])
+
+  useEffect(() => {
+    setSelectedSvList([])
+  }, [selectedLopFilter, svCompanyFilter, svGpaFilter])
+
+  const showAssignmentResult = (response, singleAssignment = false) => {
+    if (roundRef.current !== maDot) return
+    if (response?.success !== true || (singleAssignment && !response.data?.maSV)) {
+      throw new Error(response?.message || 'Không xác nhận được kết quả phân công. Vui lòng tải lại danh sách.')
+    }
+    const result = summarizeAssignmentResult(singleAssignment
+      ? { thanhCong: [response.data], khongThanhCong: [] }
+      : response.data)
+    setSuccessMsg(result.successMessage)
+    setError(result.failureMessage)
+    setSelectedSvList(result.failedStudentIds)
+  }
+
+  const ensureEditableRound = () => {
+    if (!maDot || !canEditRound || loadedMaDot !== maDot || loading) {
+      setError('Vui lòng chọn đợt chưa đóng và chờ tải xong danh sách trước khi phân công.')
+      return false
+    }
+    return true
+  }
 
   // Chọn / bỏ chọn 1 sinh viên
   const handleToggleSelectSv = (maSV) => {
@@ -82,7 +145,7 @@ export default function PhanCongGVHDPage() {
 
   // Chọn tất cả / Bỏ chọn tất cả sinh viên
   const handleSelectAllSv = () => {
-    if (selectedSvList.length === filteredSinhViens.length && filteredSinhViens.length > 0) {
+    if (filteredSinhViens.length > 0 && filteredSinhViens.every((sv) => selectedSvList.includes(sv.maSV))) {
       setSelectedSvList([])
     } else {
       setSelectedSvList(filteredSinhViens.map((s) => s.maSV))
@@ -91,6 +154,7 @@ export default function PhanCongGVHDPage() {
 
   // Thực hiện phân công cho 1 giảng viên cụ thể
   const handleAssignToLecturer = async (gv) => {
+    if (!ensureEditableRound()) return
     if (selectedSvList.length === 0) {
       alert('Vui lòng tích chọn ít nhất 1 sinh viên bên danh sách bên trái!')
       return
@@ -116,19 +180,13 @@ export default function PhanCongGVHDPage() {
 
       let res
       if (selectedSvList.length === 1) {
-        res = await gvHuongDanService.phanCongDonLe(gv.maGV, selectedSvList[0])
+        res = await gvHuongDanService.phanCongDonLe(gv.maGV, selectedSvList[0], maDot)
       } else {
-        res = await gvHuongDanService.phanCongHangLoat(gv.maGV, selectedSvList)
+        res = await gvHuongDanService.phanCongHangLoat(gv.maGV, selectedSvList, maDot)
       }
 
-      const skipped = res.data?.data?.khongThanhCong || []
-      setSuccessMsg(
-        skipped.length > 0
-          ? `${res.data?.message || `Đã phân công cho GV ${gv.hoTen}.`} Không thực hiện: ${skipped.map((item) => `${item.maSV} (${item.lyDo})`).join(', ')}`
-          : (res.data?.message || `Đã phân công thành công cho GV ${gv.hoTen}!`)
-      )
-      setSelectedSvList([])
-      await loadData() // Làm mới lại cả 2 danh sách
+      showAssignmentResult(res.data, selectedSvList.length === 1)
+      await loadData({ preserveFeedback: true })
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Lỗi khi thực hiện phân công')
     } finally {
@@ -137,31 +195,25 @@ export default function PhanCongGVHDPage() {
   }
 
   // Thống kê nhanh toàn Khoa
-  const totalAssigned = giangViens.reduce((sum, gv) => sum + (gv.soLuongHienTai || 0), 0)
+  const totalAssigned = assignmentSummary.assigned
+  const totalWorkload = giangViens.reduce((sum, gv) => sum + (gv.soLuongHienTai || 0), 0)
   const totalUnassigned = sinhViens.length
-  const totalStudents = totalAssigned + totalUnassigned
+  const totalStudents = assignmentSummary.total
   const totalQuota = giangViens.reduce((sum, gv) => sum + (gv.soLuongSVHD || 0), 0)
-  const availableSlots = Math.max(0, totalQuota - totalAssigned)
+  const availableSlots = Math.max(0, totalQuota - totalWorkload)
   const percentAssigned = totalStudents > 0 ? Math.round((totalAssigned / totalStudents) * 100) : 0
 
   // Danh sách lớp để lọc nhanh
   const uniqueLops = ['Tất cả', ...new Set(sinhViens.map((s) => s.lop).filter(Boolean))]
+  const uniqueCompanies = ['Tất cả đơn vị tiếp nhận', ...new Set(sinhViens.map((s) => s.tenCongTy).filter(Boolean))]
 
   // Lọc danh sách SV theo từ khóa, lớp, doanh nghiệp và GPA
   const filteredSinhViens = sinhViens.filter((sv) => {
+    const keyword = svKeyword.trim().toLocaleLowerCase('vi')
+    if (keyword && !`${sv.maSV} ${sv.hoTen} ${sv.lop || ''}`.toLocaleLowerCase('vi').includes(keyword)) return false
     if (selectedLopFilter !== 'Tất cả' && sv.lop !== selectedLopFilter) return false
 
-    const compNorm = (sv.tenCongTy || '').trim().toLowerCase()
-    const hasCompany = Boolean(
-      compNorm &&
-      compNorm !== 'chưa phân bổ' &&
-      compNorm !== 'chưa có công ty' &&
-      compNorm !== 'chưa có' &&
-      compNorm !== 'chưa có nơi thực tập' &&
-      compNorm !== '-'
-    )
-    if (svCompanyFilter === 'has_dn' && !hasCompany) return false
-    if (svCompanyFilter === 'no_dn' && hasCompany) return false
+    if (svCompanyFilter !== 'all' && sv.tenCongTy !== svCompanyFilter) return false
 
     const gpaVal = Number(sv.gpa) || 0
     if (svGpaFilter === 'high' && gpaVal < 3.2) return false
@@ -186,6 +238,10 @@ export default function PhanCongGVHDPage() {
     return true
   })
 
+  const studentPagination = usePagination(filteredSinhViens, JSON.stringify([maDot, svKeyword, selectedLopFilter, svCompanyFilter, svGpaFilter]))
+  const lecturerPagination = usePagination(filteredGiangViens, JSON.stringify([maDot, gvKeyword, gvSlotFilter]))
+  const modalPagination = usePagination(svListOfSelectedGv, JSON.stringify([maDot, selectedGvForView?.maGV]))
+
   // Chọn / bỏ chọn Giảng viên để chia đều
   const handleToggleSelectGv = (maGV) => {
     setSelectedGvList((prev) =>
@@ -205,6 +261,7 @@ export default function PhanCongGVHDPage() {
 
   // Mở modal tính toán đề xuất chia đều sinh viên cho nhiều giảng viên
   const handleOpenBatchSplitPreview = () => {
+    if (!ensureEditableRound()) return
     if (selectedSvList.length === 0) {
       alert('Vui lòng tích chọn danh sách sinh viên bên trái!')
       return
@@ -263,6 +320,7 @@ export default function PhanCongGVHDPage() {
     }
 
     setBatchSplitPreview({
+      maDot,
       pairings,
       unassigned,
       gvSummary: gvCapacities,
@@ -274,23 +332,23 @@ export default function PhanCongGVHDPage() {
 
   // Xác nhận lưu kết quả chia đều hàng loạt vào CSDL SQL Server
   const handleConfirmBatchSplit = async () => {
+    if (!ensureEditableRound()) return
+    if (batchSplitPreview?.maDot !== maDot) return
     if (!batchSplitPreview || batchSplitPreview.pairings.length === 0) return
     try {
       setSavingBatchSplit(true)
+      setSuccessMsg('')
+      setError(null)
       const payload = batchSplitPreview.pairings.map((p) => ({
         maGV: p.maGV,
         maSV: p.maSV,
       }))
-      const res = await gvHuongDanService.xacNhanPhanCongTuDong(payload)
-      if (res.data?.success) {
-        setShowBatchSplitModal(false)
-        setSuccessMsg(
-          `Đã chia đều thành công ${payload.length} sinh viên cho ${selectedGvList.length} giảng viên!`
-        )
-        setSelectedSvList([])
-        setSelectedGvList([])
-        await loadData()
-      }
+      const res = await gvHuongDanService.xacNhanPhanCongTuDong(payload, batchSplitPreview.maDot)
+      if (roundRef.current !== maDot) return
+      showAssignmentResult(res.data)
+      setShowBatchSplitModal(false)
+      setSelectedGvList([])
+      await loadData({ preserveFeedback: true })
     } catch (err) {
       alert('Lỗi khi lưu kết quả chia đều: ' + (err.response?.data?.message || err.message))
     } finally {
@@ -300,15 +358,26 @@ export default function PhanCongGVHDPage() {
 
   // Xử lý xuất Excel quyết định phân công chính thức
   const handleExportExcel = async () => {
+    if (!maDot || loading || loadedMaDot !== maDot || exportingExcel) return
     try {
       setExportingExcel(true)
-      const res = await gvHuongDanService.getTatCaPhanCong()
-      const dataPhanCong = res.data?.data || []
+      const [res, roster] = await Promise.all([
+        gvHuongDanService.getTatCaPhanCong(maDot),
+        apiClient.get('/khoa/phan-cong', { params: { maDot } }),
+      ])
+      if (roundRef.current !== maDot) return
+      const eligibleIds = new Set(roster.data.students.map(student => student.maSV))
+      const dataPhanCong = (res.data?.data || []).filter(assignment => eligibleIds.has(assignment.maSV))
       if (dataPhanCong.length === 0) {
         alert('Hiện chưa có dữ liệu phân công giảng viên hướng dẫn để xuất file!')
         return
       }
-      gvHuongDanService.exportExcelPhanCong(dataPhanCong, giangViens)
+      const subTitle = selectedDot?.tenDot
+          ? ('Đợt thực tập: ' + selectedDot.tenDot + (selectedDot.namHoc ? ' — Năm học: ' + selectedDot.namHoc : ''))
+        : 'Quyết định phân công cán bộ hướng dẫn thực tập'
+      const customFileName = 'QuyetDinh_PhanCong_GVHD_FIT_HUIT_' + (maDot || 'TatCa') + '_' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '.xlsx'
+      const exported = await gvHuongDanService.exportExcelPhanCong(dataPhanCong, giangViens, customFileName, subTitle)
+      if (exported === false) return
       setSuccessMsg(`Đã xuất file Microsoft Excel Quyết định Phân công GVHD (${dataPhanCong.length} SV) thành công!`)
     } catch (err) {
       alert('Không thể xuất file Excel: ' + (err.response?.data?.message || err.message))
@@ -330,10 +399,12 @@ export default function PhanCongGVHDPage() {
 
   // 1. Mở Modal & Lấy đề xuất phân công tự động từ Backend
   const handleOpenAutoAssign = async () => {
+    if (!ensureEditableRound()) return
     try {
       setLoadingAutoAssign(true)
       setError(null)
-      const res = await gvHuongDanService.deXuatPhanCongTuDong()
+      const res = await gvHuongDanService.deXuatPhanCongTuDong(maDot)
+      if (roundRef.current !== maDot) return
       if (res.data?.success) {
         setAutoPreviewData(res.data.data)
         setShowAutoModal(true)
@@ -347,20 +418,23 @@ export default function PhanCongGVHDPage() {
 
   // 2. Chốt lưu phân công tự động vào cơ sở dữ liệu SQL Server
   const handleConfirmAutoAssign = async () => {
+    if (!ensureEditableRound()) return
+    if (autoPreviewData?.maDot !== maDot) return
     if (!autoPreviewData || autoPreviewData.danhSachDeXuat.length === 0) return
     try {
       setConfirmingAuto(true)
+      setSuccessMsg('')
+      setError(null)
       const payload = autoPreviewData.danhSachDeXuat.map((item) => ({
         maGV: item.maGV,
         maSV: item.maSV,
       }))
 
-      const res = await gvHuongDanService.xacNhanPhanCongTuDong(payload)
-      if (res.data?.success) {
-        setShowAutoModal(false)
-        setSuccessMsg(`Đã phân công tự động thành công cho ${payload.length} sinh viên!`)
-        await loadData()
-      }
+      const res = await gvHuongDanService.xacNhanPhanCongTuDong(payload, autoPreviewData.maDot)
+      if (roundRef.current !== maDot) return
+      showAssignmentResult(res.data)
+      setShowAutoModal(false)
+      await loadData({ preserveFeedback: true })
     } catch (err) {
       alert('Lỗi khi lưu phân công tự động: ' + (err.response?.data?.message || err.message))
     } finally {
@@ -402,7 +476,8 @@ export default function PhanCongGVHDPage() {
     setModalMsg(null)
     try {
       setLoadingGvSv(true)
-      const res = await gvHuongDanService.getSVTheoGiangVien(gv.maGV)
+      const res = await gvHuongDanService.getSVTheoGiangVien(gv.maGV, '', maDot)
+      if (roundRef.current !== maDot) return
       if (res.data?.success) {
         setSvListOfSelectedGv(res.data.data || [])
       } else {
@@ -428,6 +503,7 @@ export default function PhanCongGVHDPage() {
 
   // 4. Nghiệp vụ: Đổi sang Giảng viên khác (khi GV bận đột xuất)
   const handleConfirmReassign = async (maSo) => {
+    if (!ensureEditableRound()) return
     if (!targetNewGv) {
       alert('Vui lòng chọn giảng viên mới từ danh sách!')
       return
@@ -441,7 +517,8 @@ export default function PhanCongGVHDPage() {
     try {
       setActionLoading(true)
       setModalMsg(null)
-      const res = await gvHuongDanService.doiGiangVien(maSo, targetNewGv)
+      const res = await gvHuongDanService.doiGiangVien(maSo, targetNewGv, maDot)
+      if (roundRef.current !== maDot) return
       setModalMsg({
         type: 'success',
         text: res.data?.message || `Đã chuyển sinh viên sang GV ${newLecturer?.hoTen || targetNewGv} thành công!`,
@@ -450,7 +527,7 @@ export default function PhanCongGVHDPage() {
       setTargetNewGv('')
 
       // Tải lại danh sách SV trong modal và danh sách chính
-      const resSv = await gvHuongDanService.getSVTheoGiangVien(selectedGvForView.maGV)
+      const resSv = await gvHuongDanService.getSVTheoGiangVien(selectedGvForView.maGV, '', maDot)
       setSvListOfSelectedGv(resSv.data?.data || resSv.data || [])
       await loadData()
     } catch (err) {
@@ -465,6 +542,7 @@ export default function PhanCongGVHDPage() {
 
   // 5. Nghiệp vụ: Hủy phân công (trả sinh viên về hàng chờ Chưa có GVHD)
   const handleCancelAssignment = async (sv) => {
+    if (!ensureEditableRound()) return
     const confirmDelete = window.confirm(
       `Bạn có chắc chắn muốn hủy phân công sinh viên "${sv.hoTen}" (${sv.maSV}) khỏi GV ${selectedGvForView.hoTen}?\n\nSinh viên sẽ được đưa về lại danh sách "Sinh viên chờ phân công" ở cột bên trái.`
     )
@@ -473,14 +551,15 @@ export default function PhanCongGVHDPage() {
     try {
       setActionLoading(true)
       setModalMsg(null)
-      const res = await gvHuongDanService.huyPhanCong(sv.maSo)
+      const res = await gvHuongDanService.huyPhanCong(sv.maSo, maDot)
+      if (roundRef.current !== maDot) return
       setModalMsg({
         type: 'success',
         text: res.data?.message || `Đã hủy phân công cho sinh viên ${sv.hoTen}!`,
       })
 
       // Tải lại danh sách SV trong modal và danh sách chính
-      const resSv = await gvHuongDanService.getSVTheoGiangVien(selectedGvForView.maGV)
+      const resSv = await gvHuongDanService.getSVTheoGiangVien(selectedGvForView.maGV, '', maDot)
       setSvListOfSelectedGv(resSv.data?.data || resSv.data || [])
       await loadData()
     } catch (err) {
@@ -495,16 +574,24 @@ export default function PhanCongGVHDPage() {
 
   return (
     <div className="space-y-6">
+      {/* Cảnh báo khi đợt bị khóa */}
+      {!canEditRound && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-center gap-2">
+          <span className="material-symbols-outlined text-sm text-amber-600">lock</span>
+          <span>Đợt thực tập hiện đang ở chế độ chỉ xem, không thể thay đổi phân công.</span>
+        </div>
+      )}
+
       {/* 1. Header Trang */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
             <span className="material-symbols-outlined text-2xl">assignment_ind</span>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Phân Công Giảng Viên Hướng Dẫn</h1>
+            <h1 className="text-xl font-bold text-slate-900">Phân công Giảng viên hướng dẫn</h1>
             <p className="text-sm text-slate-500">
-              Điều phối sinh viên và cân bằng hạn ngạch hướng dẫn cho Hội đồng chuyên môn Khoa CNTT
+              Điều phối và phân công cán bộ hướng dẫn cho sinh viên đã có đơn vị thực tập tiếp nhận.
             </p>
           </div>
         </div>
@@ -514,28 +601,28 @@ export default function PhanCongGVHDPage() {
             onClick={handleExportExcel}
             disabled={exportingExcel}
             className="px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-            title="Xuất quyết định phân công GVHD và bảng thống kê tải giảng viên ra file Excel (.xlsx)"
+            title="Xuất quyết định phân công GVHD ra file Excel (.xlsx)"
           >
             {exportingExcel ? (
               <span className="material-symbols-outlined text-sm animate-spin">sync</span>
             ) : (
               <span className="material-symbols-outlined text-sm">table_chart</span>
             )}
-            <span>Xuất Excel</span>
+            <span>Xuất mẫu trình ký</span>
           </button>
 
           <button
             onClick={handleOpenAutoAssign}
-            disabled={loadingAutoAssign || sinhViens.length === 0}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
-            title="Tự động ghép cặp sinh viên theo chuyên môn & cân bằng chỉ tiêu giảng viên"
+            disabled={!canEditRound || loading || loadedMaDot !== maDot || loadingAutoAssign || sinhViens.length === 0}
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+            title="Đề xuất phân công theo chuyên môn và cân bằng chỉ tiêu giảng viên"
           >
             {loadingAutoAssign ? (
               <span className="material-symbols-outlined text-sm animate-spin">sync</span>
             ) : (
-              <span className="material-symbols-outlined text-sm">smart_toy</span>
+              <span className="material-symbols-outlined text-sm">assignment_turned_in</span>
             )}
-            <span>Phân công tự động</span>
+            <span>Phân công theo chuyên môn</span>
           </button>
 
           <button
@@ -548,6 +635,23 @@ export default function PhanCongGVHDPage() {
           </button>
         </div>
       </div>
+
+      {/* Thông báo chênh lệch tải giảng viên nếu có dữ liệu cũ */}
+      {totalWorkload > totalAssigned && (
+        <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-amber-600 text-base">info</span>
+            <span>Lưu ý: Có {totalWorkload - totalAssigned} lượt hướng dẫn từ hồ sơ cần rà soát đang tính vào định mức của giảng viên.</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/khoa/phan-bo')}
+            className="underline font-semibold text-amber-800 hover:text-amber-950 shrink-0 ml-2"
+          >
+            Rà soát danh sách
+          </button>
+        </div>
+      )}
 
       {/* Thông báo Thành công / Thất bại */}
       {successMsg && (
@@ -581,9 +685,9 @@ export default function PhanCongGVHDPage() {
             <span className="material-symbols-outlined text-2xl">groups</span>
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Tổng sinh viên</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">SV có nơi thực tập</p>
             <p className="text-xl font-bold text-slate-800">{totalStudents} <span className="text-xs font-normal text-slate-400">SV</span></p>
-            <p className="text-[11px] text-slate-500 mt-0.5 truncate">Đã đăng ký thực tập</p>
+            <p className="text-[11px] text-slate-500 mt-0.5 truncate">Phân bổ còn hiệu lực trong đợt</p>
           </div>
         </div>
 
@@ -614,8 +718,8 @@ export default function PhanCongGVHDPage() {
             <span className="material-symbols-outlined text-2xl">pie_chart</span>
           </div>
           <div className="min-w-0">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Chỉ tiêu toàn Khoa</p>
-            <p className="text-xl font-bold text-slate-800">{totalAssigned} / {totalQuota} <span className="text-xs font-normal text-slate-400">chỉ tiêu</span></p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">Tổng hạn mức hướng dẫn</p>
+            <p className="text-xl font-bold text-slate-800">{totalWorkload} / {totalQuota} <span className="text-xs font-normal text-slate-400">chỉ tiêu</span></p>
             <p className="text-[11px] text-indigo-600 font-semibold mt-0.5 truncate">Còn nhận thêm {availableSlots} sinh viên</p>
           </div>
         </div>
@@ -635,7 +739,7 @@ export default function PhanCongGVHDPage() {
                     {filteredSinhViens.length}/{sinhViens.length} SV
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">Tích chọn sinh viên để gán vào giảng viên bên phải</p>
+                <p className="text-xs text-slate-400 mt-0.5">Chọn sinh viên để phân công cán bộ hướng dẫn</p>
               </div>
 
               {/* Ô tìm kiếm MSSV, tên */}
@@ -667,15 +771,16 @@ export default function PhanCongGVHDPage() {
                 ))}
               </select>
 
-              {/* Lọc theo Tình trạng Nơi thực tập */}
+              {/* Lọc theo Đơn vị tiếp nhận */}
               <select
                 value={svCompanyFilter}
                 onChange={(e) => setSvCompanyFilter(e.target.value)}
-                className="py-1 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                className="py-1 px-2.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer max-w-[180px] truncate"
               >
-                <option value="all">Tất cả nơi thực tập</option>
-                <option value="has_dn">Đã có nơi thực tập</option>
-                <option value="no_dn">Chưa có nơi thực tập</option>
+                <option value="all">Tất cả đơn vị tiếp nhận</option>
+                {uniqueCompanies.filter((c) => c !== 'Tất cả đơn vị tiếp nhận').map((comp) => (
+                  <option key={comp} value={comp}>{comp}</option>
+                ))}
               </select>
 
               {/* Lọc theo GPA */}
@@ -709,14 +814,15 @@ export default function PhanCongGVHDPage() {
 
           {/* Thanh tác vụ chọn hàng loạt */}
           <div className="px-4 py-2 bg-slate-100/70 border-b border-slate-200 flex items-center justify-between text-xs">
-            <label className="flex items-center gap-2 cursor-pointer font-medium text-slate-700">
+            <label className={`flex items-center gap-2 font-medium ${filteredSinhViens.length === 0 ? 'text-slate-400 cursor-not-allowed' : 'cursor-pointer text-slate-700'}`}>
               <input
                 type="checkbox"
-                checked={filteredSinhViens.length > 0 && selectedSvList.length === filteredSinhViens.length}
+                disabled={filteredSinhViens.length === 0}
+                checked={filteredSinhViens.length > 0 && filteredSinhViens.every((sv) => selectedSvList.includes(sv.maSV))}
                 onChange={handleSelectAllSv}
-                className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 disabled:opacity-40"
               />
-              Chọn tất cả ({selectedSvList.length}/{filteredSinhViens.length})
+              Chọn toàn bộ kết quả lọc ({selectedSvList.length}/{filteredSinhViens.length})
             </label>
             {selectedSvList.length > 0 && (
               <span className="text-indigo-600 font-semibold">
@@ -724,6 +830,7 @@ export default function PhanCongGVHDPage() {
               </span>
             )}
           </div>
+
 
           {/* Danh sách cuộn Sinh viên */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
@@ -734,12 +841,34 @@ export default function PhanCongGVHDPage() {
               </div>
             ) : filteredSinhViens.length === 0 ? (
               <div className="py-20 text-center text-slate-400">
-                <span className="material-symbols-outlined text-4xl text-emerald-400">task_alt</span>
-                <p className="mt-2 text-sm font-semibold text-slate-700">Tuyệt vời! Đã phân công hết sinh viên</p>
-                <p className="text-xs text-slate-400 mt-0.5">Không còn sinh viên nào đang chờ xếp giảng viên.</p>
+                <span className="material-symbols-outlined text-4xl text-emerald-500">task_alt</span>
+                <p className="mt-2 text-sm font-semibold text-slate-700">
+                  {sinhViens.length
+                    ? 'Không có sinh viên khớp bộ lọc'
+                    : totalStudents > 0 && totalAssigned >= totalStudents
+                    ? 'Đã hoàn tất phân công GVHD cho 100% sinh viên'
+                    : 'Không có sinh viên chờ phân công'}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {sinhViens.length
+                    ? 'Thử bỏ từ khóa hoặc chọn lại bộ lọc.'
+                    : totalStudents > 0 && totalAssigned >= totalStudents
+                    ? 'Toàn bộ sinh viên có đơn vị tiếp nhận trong đợt đều đã có cán bộ hướng dẫn.'
+                    : 'Sinh viên cần có đơn vị tiếp nhận hợp lệ trong đợt trước khi phân công GVHD.'}
+                </p>
+                {sinhViens.length === 0 && totalStudents > 0 && totalAssigned >= totalStudents && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/khoa/phan-bo')}
+                    className="mt-3 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">visibility</span>
+                    Xem danh sách & điều chỉnh GVHD
+                  </button>
+                )}
               </div>
             ) : (
-              filteredSinhViens.map((sv) => {
+              studentPagination.items.map((sv) => {
                 const isSelected = selectedSvList.includes(sv.maSV)
                 return (
                   <div
@@ -800,6 +929,9 @@ export default function PhanCongGVHDPage() {
               })
             )}
           </div>
+          <div className="rounded-b-2xl overflow-hidden">
+            <Pagination pagination={studentPagination} label="sinh viên chờ phân công"/>
+          </div>
         </div>
 
         {/* CỘT PHẢI (5/12): Danh sách Giảng viên & Chỉ số Quota */}
@@ -808,8 +940,8 @@ export default function PhanCongGVHDPage() {
           <div className="p-4 border-b border-slate-200 bg-slate-50/60 rounded-t-2xl space-y-2">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="font-bold text-slate-800 text-sm">Giảng Viên & Tải Công Việc</h2>
-                <p className="text-xs text-slate-400 mt-0.5">Bấm "Phân công" để gán các SV đã chọn vào GV</p>
+                <h2 className="font-bold text-slate-800 text-sm">Danh Sách Giảng Viên & Định Mức</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Phân công theo từng giảng viên hoặc phân bổ đều theo chỉ tiêu</p>
               </div>
               <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
                 {filteredGiangViens.length} GV
@@ -875,7 +1007,7 @@ export default function PhanCongGVHDPage() {
                   onChange={handleSelectAllAvailableGv}
                   className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                 />
-                <span>Chọn GV để chia đều ({selectedGvList.length}/{filteredGiangViens.filter((g) => (g.soLuongSVHD - g.soLuongHienTai) > 0).length})</span>
+                <span>Chọn tất cả giảng viên còn chỉ tiêu ({selectedGvList.length}/{filteredGiangViens.filter((g) => (g.soLuongSVHD - g.soLuongHienTai) > 0).length})</span>
               </label>
               {selectedGvList.length > 0 && (
                 <button
@@ -889,9 +1021,10 @@ export default function PhanCongGVHDPage() {
             </div>
           </div>
 
+
           {/* Danh sách cuộn Giảng viên */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3.5">
-            {filteredGiangViens.map((gv) => {
+            {lecturerPagination.items.map((gv) => {
               const isFull = gv.soLuongHienTai >= gv.soLuongSVHD
               const percent = Math.min(100, gv.tyLeTai || 0)
 
@@ -928,7 +1061,7 @@ export default function PhanCongGVHDPage() {
                     {/* Nút hành động Phân công */}
                     <button
                       onClick={() => handleAssignToLecturer(gv)}
-                      disabled={isFull || submitting || selectedSvList.length === 0}
+                      disabled={!canEditRound || loading || loadedMaDot !== maDot || isFull || submitting || selectedSvList.length === 0}
                       className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
                         isFull
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -938,7 +1071,7 @@ export default function PhanCongGVHDPage() {
                       }`}
                     >
                       <span className="material-symbols-outlined text-xs">person_add</span>
-                      {isFull ? 'Đã đầy' : 'Phân công'}
+                      {isFull ? 'Đủ chỉ tiêu' : 'Phân công'}
                     </button>
                   </div>
 
@@ -986,6 +1119,9 @@ export default function PhanCongGVHDPage() {
               )
             })}
           </div>
+          <div className="rounded-b-2xl overflow-hidden">
+            <Pagination pagination={lecturerPagination} label="giảng viên phân công"/>
+          </div>
         </div>
       </div>
 
@@ -997,9 +1133,9 @@ export default function PhanCongGVHDPage() {
               <span className="material-symbols-outlined text-2xl">balance</span>
             </div>
             <div>
-              <p className="text-xs font-semibold text-indigo-300">Nghiệp vụ chia đều hàng loạt (Multi-SV to Multi-GV)</p>
+              <p className="text-xs font-medium text-indigo-300">Chia đều sinh viên cho nhiều giảng viên</p>
               <p className="text-sm font-bold">
-                Đã chọn <span className="text-amber-400 font-black">{selectedSvList.length}</span> SV và <span className="text-emerald-400 font-black">{selectedGvList.length}</span> Giảng viên
+                Đã chọn <span className="text-amber-400 font-extrabold">{selectedSvList.length}</span> SV và <span className="text-emerald-400 font-extrabold">{selectedGvList.length}</span> Giảng viên
               </p>
             </div>
           </div>
@@ -1014,7 +1150,7 @@ export default function PhanCongGVHDPage() {
             <button
               type="button"
               onClick={handleOpenBatchSplitPreview}
-              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all hover:scale-105"
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer transition-all"
             >
               <span className="material-symbols-outlined text-base">shuffle</span>
               <span>Chia đều {selectedSvList.length} SV cho {selectedGvList.length} GV</span>
@@ -1081,14 +1217,14 @@ export default function PhanCongGVHDPage() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-lg">smart_toy</span>
+                  <span className="material-symbols-outlined text-lg">assignment_turned_in</span>
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
-                    Đề Xuất Phân Công Tự Động (Smart Match & Cân Bằng Tải)
+                    Phương án phân công theo chuyên môn & chỉ tiêu
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Hệ thống tự động rà soát chuyên môn và hạn ngạch còn trống của từng giảng viên
+                    Rà soát đối sánh chuyên môn của giảng viên và cân bằng hạn ngạch hướng dẫn
                   </p>
                 </div>
               </div>
@@ -1104,11 +1240,11 @@ export default function PhanCongGVHDPage() {
                 <p className="text-lg font-black text-slate-800">{autoPreviewData.tongSoSVChuaPhanCong}</p>
               </div>
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100">
-                <p className="text-[11px] text-emerald-600 font-bold uppercase">Đề xuất ghép thành công</p>
+                <p className="text-[11px] text-emerald-600 font-bold uppercase">Đề xuất phân công phù hợp</p>
                 <p className="text-lg font-black text-emerald-700">{autoPreviewData.soLuongGhepThanhCong}</p>
               </div>
               <div className="p-3 bg-rose-50 rounded-xl border border-rose-100">
-                <p className="text-[11px] text-rose-600 font-bold uppercase">Chưa thể ghép (Hết chỉ tiêu)</p>
+                <p className="text-[11px] text-rose-600 font-bold uppercase">Chưa thể phân công (Đã đủ chỉ tiêu)</p>
                 <p className="text-lg font-black text-rose-700">{autoPreviewData.soLuongKhongTheGhep}</p>
               </div>
             </div>
@@ -1117,7 +1253,7 @@ export default function PhanCongGVHDPage() {
             <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl">
               {autoPreviewData.danhSachDeXuat.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  Không thể ghép cặp nào. Vui lòng tăng chỉ tiêu của các Giảng viên trước!
+                  Chưa có phương án phân công phù hợp với chỉ tiêu hiện tại. Vui lòng rà soát lại chỉ tiêu của các Giảng viên.
                 </div>
               ) : (
                 <table className="w-full text-left border-collapse text-xs">
@@ -1126,7 +1262,7 @@ export default function PhanCongGVHDPage() {
                       <th className="py-2.5 px-3">Sinh viên</th>
                       <th className="py-2.5 px-3">Đơn vị thực tập</th>
                       <th className="py-2.5 px-3">GVHD đề xuất</th>
-                      <th className="py-2.5 px-3">Lý do ghép</th>
+                      <th className="py-2.5 px-3">Căn cứ phân công</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1144,14 +1280,14 @@ export default function PhanCongGVHDPage() {
                           <p className="text-[11px] text-slate-400">{item.chuyenMonGV}</p>
                         </td>
                         <td className="py-2.5 px-3">
-                          {item.lyDoGhep?.includes('kết nối & giới thiệu DN') ? (
+                          {item.mucUuTien === 1 ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200 shadow-xs">
-                              <span className="material-symbols-outlined text-[13px] text-purple-600">stars</span>
+                              <span className="material-symbols-outlined text-[13px] text-purple-600">verified</span>
                               {item.lyDoGhep}
                             </span>
-                          ) : item.lyDoGhep?.includes('chuyên môn') ? (
+                          ) : item.mucUuTien === 2 ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              <span className="material-symbols-outlined text-[13px] text-indigo-600">psychology</span>
+                              <span className="material-symbols-outlined text-[13px] text-indigo-600">school</span>
                               {item.lyDoGhep}
                             </span>
                           ) : (
@@ -1186,11 +1322,11 @@ export default function PhanCongGVHDPage() {
               <button
                 type="button"
                 onClick={handleConfirmAutoAssign}
-                disabled={confirmingAuto || autoPreviewData.danhSachDeXuat.length === 0}
+                disabled={!canEditRound || confirmingAuto || autoPreviewData.maDot !== maDot || autoPreviewData.danhSachDeXuat.length === 0}
                 className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl flex items-center gap-1.5 shadow-sm"
               >
                 {confirmingAuto && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                <span>Xác nhận & Lưu vào CSDL ({autoPreviewData.danhSachDeXuat.length} SV)</span>
+                <span>Lưu danh sách phân công ({autoPreviewData.danhSachDeXuat.length} SV)</span>
               </button>
             </div>
           </div>
@@ -1212,6 +1348,7 @@ export default function PhanCongGVHDPage() {
                   </h3>
                   <p className="text-xs text-slate-500">
                     Phân bổ đều {batchSplitPreview.totalAssigned} sinh viên cho {selectedGvList.length} giảng viên đã chọn
+                     theo chỉ tiêu hướng dẫn còn trống.
                   </p>
                 </div>
               </div>
@@ -1242,7 +1379,7 @@ export default function PhanCongGVHDPage() {
               </div>
             </div>
 
-            {/* Bảng danh sách ghép cặp chi tiết */}
+            {/* Danh sách phân bổ chi tiết */}
             <div className="flex-1 overflow-y-auto border border-slate-200 rounded-2xl max-h-60">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 font-semibold text-slate-500">
@@ -1272,7 +1409,7 @@ export default function PhanCongGVHDPage() {
             {/* Cảnh báo nếu có sinh viên bị sót do hết slot */}
             {batchSplitPreview.unassigned.length > 0 && (
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs">
-                <span className="font-bold">Lưu ý:</span> Còn {batchSplitPreview.unassigned.length} sinh viên chưa được phân bổ do tổng slot trống của các giảng viên được chọn không đủ.
+                <span className="font-bold">Lưu ý:</span> Còn {batchSplitPreview.unassigned.length} sinh viên chưa được phân bổ do tổng chỉ tiêu còn lại của các giảng viên được chọn không đủ.
               </div>
             )}
 
@@ -1287,11 +1424,11 @@ export default function PhanCongGVHDPage() {
               <button
                 type="button"
                 onClick={handleConfirmBatchSplit}
-                disabled={savingBatchSplit || batchSplitPreview.pairings.length === 0}
+                disabled={!canEditRound || savingBatchSplit || batchSplitPreview.maDot !== maDot || batchSplitPreview.pairings.length === 0}
                 className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-xl flex items-center gap-1.5 shadow-sm cursor-pointer"
               >
                 {savingBatchSplit && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                <span>Xác nhận & Lưu vào CSDL ({batchSplitPreview.totalAssigned} SV)</span>
+                <span>Lưu danh sách phân công ({batchSplitPreview.totalAssigned} SV)</span>
               </button>
             </div>
           </div>
@@ -1390,11 +1527,11 @@ export default function PhanCongGVHDPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {svListOfSelectedGv.map((sv, idx) => {
+                    {modalPagination.items.map((sv, idx) => {
                       const isReassigning = reassigningSvId === sv.maSo
                       return (
                         <tr key={sv.maSo || sv.maSV} className="hover:bg-slate-50/70 transition-colors">
-                          <td className="py-3 px-3 text-slate-400 font-mono">{idx + 1}</td>
+                          <td className="py-3 px-3 text-slate-400 font-mono">{modalPagination.start + idx}</td>
                           <td className="py-3 px-3">
                             <p className="font-bold text-slate-900">{sv.hoTen}</p>
                             <p className="text-[11px] text-slate-400 font-mono">
@@ -1433,7 +1570,7 @@ export default function PhanCongGVHDPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleConfirmReassign(sv.maSo)}
-                                  disabled={actionLoading || !targetNewGv}
+                                  disabled={!canEditRound || actionLoading || !targetNewGv}
                                   className="px-2.5 py-1 bg-indigo-600 text-white rounded-lg text-[11px] font-bold hover:bg-indigo-700 disabled:opacity-50 cursor-pointer"
                                 >
                                   {actionLoading ? 'Đang lưu...' : 'Lưu'}
@@ -1486,6 +1623,7 @@ export default function PhanCongGVHDPage() {
               )}
             </div>
 
+<Pagination pagination={modalPagination} label="sinh viên của giảng viên"/>
             {/* Footer Modal */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-100">
               <button

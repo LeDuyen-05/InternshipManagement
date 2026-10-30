@@ -8,7 +8,8 @@ public class ChiTietChamDiemConfiguration : IEntityTypeConfiguration<ChiTietCham
 {
     public void Configure(EntityTypeBuilder<ChiTietChamDiem> builder)
     {
-        builder.ToTable("CHITIETCHAMDIEM");
+        // SQL schema có trigger trên chi tiết điểm; OUTPUT trực tiếp của EF8 bị SQL Server từ chối khi UPDATE.
+        builder.ToTable("CHITIETCHAMDIEM", table => table.UseSqlOutputClause(false));
         builder.HasKey(x => x.MaSo);
         builder.Property(x => x.MaSo).HasColumnName("maSo").HasMaxLength(20);
         builder.Property(x => x.DiemCham).HasColumnName("diemCham").HasColumnType("decimal(5,2)");

@@ -8,14 +8,17 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
 {
     public GVHuongDanRepository(AppDbContext context) : base(context) { }
 
-    public async Task<IReadOnlyList<GVHuongDan>> GetDanhSachSVTheoGiangVienAsync(string maGV, string? keyword = null)
+    public async Task<IReadOnlyList<GVHuongDan>> GetDanhSachSVTheoGiangVienAsync(string maGV, string? keyword = null, string? maDot = null)
     {
         var query = DbSet
             .AsNoTracking()
             .Include(g => g.SinhVien)
                 .ThenInclude(s => s.PhanBoThucTaps)
                     .ThenInclude(pb => pb.CongTy)
-            .Where(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan");
+            .Where(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan"
+                && (g.MaDot == null || g.SinhVien.PhanBoThucTaps.Any(p => p.MaDot == g.MaDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet)));
+
+        if (!string.IsNullOrWhiteSpace(maDot)) query = query.Where(g => g.MaDot == maDot);
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -29,7 +32,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
     }
 
     
-    public async Task<IReadOnlyList<GVHuongDan>> GetTatCaPhanCongAsync()
+    public async Task<IReadOnlyList<GVHuongDan>> GetTatCaPhanCongAsync(string? maDot = null)
     {
         return await DbSet
             .AsNoTracking()
@@ -37,23 +40,21 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             .Include(g => g.SinhVien)
                 .ThenInclude(s => s.PhanBoThucTaps)
                     .ThenInclude(pb => pb.CongTy)
-            .Where(g => g.TrangThai == "DangHuongDan")
+            .Where(g => g.TrangThai == "DangHuongDan" && (maDot == null || g.MaDot == maDot)
+                && (g.MaDot == null || g.SinhVien.PhanBoThucTaps.Any(p => p.MaDot == g.MaDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet)))
             .OrderBy(g => g.GiangVien.HoTen)
             .ThenBy(g => g.SinhVien.MaSV)
             .ToListAsync();
     }
 
-    public async Task<IReadOnlyList<SinhVien>> GetDanhSachSVChuaPhanCongAsync(string? keyword = null)
+    public async Task<IReadOnlyList<SinhVien>> GetDanhSachSVChuaPhanCongAsync(string maDot, string? keyword = null)
     {
         var query = Context.SinhViens
             .AsNoTracking()
             .Include(s => s.PhanBoThucTaps)
                 .ThenInclude(pb => pb.CongTy)
-            .Where(s => !s.GVHuongDans.Any(h => h.TrangThai == "DangHuongDan"))
-            // Bỏ qua SV chỉ tham gia các đợt đã kết thúc (đã hoàn thành thực tập ở đợt trước)
-            .Where(s => s.PhanBoThucTaps.Any(p => p.TrangThai != "Huy" && p.DotThucTap.TrangThai != "DaKetThuc")
-                     || s.DangKyThucTaps.Any(d => d.DotThucTap.TrangThai != "DaKetThuc")
-                     || (!s.PhanBoThucTaps.Any() && !s.DangKyThucTaps.Any()));
+            .Where(s => !s.GVHuongDans.Any(h => h.TrangThai == "DangHuongDan" && (h.MaDot == maDot || h.MaDot == null)))
+            .Where(s => s.PhanBoThucTaps.Any(p => p.MaDot == maDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet));
 
         if (!string.IsNullOrWhiteSpace(keyword))
         {
@@ -66,11 +67,11 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         return await query.OrderBy(s => s.MaSV).ToListAsync();
     }
 
-    public async Task<IReadOnlyList<GiangVien>> GetDanhSachGiangVienKemTaiAsync()
+    public async Task<IReadOnlyList<GiangVien>> GetDanhSachGiangVienKemTaiAsync(string? maDot = null)
     {
         return await Context.GiangViens
             .AsNoTracking()
-            .Include(gv => gv.GVHuongDans.Where(h => h.TrangThai == "DangHuongDan"))
+            .Include(gv => gv.GVHuongDans.Where(h => h.TrangThai == "DangHuongDan" && (maDot == null || h.MaDot == maDot || h.MaDot == null)))
             .OrderBy(gv => gv.HoTen)
             .ToListAsync();
     }
@@ -81,6 +82,12 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             .AsNoTracking()
             .FirstOrDefaultAsync(g => g.MaGV == maGV);
     }
+
+    public Task<DotThucTap?> GetDotThucTapAsync(string maDot) =>
+        Context.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == maDot);
+
+    public Task<bool> SinhVienCoPhanBoAsync(string maSV, string maDot) =>
+        Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet);
 
     public async Task<bool> SinhVienTonTaiAsync(string maSV)
     {
@@ -100,21 +107,21 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             .FirstOrDefaultAsync(g => g.MaSo == maSo);
     }
 
-    public async Task<bool> SinhVienDaCoGVHDAsync(string maSV)
+    public async Task<bool> SinhVienDaCoGVHDAsync(string maSV, string maDot)
     {
         return await DbSet
             .AsNoTracking()
-            .AnyAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan");
+            .AnyAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan" && (g.MaDot == maDot || g.MaDot == null));
     }
 
-    public async Task<int> CountSVHienTaiByGiangVienAsync(string maGV)
+    public async Task<int> CountSVHienTaiByGiangVienAsync(string maGV, string? maDot = null)
     {
         return await DbSet
             .AsNoTracking()
-            .CountAsync(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan");
+            .CountAsync(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan" && (maDot == null || g.MaDot == maDot || g.MaDot == null));
     }
 
-    public async Task<GVHuongDan> PhanCongAsync(string maGV, string maSV)
+    public async Task<GVHuongDan> PhanCongAsync(string maGV, string maSV, string maDot)
     {
         var maSo = $"HD{Guid.NewGuid():N}"[..20];
         var record = new GVHuongDan
@@ -122,6 +129,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             MaSo = maSo,
             MaGiangVien = maGV,
             MaSinhVien = maSV,
+            MaDot = maDot,
             NgayPC = DateTime.Today,
             TrangThai = "DangHuongDan"
         };
@@ -176,28 +184,29 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         return true;
     }
 
-    public async Task<IReadOnlyList<GioiThieu>> GetGioiThieuDaDuyetAsync()
+    public async Task<IReadOnlyList<GiangVienGioiThieuTheoDot>> GetGiangVienGioiThieuTheoDotAsync(string maDot)
     {
-        return await Context.GioiThieus
-            .AsNoTracking()
-            .Include(g => g.GiangVien)
-            .Where(g => g.TrangThaiKetNoi == "DaDuyet")
+        return await Context.CongTyTheoDots.AsNoTracking()
+            .Where(x => x.MaDot == maDot && x.MaGVGioiThieu != null)
+            .Select(x => new GiangVienGioiThieuTheoDot(x.MaDot, x.MaCongTy, x.MaGVGioiThieu!, x.GiangVienGioiThieu!.HoTen))
             .ToListAsync();
     }
 
     public async Task<T> ExecuteInTransactionAsync<T>(Func<Task<T>> operation)
     {
-        await using var transaction = await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        await using var transaction = Context.Database.IsRelational()
+            ? await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable)
+            : null;
 
         try
         {
             var result = await operation();
-            await transaction.CommitAsync();
+            if (transaction != null) await transaction.CommitAsync();
             return result;
         }
         catch
         {
-            await transaction.RollbackAsync();
+            if (transaction != null) await transaction.RollbackAsync();
             throw;
         }
     }

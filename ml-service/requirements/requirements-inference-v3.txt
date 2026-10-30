@@ -1,0 +1,4 @@
+-r requirements-colab-v3.txt
+sentence-transformers==3.4.1
+transformers==4.48.3
+torch==2.6.0

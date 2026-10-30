@@ -2,8 +2,9 @@ import apiClient from './api'
 
 export const dangKyThucTapService = {
   // Lấy danh sách công ty đã duyệt đang tuyển dụng
-  getDanhSachCongTy: async () => {
-    const res = await apiClient.get('/CongTy')
+  getDanhSachCongTy: async (maDot) => {
+    if (!maDot) return []
+    const res = await apiClient.get('/CongTy', { params: { maDot } })
     return res.data
   },
 

@@ -21,7 +21,8 @@ public class JwtTokenService(IConfiguration configuration)
             new(ClaimTypes.NameIdentifier, account.MaTaiKhoan),
             new(ClaimTypes.Name, account.TenDangNhap),
             new(ClaimTypes.Role, account.VaiTro?.TenVaiTro ?? account.MaVaiTro),
-            new("maVaiTro", account.MaVaiTro)
+            new("maVaiTro", account.MaVaiTro),
+            new("security_stamp", account.SecurityStamp)
         };
 
         if (!string.IsNullOrWhiteSpace(account.MaSV))
