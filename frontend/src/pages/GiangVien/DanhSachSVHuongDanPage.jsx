@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import * as XLSX from 'xlsx'
+import { tachHoTen, xuatBangHuitExcel } from '../../utils/exportHuitExcel'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -8,7 +10,7 @@ import { useIdentity } from '../../hooks/useIdentity'
 export default function DanhSachSVHuongDanPage() {
   const [searchParams] = useSearchParams()
   const { selectedDot, isReadOnly } = useDotThucTap()
-  const { maGV: identityMaGV, role } = useIdentity() || {}
+  const { user, maGV: identityMaGV, role } = useIdentity() || {}
   const isStaff = role === 'VT01' || role === 'VT02'
 
   const [list, setList] = useState([])
@@ -24,15 +26,23 @@ export default function DanhSachSVHuongDanPage() {
   // Nếu là Giảng viên thì luôn luôn là tài khoản của chính mình
   const urlMaGV = searchParams.get('gv')
   const currentMaGV = isStaff && urlMaGV ? urlMaGV : (identityMaGV || 'GV001')
+  const dataKey = JSON.stringify([currentMaGV, keyword, selectedDot?.maDot])
+  const currentKey = useRef(dataKey); currentKey.current = dataKey
+  const requestId = useRef(0)
+  const [loadedKey, setLoadedKey] = useState(null)
 
   const loadData = async () => {
+    const request = ++requestId.current
+    setList([]); setLoadedKey(null); setLecturerInfo(null)
+    if (!selectedDot?.maDot) { setLoading(false); return }
     try {
       setLoading(true)
       setError(null)
       const [resSv, resGvTai] = await Promise.all([
-        gvHuongDanService.getSVTheoGiangVien(currentMaGV, keyword),
-        gvHuongDanService.getGiangVienTai(),
+        gvHuongDanService.getSVTheoGiangVien(currentMaGV, keyword, selectedDot?.maDot),
+        gvHuongDanService.getGiangVienTai(selectedDot?.maDot),
       ])
+      if (request !== requestId.current || currentKey.current !== dataKey) return
 
       if (resSv.data?.success) {
         setList(resSv.data.data || [])
@@ -44,10 +54,12 @@ export default function DanhSachSVHuongDanPage() {
         const found = resGvTai.data.data?.find((g) => g.maGV === currentMaGV)
         if (found) setLecturerInfo(found)
       }
+      setLoadedKey(dataKey)
     } catch (err) {
+      if (request !== requestId.current || currentKey.current !== dataKey) return
       setError(err.response?.data?.message || err.message || 'Không thể tải danh sách sinh viên')
     } finally {
-      setLoading(false)
+      if (request === requestId.current && currentKey.current === dataKey) setLoading(false)
     }
   }
 
@@ -63,46 +75,69 @@ export default function DanhSachSVHuongDanPage() {
 
   // Tính toán thống kê KPI
   const totalSV = list.length
+  const pagination = usePagination(filteredList, JSON.stringify([currentMaGV, selectedDot?.maDot, keyword, statusFilter]))
   const dangHuongDanCount = list.filter((s) => s.trangThai === 'DangHuongDan').length
   const hoanThanhCount = list.filter((s) => s.trangThai === 'HoanThanh').length
   const avgGpa = totalSV > 0
     ? (list.reduce((acc, cur) => acc + (cur.gpa || 0), 0) / totalSV).toFixed(2)
     : '0.00'
-  // Xuất danh sách sinh viên ra file Excel
-  const handleExportExcel = () => {
+  // Xuất danh sách sinh viên ra file Excel (.xlsx) chuẩn HUIT
+  const handleExportExcel = async () => {
+    if (loading || loadedKey !== dataKey || !selectedDot?.maDot) return
     if (!list || list.length === 0) {
       alert('Không có dữ liệu sinh viên để xuất!')
       return
     }
-    const rows = list.map((item, idx) => ({
-      STT: idx + 1,
-      'Mã sinh viên': item.sinhVien?.maSV || item.maSV,
-      'Họ và tên': item.sinhVien?.hoTen || item.hoTen,
-      Lớp: item.sinhVien?.lop || item.lop || '-',
-      'Doanh nghiệp tiếp nhận': item.congTy?.tenCongTy || item.tenCongTy || 'Chưa có',
-      'Vị trí': item.congTy?.viTriTuyen || item.viTriTuyen || '-',
-      GPA: item.sinhVien?.gpa || item.gpa || '-',
-      'Trạng thái':
-        item.trangThai === 'DangHuongDan'
-          ? 'Đang hướng dẫn'
-          : item.trangThai === 'HoanThanh'
-          ? 'Đã hoàn thành'
-          : item.trangThai,
-    }))
-    const ws = XLSX.utils.json_to_sheet(rows)
-    ws['!cols'] = [
-      { wch: 6 },
-      { wch: 15 },
-      { wch: 25 },
-      { wch: 12 },
-      { wch: 30 },
-      { wch: 20 },
-      { wch: 8 },
-      { wch: 18 },
+
+    const maDotSafe = selectedDot?.maDot || 'FIT'
+    const ngayXuat = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    const fileName = 'DS_SinhVien_GV_' + currentMaGV + '_' + maDotSafe + '_' + ngayXuat + '.xlsx'
+
+    const columns = [
+      { header: 'STT', key: 'stt', width: 6, align: 'center' },
+      { header: 'Mã sinh viên', key: 'maSV', width: 14, align: 'center' },
+      { header: 'Họ và', key: 'hoLot', width: 18, align: 'left' },
+      { header: 'Tên', key: 'ten', width: 10, align: 'left' },
+      { header: 'Họ và tên', key: 'hoTen', width: 24, align: 'left' },
+      { header: 'Lớp', key: 'lop', width: 12, align: 'center' },
+      { header: 'Doanh nghiệp tiếp nhận', key: 'tenCongTy', width: 32, align: 'left' },
+      { header: 'Vị trí', key: 'viTri', width: 22, align: 'left' },
+      { header: 'Trạng thái', key: 'trangThai', width: 18, align: 'center' },
     ]
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'SinhVienHuongDan')
-    XLSX.writeFile(wb, `DS_SinhVien_GV_${currentMaGV}_${selectedDot?.maDot || 'FIT'}.xlsx`)
+
+    const excelRows = list.map((item, idx) => {
+      const svTen = item.sinhVien?.hoTen || item.hoTen || ''
+      const { hoLot, ten, hoTen } = tachHoTen(svTen)
+      return {
+        stt: idx + 1,
+        maSV: item.sinhVien?.maSV || item.maSV,
+        hoLot,
+        ten,
+        hoTen,
+        lop: item.sinhVien?.lop || item.lop || '-',
+        tenCongTy: item.congTy?.tenCongTy || item.tenCongTy || 'Chưa có',
+        viTri: item.congTy?.viTriTuyen || item.viTriTuyen || '-',
+        trangThai:
+          item.trangThai === 'DangHuongDan'
+            ? 'Đang hướng dẫn'
+            : item.trangThai === 'HoanThanh'
+            ? 'Đã hoàn thành'
+            : item.trangThai || 'Đang hướng dẫn',
+      }
+    })
+
+    await xuatBangHuitExcel({
+      reportType: 'internal',
+      fileName,
+      sheetName: 'SinhVienHuongDan',
+      title: 'DANH SÁCH SINH VIÊN HƯỚNG DẪN THỰC TẬP TỐT NGHIỆP',
+      subTitle: 'Giảng viên hướng dẫn: ' + (user?.hoTen || currentMaGV) + (selectedDot?.tenDot ? (' — ' + selectedDot.tenDot) : ''),
+      columns,
+      rows: excelRows,
+      signatures: [
+        { title: 'GIẢNG VIÊN HƯỚNG DẪN', note: '(Ký, ghi rõ họ tên)', col: 8 },
+      ],
+    })
   }
 
   return (
@@ -132,11 +167,11 @@ export default function DanhSachSVHuongDanPage() {
 
           <button
             onClick={handleExportExcel}
-            title="Xuất file Excel danh sách sinh viên"
+            title="Danh sách nội bộ, không yêu cầu chữ ký người lập"
             className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-base">table_chart</span>
-            <span>Xuất Excel</span>
+            <span>Xuất Excel nội bộ</span>
           </button>
 
           <button
@@ -310,7 +345,7 @@ export default function DanhSachSVHuongDanPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {filteredList.map((sv) => {
+                {pagination.items.map((sv) => {
                   const isChuaPhanBo = !sv.tenCongTy || sv.tenCongTy.trim().toLowerCase() === 'chưa phân bổ'
                   const dateFormatted = sv.ngayPC
                     ? new Date(sv.ngayPC).toLocaleDateString('vi-VN', {
@@ -448,6 +483,7 @@ export default function DanhSachSVHuongDanPage() {
                 })}
               </tbody>
             </table>
+            <Pagination pagination={pagination} label="sinh viên hướng dẫn"/>
           </div>
         )}
       </div>

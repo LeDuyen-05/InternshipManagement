@@ -1,8 +1,12 @@
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
+import DocumentAttachments from '../../components/common/DocumentAttachments'
 import { useState, useEffect } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { xepLoaiGpa } from '../../utils/trangThai'
+import { canApproveCandidate, canRejectCandidate, isVisibleToCompany } from '../../utils/ungVienActions.js'
 
 // Trạng thái hồ sơ theo đúng tiến trình tuyển: xét hồ sơ → phỏng vấn → trúng tuyển
 const trangThaiHoSo = (c) => {
@@ -13,11 +17,8 @@ const trangThaiHoSo = (c) => {
   if (c.trangThai === 'DaDuyet') return { label: 'Đạt vòng hồ sơ (mời PV)', cls: 'bg-indigo-100 text-indigo-800', dot: 'bg-indigo-500' }
   return { label: 'Chờ duyệt', cls: 'bg-amber-100 text-amber-800', dot: 'bg-amber-500' }
 }
-// Chỉ đổi trạng thái hồ sơ khi chưa trúng tuyển và chưa có lịch phỏng vấn chờ kết quả
-const coTheDoiTrangThai = (c) => !c.daDuocTiepNhan && !c.coLichPhongVanCho
-
 export default function QuanLyUngVienPage() {
-  const { activeCompany } = useEnterprise()
+  const { activeCompany, maDot, updateChiTieu } = useEnterprise()
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedCandidate, setSelectedCandidate] = useState(null)
@@ -32,11 +33,12 @@ export default function QuanLyUngVienPage() {
     try {
       setLoading(true)
       const [res, tq] = await Promise.all([
-        doanhNghiepService.getUngVien(activeCompany.maCongTy),
-        doanhNghiepService.getTongQuan(activeCompany.maCongTy),
+        doanhNghiepService.getUngVien(activeCompany.maCongTy, maDot),
+        doanhNghiepService.getTongQuan(activeCompany.maCongTy, maDot),
       ])
-      setCandidates(res || [])
+      setCandidates((res || []).filter(isVisibleToCompany))
       setChiTieu(tq?.chiTieu || null)
+      updateChiTieu(tq?.chiTieu)
     } catch (err) {
       console.error('Lỗi lấy danh sách ứng viên:', err)
     } finally {
@@ -46,7 +48,7 @@ export default function QuanLyUngVienPage() {
 
   useEffect(() => {
     fetchCandidates()
-  }, [activeCompany?.maCongTy])
+  }, [activeCompany?.maCongTy, maDot])
 
   const daDongTuyen = !!chiTieu?.daDuChiTieu
 
@@ -78,7 +80,9 @@ export default function QuanLyUngVienPage() {
 
   // Filter & Search logic
   const filteredCandidates = candidates.filter((c) => {
-    const matchesStatus = filterStatus === 'ALL' || c.trangThai === filterStatus
+    const matchesStatus = filterStatus === 'ALL'
+      || (filterStatus === 'ChoDuyet' && !c.daDuocTiepNhan && (c.trangThai === 'ChoDuyet' || !c.trangThai))
+      || (filterStatus !== 'ChoDuyet' && c.trangThai === filterStatus)
     const matchesSearch =
       c.hoTen?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.maSV?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -87,10 +91,11 @@ export default function QuanLyUngVienPage() {
     return matchesStatus && matchesSearch
   })
 
+  const pagination = usePagination(filteredCandidates, JSON.stringify([activeCompany?.maCongTy, filterStatus, searchQuery]))
   const stats = {
     total: candidates.length,
-    choDuyet: candidates.filter((c) => c.trangThai === 'ChoDuyet' || !c.trangThai).length,
-    daDuyet: candidates.filter((c) => c.trangThai === 'DaDuyet').length,
+    choDuyet: candidates.filter((c) => !c.daDuocTiepNhan && (c.trangThai === 'ChoDuyet' || !c.trangThai)).length,
+    daDuyet: candidates.filter((c) => c.trangThai === 'DaDuyet' && !c.daDuocTiepNhan).length,
     // Đạt vòng hồ sơ nhưng chưa có kết quả tuyển (còn cần phỏng vấn)
     choPhongVan: candidates.filter((c) => c.trangThai === 'DaDuyet' && !c.daDuocTiepNhan).length,
     trungTuyen: candidates.filter((c) => c.tiepNhanTaiDay).length,
@@ -103,7 +108,7 @@ export default function QuanLyUngVienPage() {
         <div className={`p-4 rounded-xl text-xs font-semibold border flex items-center gap-2 ${daDongTuyen ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
           <span className="material-symbols-outlined text-[18px]">{daDongTuyen ? 'lock' : 'groups'}</span>
           {daDongTuyen
-            ? `Đã đủ chỉ tiêu tiếp nhận (${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}) — hệ thống đã tự động đóng tuyển và từ chối các hồ sơ đang chờ.`
+            ? `Đủ chỉ tiêu các vị trí hoặc tổng trần DN — đóng nhận mới. Đã tiếp nhận ${chiTieu.daTiepNhan} SV, tổng trần DN ${chiTieu.soLuongNhan}; giữ hồ sơ đang chờ.`
             : `Đã tiếp nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} sinh viên — còn ${chiTieu.conLai} chỉ tiêu. Khi đủ chỉ tiêu, đợt tuyển sẽ tự động đóng.`}
         </div>
       )}
@@ -227,7 +232,7 @@ export default function QuanLyUngVienPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredCandidates.length > 0 ? (
-                filteredCandidates.map((c) => {
+                pagination.items.map((c) => {
                   const isProcessing = processingId === c.maDK
                   return (
                     <tr key={c.maDK} className="hover:bg-indigo-50/30 transition-colors">
@@ -238,7 +243,7 @@ export default function QuanLyUngVienPage() {
                             {c.hoTen?.charAt(0) || 'S'}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900 text-xs">{c.hoTen}</div>
+                            <div className="font-bold text-slate-900 text-xs">{c.hoTen}</div><div className="text-xs text-blue-700">{c.viTriDangKy || 'Chưa ghi vị trí'}</div>
                             <div className="text-[11px] text-slate-400">
                               MSSV: {c.maSV} • Lớp: {c.lop || '—'}
                             </div>
@@ -314,7 +319,7 @@ export default function QuanLyUngVienPage() {
                             Xem CV
                           </button>
 
-                          {c.trangThai !== 'DaDuyet' && !daDongTuyen && coTheDoiTrangThai(c) && (
+                          {c.trangThai !== 'DaDuyet' && !daDongTuyen && canApproveCandidate(c) && (
                             <button
                               type="button"
                               disabled={isProcessing}
@@ -326,7 +331,7 @@ export default function QuanLyUngVienPage() {
                             </button>
                           )}
 
-                          {c.trangThai !== 'TuChoi' && coTheDoiTrangThai(c) && (
+                          {c.trangThai !== 'TuChoi' && canRejectCandidate(c) && (
                             <button
                               type="button"
                               disabled={isProcessing}
@@ -354,6 +359,7 @@ export default function QuanLyUngVienPage() {
               )}
             </tbody>
           </table>
+          <Pagination pagination={pagination} label="hồ sơ ứng viên"/>
         </div>
       </div>
 
@@ -368,7 +374,7 @@ export default function QuanLyUngVienPage() {
                   {selectedCandidate.hoTen?.charAt(0) || 'S'}
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">{selectedCandidate.hoTen}</h3>
+                  <h3 className="font-extrabold text-slate-900 text-base">{selectedCandidate.hoTen}</h3><p>{selectedCandidate.viTriDangKy}</p><details><summary>JD khi đăng ký</summary><p className="whitespace-pre-wrap">{selectedCandidate.yeuCauDangKy || 'Hồ sơ cũ chưa lưu JD'}</p></details>
                   <div className="text-[11px] text-slate-500">
                     MSSV: {selectedCandidate.maSV} • Lớp: {selectedCandidate.lop || '—'} • Khóa: {selectedCandidate.khoaHoc || '—'}
                   </div>
@@ -453,6 +459,7 @@ export default function QuanLyUngVienPage() {
                 </p>
               </div>
 
+              <DocumentAttachments key={selectedCandidate.maSV} kind="CV" resourceId={selectedCandidate.maSV} readOnly />
               {/* CV File Attachment Link */}
               <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -490,7 +497,7 @@ export default function QuanLyUngVienPage() {
                 Đóng
               </button>
               <div className="flex items-center gap-2">
-                {selectedCandidate.trangThai !== 'TuChoi' && coTheDoiTrangThai(selectedCandidate) && (
+                {selectedCandidate.trangThai !== 'TuChoi' && canRejectCandidate(selectedCandidate) && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedCandidate.maDK, 'TuChoi')}
@@ -499,7 +506,7 @@ export default function QuanLyUngVienPage() {
                     Từ chối hồ sơ
                   </button>
                 )}
-                {selectedCandidate.trangThai !== 'DaDuyet' && !daDongTuyen && coTheDoiTrangThai(selectedCandidate) && (
+                {selectedCandidate.trangThai !== 'DaDuyet' && !daDongTuyen && canApproveCandidate(selectedCandidate) && (
                   <button
                     type="button"
                     onClick={() => handleUpdateStatus(selectedCandidate.maDK, 'DaDuyet')}

@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
 
 const TRANG_THAI_TUYEN = {
   DangTuyen: { label: 'Đang nhận hồ sơ', cls: 'bg-emerald-100 text-emerald-800' },
@@ -12,7 +13,7 @@ export default function EnterpriseSidebar({ activeCompany }) {
   const { user } = useAuth()
   const isManagerOrAdmin = user?.maVaiTro === 'VT01' || user?.maVaiTro === 'VT02'
   const chiTieu = activeCompany?.chiTieu
-  const trangThai = TRANG_THAI_TUYEN[chiTieu?.trangThaiTuyen] || TRANG_THAI_TUYEN.KhongCoDot
+  const trangThai = { ...(TRANG_THAI_TUYEN[chiTieu?.trangThaiTuyen] || TRANG_THAI_TUYEN.KhongCoDot), label: recruitmentStatusLabel(chiTieu?.trangThaiTuyen) }
 
   const navItems = [
     {
@@ -22,8 +23,9 @@ export default function EnterpriseSidebar({ activeCompany }) {
         { path: '/doanh-nghiep/tuyen-dung', label: 'Tin tuyển dụng', icon: 'campaign' },
         { path: '/doanh-nghiep/ung-vien', label: 'Duyệt hồ sơ ứng viên', icon: 'how_to_reg' },
         { path: '/doanh-nghiep/phong-van', label: 'Lịch phỏng vấn', icon: 'event_note' },
-        { path: '/doanh-nghiep/danh-gia', label: 'Đánh giá thực tập sinh', icon: 'rate_review' },
+        { path: '/doanh-nghiep/danh-gia', label: 'Đánh giá thực tập sinh', icon: 'description' },
         { path: '/doanh-nghiep/thong-bao', label: 'Thông báo từ Khoa', icon: 'notifications' },
+        { path: '/doanh-nghiep/tai-lieu', label: 'Biểu mẫu thực tập', icon: 'folder_open' },
       ],
     },
     ...(isManagerOrAdmin

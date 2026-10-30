@@ -8,9 +8,9 @@ export const phongVanService = {
   },
 
   // Lấy thông tin phân bổ thực tập & GVHD / Mentor
-  getPhanBoThucTap: async (maSV) => {
+  getPhanBoThucTap: async (maSV, maDot) => {
     try {
-      const res = await apiClient.get(`/PhongVan/phan-bo/sinhvien/${maSV}`)
+      const res = await apiClient.get(`/PhongVan/phan-bo/sinhvien/${maSV}`, { params: { maDot } })
       return res.data
     } catch (err) {
       if (err.response?.status === 404) return null
@@ -18,7 +18,7 @@ export const phongVanService = {
     }
   },
 
-  // Sinh viên xác nhận nhận quyết định tiếp nhận (Chờ xác nhận → Đang thực tập)
+  // SV xác nhận nơi nhận việc; nhánh đăng ký trên hệ thống mới tiếp tục chờ Khoa chốt.
   xacNhanTiepNhan: async (maPhanBo) => {
     const res = await apiClient.post(`/PhongVan/phan-bo/${maPhanBo}/xac-nhan`)
     return res.data

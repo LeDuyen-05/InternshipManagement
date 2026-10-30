@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import apiClient from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function ChangePasswordPage() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [f, setF] = useState({
     MatKhauCu: '',
     MatKhauMoi: '',
@@ -44,6 +46,8 @@ export default function ChangePasswordPage() {
       })
 
       setMsg(r.data?.message || 'Đổi mật khẩu thành công!')
+      logout({ revoke: false })
+      navigate('/auth', { replace: true, state: { message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.' } })
       setF({
         MatKhauCu: '',
         MatKhauMoi: '',

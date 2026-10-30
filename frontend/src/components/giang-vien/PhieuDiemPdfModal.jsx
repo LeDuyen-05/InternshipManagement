@@ -1,3 +1,5 @@
+import { hasScore, summarizeGrade } from '../../utils/diemGiangVien'
+
 export default function PhieuDiemPdfModal({
   isOpen,
   onClose,
@@ -7,7 +9,6 @@ export default function PhieuDiemPdfModal({
   scores = {},
   total = 0,
   generalReview,
-  enterpriseConfirmed,
   enterpriseNote,
   dnChuyenCan = '',
   dnChuyenMon = '',
@@ -24,42 +25,8 @@ export default function PhieuDiemPdfModal({
   const score42 = clo42 ? Number(scores[clo42.maTieuChi] || 0) : 0
   const subTotalDN = score41 + score42
 
-  // Quy đổi xếp loại và thang 4 theo Bảng 3: Quy chế đào tạo tín chỉ
-  const xepLoai =
-    total >= 8.5
-      ? 'Giỏi (A)'
-      : total >= 8.0
-      ? 'Khá (B+)'
-      : total >= 7.0
-      ? 'Khá (B)'
-      : total >= 6.5
-      ? 'Trung bình (C+)'
-      : total >= 5.5
-      ? 'Trung bình (C)'
-      : total >= 5.0
-      ? 'Trung bình yếu (D+)'
-      : total >= 4.0
-      ? 'Trung bình yếu (D)'
-      : 'Kém (F)'
-
-  const diemHe4 =
-    total >= 8.5
-      ? '4.0'
-      : total >= 8.0
-      ? '3.5'
-      : total >= 7.0
-      ? '3.0'
-      : total >= 6.5
-      ? '2.5'
-      : total >= 5.5
-      ? '2.0'
-      : total >= 5.0
-      ? '1.5'
-      : total >= 4.0
-      ? '1.0'
-      : '0.0'
-
-  const ketQua = total >= 4.0 ? 'ĐẠT' : 'KHÔNG ĐẠT'
+  const summary = summarizeGrade(criteria, scores)
+  const { xepLoai, diemHe4, ketQua } = summary
 
   const currentDate = new Date()
 
@@ -76,7 +43,7 @@ export default function PhieuDiemPdfModal({
             <button
               type="button"
               onClick={() => window.print()}
-              className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+              className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
             >
               <span className="material-symbols-outlined text-[16px]">print</span>
               <span>In / Xuất PDF</span>
@@ -84,7 +51,7 @@ export default function PhieuDiemPdfModal({
             <button
               type="button"
               onClick={onClose}
-              className="w-8 h-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-lg text-slate-300 hover:text-white"
+              className="w-8 h-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-lg text-slate-300 hover:text-white cursor-pointer"
             >
               ×
             </button>
@@ -111,6 +78,7 @@ export default function PhieuDiemPdfModal({
 
           {/* Tiêu đề phiếu */}
           <div className="text-center my-6 space-y-1">
+            <p className="font-bold text-amber-800">BẢN XEM TRƯỚC — CHƯA PHẢI QUYẾT ĐỊNH CHỐT ĐIỂM{!summary.complete ? ' — CHƯA ĐỦ ĐIỂM' : ''}</p>
             <h1 className="text-base sm:text-lg font-black uppercase text-slate-900 tracking-wide">
               PHIẾU ĐÁNH GIÁ KẾT QUẢ THỰC TẬP TỐT NGHIỆP
             </h1>
@@ -138,7 +106,7 @@ export default function PhieuDiemPdfModal({
             </div>
             <div>
               <span className="text-slate-500">Ngành đào tạo: </span>
-              <strong className="text-slate-900">Công nghệ thông tin</strong>
+              <strong className="text-slate-900">{currentStudent.chuyenNganh || 'Công nghệ thông tin'}</strong>
             </div>
             <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
               <div>
@@ -146,9 +114,9 @@ export default function PhieuDiemPdfModal({
                 <strong className="text-slate-900">{currentStudent.tenCongTy || '—'}</strong>
               </div>
               <div>
-                <span className="text-slate-500">Xác nhận phiếu nhận xét DN: </span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${enterpriseConfirmed ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                  {enterpriseConfirmed ? 'Đã đối chiếu' : 'Chưa đối chiếu'}
+                <span className="text-slate-500">Nguồn điểm DN: </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold">
+                  Doanh nghiệp cập nhật trên hệ thống
                 </span>
               </div>
             </div>
@@ -178,7 +146,7 @@ export default function PhieuDiemPdfModal({
                   <td className="border border-slate-300 p-2 text-center font-bold text-blue-700">{c.maCLO || c.maTieuChi}</td>
                   <td className="border border-slate-300 p-2">{c.tenTieuChi}</td>
                   <td className="border border-slate-300 p-2 text-center">{Number(c.diemToiDa).toFixed(2)}</td>
-                  <td className="border border-slate-300 p-2 text-center font-semibold">{Number(scores[c.maTieuChi] || 0).toFixed(2)}</td>
+                  <td className="border border-slate-300 p-2 text-center font-semibold">{hasScore(scores[c.maTieuChi]) ? Number(scores[c.maTieuChi]).toFixed(2) : '—'}</td>
                 </tr>
               ))}
               <tr className="bg-slate-50 font-semibold text-slate-800">
@@ -197,7 +165,7 @@ export default function PhieuDiemPdfModal({
               </tr>
               {clo41 && (
                 <tr className="hover:bg-slate-50">
-                  <td className="border border-slate-300 p-2 text-center text-slate-500">10</td>
+                  <td className="border border-slate-300 p-2 text-center text-slate-500">{clo1to3.length + 1}</td>
                   <td className="border border-slate-300 p-2 text-center font-bold text-amber-700">{clo41.maCLO}</td>
                   <td className="border border-slate-300 p-2">
                     <div>{clo41.tenTieuChi}</div>
@@ -207,12 +175,12 @@ export default function PhieuDiemPdfModal({
                     </div>
                   </td>
                   <td className="border border-slate-300 p-2 text-center">2.00</td>
-                  <td className="border border-slate-300 p-2 text-center font-semibold">{score41.toFixed(2)}</td>
+                  <td className="border border-slate-300 p-2 text-center font-semibold">{hasScore(scores[clo41.maTieuChi]) ? score41.toFixed(2) : '—'}</td>
                 </tr>
               )}
               {clo42 && (
                 <tr className="hover:bg-slate-50">
-                  <td className="border border-slate-300 p-2 text-center text-slate-500">11</td>
+                  <td className="border border-slate-300 p-2 text-center text-slate-500">{clo1to3.length + (clo41 ? 2 : 1)}</td>
                   <td className="border border-slate-300 p-2 text-center font-bold text-amber-700">{clo42.maCLO}</td>
                   <td className="border border-slate-300 p-2">
                     <div>{clo42.tenTieuChi}</div>
@@ -222,7 +190,7 @@ export default function PhieuDiemPdfModal({
                     </div>
                   </td>
                   <td className="border border-slate-300 p-2 text-center">3.00</td>
-                  <td className="border border-slate-300 p-2 text-center font-semibold">{score42.toFixed(2)}</td>
+                  <td className="border border-slate-300 p-2 text-center font-semibold">{hasScore(scores[clo42.maTieuChi]) ? score42.toFixed(2) : '—'}</td>
                 </tr>
               )}
               <tr className="bg-slate-50 font-semibold text-slate-800">
@@ -238,7 +206,7 @@ export default function PhieuDiemPdfModal({
             <tfoot>
               <tr className="bg-indigo-50 border-t-2 border-slate-400 text-slate-900 font-extrabold text-sm">
                 <td colSpan={3} className="border border-slate-300 p-2.5 text-right uppercase tracking-wide">
-                  TỔNG ĐIỂM TOÀN DIỆN (Thang 10):
+                  {summary.complete ? 'TỔNG ĐIỂM (Thang 10):' : 'ĐIỂM TẠM TÍNH — CHƯA ĐỦ THÀNH PHẦN:'}
                 </td>
                 <td className="border border-slate-300 p-2.5 text-center text-slate-600">10.00</td>
                 <td className="border border-slate-300 p-2.5 text-center text-blue-900 text-base">{total.toFixed(2)}</td>
@@ -246,7 +214,7 @@ export default function PhieuDiemPdfModal({
               <tr className="bg-white font-semibold">
                 <td colSpan={5} className="border border-slate-300 p-2 text-center text-xs">
                   <span>Kết luận: </span>
-                  <strong className={`mr-4 ${total >= 4.0 ? 'text-emerald-700' : 'text-rose-700'}`}>{ketQua}</strong>
+                  <strong className={`mr-4 ${ketQua === 'Đạt' ? 'text-emerald-700' : 'text-rose-700'}`}>{ketQua}</strong>
                   <span>• Thang điểm 4: </span>
                   <strong className="text-indigo-900 mr-4 font-mono">{diemHe4}</strong>
                   <span>• Xếp loại: </span>
@@ -260,7 +228,7 @@ export default function PhieuDiemPdfModal({
           <div className="space-y-3 mb-8">
             <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
               <strong className="text-slate-800 block mb-1">Nhận xét chi tiết của Giảng viên hướng dẫn:</strong>
-              <p className="text-slate-700 italic whitespace-pre-wrap">{generalReview || 'Sinh viên hoàn thành đầy đủ tiến độ và nhiệm vụ thực tập được giao.'}</p>
+              <p className="text-slate-700 italic whitespace-pre-wrap">{generalReview?.trim() || 'Chưa có nhận xét của giảng viên hướng dẫn.'}</p>
             </div>
 
             {enterpriseNote && (
@@ -282,12 +250,7 @@ export default function PhieuDiemPdfModal({
             <div className="space-y-1">
               <p className="font-bold uppercase text-[11px] text-slate-700">GIẢNG VIÊN HƯỚNG DẪN</p>
               <p className="text-[10px] text-slate-400 italic">(Ký và ghi rõ họ tên)</p>
-              <div className="h-20 flex items-center justify-center">
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-                  <span className="material-symbols-outlined text-[14px]">verified</span>
-                  Đã ký xác nhận điện tử
-                </span>
-              </div>
+              <div className="h-20"></div>
               <p className="font-semibold text-slate-800">{lecturerName || 'Giảng viên hướng dẫn'}</p>
             </div>
           </div>

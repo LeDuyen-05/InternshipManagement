@@ -7,7 +7,9 @@ const USER_KEY = 'internship_user'
 
 const isExpired = (token) => {
   try {
-    return JSON.parse(atob(token.split('.')[1])).exp * 1000 < Date.now()
+    const part = token.split('.')[1]?.replace(/-/g, '+').replace(/_/g, '/')
+    const exp = JSON.parse(atob(part)).exp
+    return !Number.isFinite(exp) || exp * 1000 <= Date.now()
   } catch {
     return true
   }
@@ -38,11 +40,15 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  const logout = () => {
+  const logout = ({ revoke = true } = {}) => {
+    const token = localStorage.getItem(TOKEN_KEY)
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem('selected_dot_thuc_tap')
     setUser(null)
+    if (revoke && token) {
+      void apiClient.post('/auth/logout', {}, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {})
+    }
   }
 
   const updateUser = (updates) => {

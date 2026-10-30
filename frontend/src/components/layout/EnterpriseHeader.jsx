@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 
 export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
   const [companies, setCompanies] = useState([])
   const [showDropdown, setShowDropdown] = useState(false)
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { selectedDot, danhSachNamHoc, changeDot } = useDotThucTap()
 
   const isManagerOrAdmin = user?.maVaiTro === 'VT01' || user?.maVaiTro === 'VT02'
 
@@ -30,14 +32,24 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 px-6 flex items-center justify-between shadow-xs">
+    <header className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 pl-16 pr-3 lg:px-6 flex items-center justify-between gap-2 shadow-xs">
+      <label className="text-xs min-w-0 max-w-[280px] sm:max-w-[340px]">
+        <span className="sr-only">Đợt thực tập doanh nghiệp</span>
+        <select aria-label="Đợt thực tập doanh nghiệp" value={selectedDot?.maDot || ''}
+          onChange={e => {
+            const round = danhSachNamHoc.flatMap(year => year.dots).find(item => item.maDot === e.target.value)
+            if (round) changeDot(round)
+          }} className="border rounded-lg p-2 w-full bg-white">
+          {danhSachNamHoc.flatMap(year => year.dots).map(round => <option key={round.maDot} value={round.maDot}>{round.tenDot} ({round.maDot})</option>)}
+        </select>
+      </label>
       {/* Left section: Breadcrumb & Company Info */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center text-slate-500 text-sm">
+        <div className="hidden xl:flex items-center text-slate-500 text-sm">
           <span className="material-symbols-outlined text-[18px] text-indigo-700 mr-1.5">corporate_fare</span>
-          <span className="font-semibold text-indigo-950">FIT Portal</span>
-          <span className="mx-2 text-slate-300">/</span>
-          <span className="text-slate-800 font-medium">Cổng Doanh Nghiệp</span>
+          <span className="hidden xl:inline font-semibold text-indigo-950">FIT Portal</span>
+          <span className="hidden sm:inline mx-2 text-slate-300">/</span>
+          <span className="hidden sm:inline text-slate-800 font-medium">Cổng Doanh nghiệp</span>
         </div>
 
         {/* Company Badge / Switcher (Chỉ Admin/Khoa mới được switch, tài khoản DN hiển thị cố định) */}
@@ -122,10 +134,10 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
           </div>
           <div className="hidden sm:flex flex-col text-left">
             <span className="text-xs font-bold text-slate-800 leading-tight">
-              {activeCompany?.daiDienChinh?.hoTen || user?.tenDangNhap || 'Đại diện Doanh nghiệp'}
+              {user?.hoTen || user?.tenDangNhap || 'Đại diện Doanh nghiệp'}
             </span>
             <span className="text-[10px] text-slate-500">
-              {activeCompany?.daiDienChinh?.chucVu || (user?.maVaiTro === 'VT05' ? 'Đại diện Doanh nghiệp' : 'HR / Tuyển dụng')}
+              {user?.tenVaiTro || (user?.maVaiTro === 'VT02' ? 'Khoa' : user?.maVaiTro === 'VT01' ? 'Quản trị viên' : 'Đại diện Doanh nghiệp')}
             </span>
           </div>
         </div>

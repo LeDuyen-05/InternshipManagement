@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
+import { useState, useEffect, useCallback } from 'react'
 import { gioiThieuService } from '../../services/gioiThieuService'
 import { useIdentity } from '../../hooks/useIdentity'
+import { extractJdText } from '../../utils/jdTextExtraction'
 
 export default function GioiThieuCongTyPage() {
-  const { maGV } = useIdentity() || {}
+  const { maGV, user } = useIdentity() || {}
+  const currentMaGV = maGV || user?.maGV || 'GV001'
+  const [activeTab, setActiveTab] = useState('mine') // 'mine' | 'all'
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
 
-  // Giả lập tài khoản giảng viên hiện tại
-  const currentMaGV = maGV || 'GV001'
+  const pagination = usePagination(list, `${currentMaGV}-${activeTab}`)
 
   // Form đề xuất công ty
   const [tenCongTy, setTenCongTy] = useState('')
@@ -24,12 +28,15 @@ export default function GioiThieuCongTyPage() {
   const [showJdModal, setShowJdModal] = useState(false)
   const [jdRawText, setJdRawText] = useState('')
   const [parsingJd, setParsingJd] = useState(false)
+  const [jdFileError, setJdFileError] = useState('')
 
-  const loadData = async () => {
+  const loadData = useCallback(async (tab = activeTab) => {
     try {
       setLoading(true)
       setError(null)
-      const res = await gioiThieuService.getAll()
+      const res = tab === 'mine'
+        ? await gioiThieuService.getByGiangVien(currentMaGV)
+        : await gioiThieuService.getAll()
       if (res.data?.success) {
         setList(res.data.data || [])
       } else {
@@ -40,11 +47,11 @@ export default function GioiThieuCongTyPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTab, currentMaGV])
 
   useEffect(() => {
-    loadData()
-  }, [])
+    loadData(activeTab)
+  }, [activeTab, loadData])
 
   // Hàm bóc tách thông minh từ văn bản JD
   const parseJdText = (text) => {
@@ -53,14 +60,14 @@ export default function GioiThieuCongTyPage() {
     setParsingJd(true)
     try {
       // 1. Tìm tên công ty (tìm các dòng có từ "Công ty", "Company", "Tập đoàn")
-      const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,\.]+)/i)
+      const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,.]+)/i)
       if (companyMatch) {
         setTenCongTy(companyMatch[0].trim())
       }
 
       // 2. Tìm vị trí tuyển dụng (tìm các từ Intern, Developer, Kỹ sư, Lập trình viên)
       const positionMatch = text.match(/(?:Vị trí|Position|Tuyển dụng|Tuyển)\s*:\s*([^\n\r]+)/i) ||
-                            text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,\.]+)/i)
+                            text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,.]+)/i)
       if (positionMatch) {
         setViTriTuyen(positionMatch[1]?.trim() || positionMatch[0]?.trim())
       }
@@ -97,15 +104,23 @@ export default function GioiThieuCongTyPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const content = event.target?.result
-      if (typeof content === 'string') {
+    setJdFileError('')
+    setParsingJd(true)
+    extractJdText(file)
+      .then(content => {
+        if (!content.trim()) {
+          throw new Error('Không tìm thấy văn bản trong file. Nếu đây là PDF scan/ảnh, hãy dán nội dung hoặc dùng file có thể chọn văn bản.')
+        }
         setJdRawText(content)
         parseJdText(content)
-      }
-    }
-    reader.readAsText(file)
+      })
+      .catch(error => {
+        setJdFileError(error.message || 'Không đọc được file JD. Vui lòng thử file khác hoặc dán nội dung.')
+        setParsingJd(false)
+      })
+      .finally(() => {
+        e.target.value = ''
+      })
   }
 
   const handleSubmit = async (e) => {
@@ -135,7 +150,8 @@ export default function GioiThieuCongTyPage() {
         setTenCongTy('')
         setViTriTuyen('')
         setYeuCau('')
-        loadData()
+        setActiveTab('mine')
+        loadData('mine')
       }
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Lỗi khi gửi đề xuất công ty')
@@ -345,20 +361,58 @@ export default function GioiThieuCongTyPage() {
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-700">corporate_fare</span>
-                  Danh sách Doanh nghiệp đã đề xuất
+                  <span>{activeTab === 'mine' ? 'Doanh nghiệp tôi đã đề xuất' : 'Danh sách đề xuất toàn Khoa'}</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tổng số: <strong className="text-slate-800">{list.length}</strong> công ty trong danh sách
+                  {activeTab === 'mine' ? (
+                    <>
+                      Bạn đã đề xuất <strong className="text-slate-800">{list.length}</strong> công ty cho Khoa xét duyệt
+                    </>
+                  ) : (
+                    <>
+                      Tổng cộng <strong className="text-slate-800">{list.length}</strong> công ty do các giảng viên đề xuất
+                    </>
+                  )}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={loadData}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
-              >
-                <span className="material-symbols-outlined text-[16px]">refresh</span>
-                Làm mới
-              </button>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 2 Tabs chuyển đổi chế độ xem */}
+                <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('mine')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'mine'
+                        ? 'bg-white text-blue-700 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Đề xuất của tôi
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      activeTab === 'all'
+                        ? 'bg-white text-blue-700 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Toàn Khoa
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => loadData(activeTab)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
+                  title="Làm mới danh sách"
+                >
+                  <span className="material-symbols-outlined text-[16px]">refresh</span>
+                  <span className="hidden sm:inline">Làm mới</span>
+                </button>
+              </div>
             </div>
 
             {loading ? (
@@ -369,9 +423,20 @@ export default function GioiThieuCongTyPage() {
                 <p className="text-xs">Đang tải dữ liệu...</p>
               </div>
             ) : list.length === 0 ? (
-              <div className="py-20 text-center text-slate-400">
-                <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">inbox</span>
-                <p className="text-xs">Chưa có doanh nghiệp nào được đề xuất.</p>
+              <div className="py-16 text-center space-y-2">
+                <span className="material-symbols-outlined text-4xl text-slate-300">
+                  {activeTab === 'mine' ? 'contact_support' : 'domain_disabled'}
+                </span>
+                <p className="text-xs font-semibold text-slate-600">
+                  {activeTab === 'mine'
+                    ? 'Bạn chưa gửi đề xuất doanh nghiệp nào.'
+                    : 'Chưa có giảng viên nào đề xuất doanh nghiệp.'}
+                </p>
+                {activeTab === 'mine' && (
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    Điền form bên trái hoặc nhấn nút "Tải lên JD / Mô tả công việc" để gửi đề xuất doanh nghiệp đầu tiên cho Khoa xét duyệt.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -380,52 +445,70 @@ export default function GioiThieuCongTyPage() {
                     <tr className="bg-slate-50 text-slate-600 font-semibold border-y border-slate-200 uppercase tracking-wider text-[11px]">
                       <th className="py-3 px-3">Doanh nghiệp</th>
                       <th className="py-3 px-3">Vị trí tuyển</th>
-                      <th className="py-3 px-3">Người đề xuất</th>
+                      {activeTab === 'all' && <th className="py-3 px-3">Người đề xuất</th>}
                       <th className="py-3 px-3">Trạng thái</th>
                       <th className="py-3 px-3 text-right">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
-                    {list.map((item) => (
-                      <tr key={item.maSo} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3 px-3">
-                          <p className="font-bold text-slate-900 leading-tight">
-                            {item.tenCongTy || item.maCongTy}
-                          </p>
-                          <span className="text-[10px] text-slate-400 font-mono">[{item.maSo}]</span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="font-semibold text-blue-900">
-                            {item.viTriTuyen || 'Chưa cập nhật'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <p className="font-medium text-slate-800">{item.tenGiangVien || item.maGV}</p>
-                          <span className="text-[10px] text-slate-400 font-mono">[{item.maGV}]</span>
-                        </td>
-                        <td className="py-3 px-3">
-                          {getStatusBadge(item.trangThaiKetNoi)}
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          {/* Giảng viên chỉ được hủy đề xuất của mình khi chưa duyệt */}
-                          {item.trangThaiKetNoi !== 'DaDuyet' ? (
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(item.maSo)}
-                              title="Hủy đề xuất này"
-                              className="inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
-                              <span>Hủy</span>
-                            </button>
-                          ) : (
-                            <span className="text-[11px] text-emerald-600 font-medium">Khoa đã duyệt</span>
+                    {pagination.items.map((item) => {
+                      const isOwner = item.maGV === currentMaGV
+                      return (
+                        <tr key={item.maSo} className="hover:bg-slate-50/80 transition">
+                          <td className="py-3 px-3">
+                            <p className="font-bold text-slate-900 leading-tight">
+                              {item.tenCongTy || item.maCongTy}
+                            </p>
+                            <span className="text-[10px] text-slate-400 font-mono">[{item.maSo}]</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="font-semibold text-blue-900">
+                              {item.viTriTuyen || 'Chưa cập nhật'}
+                            </span>
+                          </td>
+                          {activeTab === 'all' && (
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-medium text-slate-800">{item.tenGiangVien || item.maGV}</span>
+                                {isOwner && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+                                    Bạn
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono">[{item.maGV}]</span>
+                            </td>
                           )}
-                        </td>
-                      </tr>
-                    ))}
+                          <td className="py-3 px-3">
+                            {getStatusBadge(item.trangThaiKetNoi)}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            {isOwner ? (
+                              item.trangThaiKetNoi === 'DangXem' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(item.maSo)}
+                                  title="Hủy đề xuất này"
+                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                                  <span>Hủy</span>
+                                </button>
+                              ) : item.trangThaiKetNoi === 'DaDuyet' ? (
+                                <span className="text-[11px] text-emerald-600 font-semibold">Khoa đã duyệt</span>
+                              ) : (
+                                <span className="text-[11px] text-rose-500 font-medium">Khoa từ chối</span>
+                              )
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">Đề xuất của GV khác</span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
+                <Pagination pagination={pagination} label="công ty giảng viên giới thiệu"/>
               </div>
             )}
           </div>
@@ -451,20 +534,23 @@ export default function GioiThieuCongTyPage() {
             </div>
 
             <p className="text-xs text-slate-500 leading-relaxed">
-              Tải file mô tả tuyển dụng hoặc dán nội dung văn bản bên dưới để hệ thống tự động điền nhanh các thông tin cần thiết.
+              Tải file JD .txt, Word .docx, PDF hoặc dán nội dung bên dưới để hệ thống tự động điền nhanh các thông tin cần thiết.
             </p>
 
             {/* Tải file */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Chọn file JD từ máy tính (.txt)
+                Chọn file JD từ máy tính (.txt, .docx, .pdf)
               </label>
               <input
                 type="file"
-                accept=".txt"
+                accept=".txt,.docx,.pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"
                 onChange={handleFileUpload}
+                disabled={parsingJd}
                 className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
               />
+              <p className="mt-1 text-[11px] text-slate-400">Tối đa 20 MB. PDF scan không có lớp văn bản cần OCR hoặc dán nội dung thủ công.</p>
+              {jdFileError && <p role="alert" className="mt-2 text-xs font-medium text-red-600">{jdFileError}</p>}
             </div>
 
             <div className="relative flex py-1 items-center">

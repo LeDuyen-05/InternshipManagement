@@ -14,14 +14,16 @@ export const doanhNghiepService = {
   },
 
   // Lấy dữ liệu Dashboard tổng quan của doanh nghiệp
-  getTongQuan: async (maCongTy) => {
-    const res = await apiClient.get(`/DoanhNghiep/tong-quan/${maCongTy}`)
+  getTongQuan: async (maCongTy, maDot) => {
+    if (!maDot) throw new Error('Chọn đợt thực tập trước khi tải dữ liệu doanh nghiệp.')
+    const res = await apiClient.get(`/DoanhNghiep/tong-quan/${maCongTy}`, { params: { maDot } })
     return res.data
   },
 
   // Lấy danh sách tin tuyển dụng của công ty
-  getTinTuyenDung: async (maCongTy) => {
-    const res = await apiClient.get(`/DoanhNghiep/tin-tuyen-dung/${maCongTy}`)
+  getTinTuyenDung: async (maCongTy, maDot) => {
+    if (!maDot) throw new Error('Chọn đợt thực tập trước khi tải dữ liệu doanh nghiệp.')
+    const res = await apiClient.get(`/DoanhNghiep/tin-tuyen-dung/${maCongTy}`, { params: { maDot } })
     return res.data
   },
 
@@ -32,8 +34,9 @@ export const doanhNghiepService = {
   },
 
   // Lấy danh sách ứng viên nộp hồ sơ vào công ty
-  getUngVien: async (maCongTy) => {
-    const res = await apiClient.get(`/DoanhNghiep/ung-vien/${maCongTy}`)
+  getUngVien: async (maCongTy, maDot) => {
+    if (!maDot) throw new Error('Chọn đợt thực tập trước khi tải dữ liệu doanh nghiệp.')
+    const res = await apiClient.get(`/DoanhNghiep/ung-vien/${maCongTy}`, { params: { maDot } })
     return res.data
   },
 
@@ -44,8 +47,9 @@ export const doanhNghiepService = {
   },
 
   // Lấy danh sách lịch phỏng vấn
-  getPhongVan: async (maCongTy) => {
-    const res = await apiClient.get(`/DoanhNghiep/phong-van/${maCongTy}`)
+  getPhongVan: async (maCongTy, maDot) => {
+    if (!maDot) throw new Error('Chọn đợt thực tập trước khi tải dữ liệu doanh nghiệp.')
+    const res = await apiClient.get(`/DoanhNghiep/phong-van/${maCongTy}`, { params: { maDot } })
     return res.data
   },
 
@@ -67,17 +71,15 @@ export const doanhNghiepService = {
     return res.data
   },
 
+  danhGia: async data => (await apiClient.post('/DoanhNghiep/danh-gia', data)).data,
+
   // Lấy danh sách sinh viên đang thực tập chính thức
-  getThucTapSinh: async (maCongTy) => {
-    const res = await apiClient.get(`/DoanhNghiep/thuc-tap-sinh/${maCongTy}`)
+  getThucTapSinh: async (maCongTy, maDot) => {
+    if (!maDot) throw new Error('Chọn đợt thực tập trước khi tải dữ liệu doanh nghiệp.')
+    const res = await apiClient.get(`/DoanhNghiep/thuc-tap-sinh/${maCongTy}`, { params: { maDot } })
     return res.data
   },
 
-  // Phiếu nhận xét của đơn vị thực tập: { maPhanBo, chiTiets: [{ maTieuChi, diemCham }], nhanXet }
-  danhGiaThucTapSinh: async (data) => {
-    const res = await apiClient.post('/DoanhNghiep/danh-gia', data)
-    return res.data
-  },
 }
 
 export default doanhNghiepService

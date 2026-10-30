@@ -4,10 +4,12 @@ import { Link } from 'react-router-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import apiClient from '../../services/api'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
 
 export default function Header({ currentRole }) {
   const navigate = useNavigate()
   const { user: authUser, logout, updateUser } = useAuth()
+  const { selectedDot } = useDotThucTap()
 
   // State thông báo & menu người dùng
   const [isNotifOpen, setIsNotifOpen] = useState(false)
@@ -158,7 +160,7 @@ export default function Header({ currentRole }) {
   }
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 flex items-center justify-between px-6 shadow-sm">
+    <header className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-white border-b border-slate-200 z-40 flex items-center justify-between pl-16 pr-3 lg:px-6 gap-2 shadow-sm">
       {/* Left section: Breadcrumb / Title */}
       <div className="flex items-center text-slate-500 text-sm">
         <span className="material-symbols-outlined text-[18px] text-blue-700 mr-1.5">school</span>
@@ -179,8 +181,13 @@ export default function Header({ currentRole }) {
 
       {/* Right section: Switch Portal + Semester + Notifications + User Menu */}
       <div className="flex items-center gap-3">
-        {/* Switch Portal Button (only for Admin/Faculty/Enterprise) */}
-        {(authUser?.maVaiTro === 'VT01' || authUser?.maVaiTro === 'VT02' || authUser?.maVaiTro === 'VT05') && (
+        {authUser?.maVaiTro === 'VT02' && (
+          <Link to="/khoa/doanh-nghiep" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold transition-all shadow-2xs">
+            <span className="material-symbols-outlined text-[16px]">domain</span>
+            <span>Doanh nghiệp liên kết</span>
+          </Link>
+        )}
+        {authUser?.maVaiTro === 'VT05' && (
           <Link
             to="/doanh-nghiep"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold transition-all shadow-2xs"
@@ -193,7 +200,7 @@ export default function Header({ currentRole }) {
         {/* Semester Tag */}
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-xs font-medium text-blue-700">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>Đợt 2 - HK2 (2026 - 2027)</span>
+          <span>{selectedDot?.tenDot || 'Chưa chọn đợt thực tập'}{selectedDot?.namHoc ? ` · ${selectedDot.namHoc}` : ''}</span>
         </div>
 
         {/* Nút Chuông Thông Báo */}

@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
+import DocumentAttachments from '../../components/common/DocumentAttachments'
 import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { phongVanService } from '../../services/phongVanService'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -7,6 +10,7 @@ import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import { BAO_CAO, PHAN_BO } from '../../utils/trangThai'
 import { Link } from 'react-router-dom'
+import { submissionBlock } from '../../utils/reportDeadline'
 
 // Khung báo cáo tuần theo kế hoạch: công việc – kết quả – khó khăn – minh chứng
 const MAU_BAO_CAO = `1. Công việc đã thực hiện trong tuần:
@@ -21,13 +25,14 @@ const MAU_BAO_CAO = `1. Công việc đã thực hiện trong tuần:
 4. Minh chứng (link tài liệu, mã nguồn, hình ảnh):
 - `
 
-const nopTre = (r) => r.ngayNop && new Date(r.ngayNop).setHours(0, 0, 0, 0) > new Date(r.mocThoiGian).setHours(0, 0, 0, 0)
+const nopTre = (r) => r.nopTre ?? (r.ngayNop && String(r.ngayNop).slice(0, 10) > String(r.mocThoiGian).slice(0, 10))
 
 export default function NopTienDoSVPage() {
   const { maSV } = useIdentity()
-  const { selectedDot, isReadOnly } = useDotThucTap()
+  const { selectedDot, roundLock } = useDotThucTap()
 
   const [reports, setReports] = useState([])
+  const pagination = usePagination(reports, JSON.stringify([maSV, selectedDot?.maDot]))
   const [placement, setPlacement] = useState(null)
   const [loading, setLoading] = useState(true)
   const [openSlotId, setOpenSlotId] = useState(null)
@@ -38,41 +43,51 @@ export default function NopTienDoSVPage() {
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [reportContent, setReportContent] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const requestVersion = useRef(0)
+  const maDot = selectedDot?.maDot
+  const contextKey = `${maSV}|${maDot}`
+  const currentContext = useRef(contextKey)
+  currentContext.current = contextKey
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 4000)
   }
 
-  const fetchReports = async () => {
-    if (!maSV) return
+  const fetchReports = useCallback(async () => {
+    if (!maSV || currentContext.current !== contextKey) return
+    const version = ++requestVersion.current
     setLoading(true)
     try {
       const [data, pb] = await Promise.all([
         tienDoThucTapService.getTienDoBySinhVien(maSV),
-        phongVanService.getPhanBoThucTap(maSV).catch(() => null),
+        phongVanService.getPhanBoThucTap(maSV, maDot),
       ])
-      setPlacement(pb && (!selectedDot?.maDot || pb.maDot === selectedDot.maDot) ? pb : null)
+      if (version !== requestVersion.current || currentContext.current !== contextKey) return
+      setPlacement(pb && (!maDot || pb.maDot === maDot) ? pb : null)
       const list = Array.isArray(data) ? data : []
       // Lọc theo đợt đang chọn nếu có
-      const filtered = selectedDot?.maDot ? list.filter((r) => r.maDot === selectedDot.maDot) : list
+      const filtered = maDot ? list.filter((r) => r.maDot === maDot) : list
       // Sắp xếp theo mốc thời gian tăng dần
       filtered.sort((a, b) => new Date(a.mocThoiGian) - new Date(b.mocThoiGian))
       setReports(filtered)
-      if (filtered.length > 0 && !openSlotId) {
-        setOpenSlotId(filtered[0].maTienDo)
-      }
+      if (filtered.length > 0) setOpenSlotId(current => current || filtered[0].maTienDo)
     } catch (err) {
-      console.error('Lỗi khi tải tiến độ thực tập:', err)
-      showToast('Không thể kết nối đến máy chủ API', 'error')
+      if (version === requestVersion.current && currentContext.current === contextKey) {
+        setPlacement(null); setReports([])
+        setToast({ message: err.response?.data?.message || 'Không tải được tiến độ thực tập.', type: 'error' })
+      }
     } finally {
-      setLoading(false)
+      if (version === requestVersion.current && currentContext.current === contextKey) setLoading(false)
     }
-  }
+  }, [maSV, maDot, contextKey])
 
   useEffect(() => {
+    setPlacement(null); setReports([]); setModalOpen(false); setSelectedSlot(null); setOpenSlotId(null); setToast(null); setIsSubmitting(false)
     fetchReports()
-  }, [maSV, selectedDot?.maDot])
+    const version = requestVersion
+    return () => { version.current++ }
+  }, [fetchReports])
 
   if (!maSV) {
     return <NoLinkedAccount />
@@ -83,10 +98,16 @@ export default function NopTienDoSVPage() {
     ? 'Bạn chưa có quyết định tiếp nhận thực tập trong đợt này nên chưa thể nộp báo cáo tiến độ.'
     : placement.trangThai === 'ChuaNhanViec'
       ? `Bạn cần xác nhận nhận quyết định tiếp nhận tại ${placement.tenCongTy} trước khi nộp báo cáo tiến độ.`
-      : null
+      : placement.trangThai !== 'DangThucTap' || placement.daDuocKhoaDuyet === false
+        ? 'Bạn chỉ được nộp tiến độ khi đang thực tập và nơi thực tập đã được Khoa chốt.'
+        : null
 
   // Mở modal nộp / sửa báo cáo
   const handleOpenSubmitModal = (slot) => {
+    if (roundLock.blocked) return showToast('Đợt đã khóa hoặc chưa xác minh trạng thái khóa.', 'error')
+    if (lyDoChuaNop || loading) return
+    const block = submissionBlock(slot)
+    if (block) { showToast(block, 'error'); return }
     setSelectedSlot(slot)
     setReportContent(slot.noiDungBaoCao || MAU_BAO_CAO)
     setModalOpen(true)
@@ -95,6 +116,10 @@ export default function NopTienDoSVPage() {
   // Submit báo cáo
   const handleSubmitReport = async (e) => {
     e.preventDefault()
+    if (roundLock.blocked) return showToast('Đợt đã khóa hoặc chưa xác minh trạng thái khóa.', 'error')
+    if (lyDoChuaNop || loading || isSubmitting) return
+    const block = submissionBlock(selectedSlot)
+    if (block) { showToast(block, 'error'); return }
     if (!reportContent.trim() || reportContent.trim() === MAU_BAO_CAO.trim()) {
       showToast('Vui lòng nhập nội dung báo cáo!', 'error')
       return
@@ -106,20 +131,23 @@ export default function NopTienDoSVPage() {
     }
 
     setIsSubmitting(true)
+    const version = requestVersion.current
     try {
       await tienDoThucTapService.nopBaoCao({
         maTienDo: selectedSlot.maTienDo,
         noiDungBaoCao: reportContent.trim(),
       })
+      if (version !== requestVersion.current || currentContext.current !== contextKey) return
 
       showToast('Nộp báo cáo tiến độ thành công!')
       setModalOpen(false)
       fetchReports()
     } catch (err) {
+      if (version !== requestVersion.current || currentContext.current !== contextKey) return
       console.error(err)
       showToast('Lỗi khi nộp báo cáo: ' + (err.response?.data?.message || err.message), 'error')
     } finally {
-      setIsSubmitting(false)
+      if (version === requestVersion.current && currentContext.current === contextKey) setIsSubmitting(false)
     }
   }
 
@@ -189,6 +217,7 @@ export default function NopTienDoSVPage() {
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Cập nhật kết quả làm việc định kỳ hàng tuần, nhận đánh giá phản hồi từ Giảng viên hướng dẫn.
+            {' '}Hạn tính hết ngày Việt Nam. Quá hạn bị khóa; lên Khoa trình bày lý do để được xem xét mở nộp bổ sung.
           </p>
         </div>
       </div>
@@ -311,10 +340,11 @@ export default function NopTienDoSVPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {reports.map((rep, idx) => {
+
+            {pagination.items.map((rep, idx) => {
               const isOpen = openSlotId === rep.maTienDo
               const canSubmitOrEdit =
-                !isReadOnly && !lyDoChuaNop && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
+                !roundLock.blocked && !lyDoChuaNop && !submissionBlock(rep) && !rep.maPhanBoLuuTru && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
 
               let statusIcon = 'pending'
               let iconColor = 'bg-slate-100 text-slate-500'
@@ -348,11 +378,12 @@ export default function NopTienDoSVPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">Tuần {idx + 1}</span>
+                          <span className="font-bold text-sm text-slate-900">Tuần {pagination.start + idx}</span>
                           {getStatusBadge(rep.trangThaiDuyet)}
+                          {rep.maPhanBoLuuTru && <span className="hint">Lịch sử trước khi đổi nơi — chỉ xem</span>}
                           {nopTre(rep) && (
                             <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-orange-700 border border-orange-200">
-                              Nộp trễ hạn
+                              {rep.hanNopBoSung ? 'Nộp bổ sung được Khoa mở' : 'Nộp sau hạn gốc — lịch sử'}
                             </span>
                           )}
                           {!rep.ngayNop && rep.trangThaiDuyet === 'ChuaNop' && new Date(rep.mocThoiGian) < new Date().setHours(0, 0, 0, 0) && (
@@ -363,6 +394,7 @@ export default function NopTienDoSVPage() {
                         </div>
                         <p className="text-xs text-slate-500 mt-0.5">
                           Hạn chót: {new Date(rep.mocThoiGian).toLocaleDateString('vi-VN')}
+                          {rep.hanNopBoSung && <span> · Khoa mở bổ sung đến {new Date(rep.hanNopBoSung).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam)</span>}
                           {rep.ngayNop && (
                             <span className="text-slate-600 font-medium">
                               {' '}
@@ -370,6 +402,7 @@ export default function NopTienDoSVPage() {
                             </span>
                           )}
                         </p>
+                        {(rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua') && submissionBlock(rep) && <p className="text-xs text-rose-700">{submissionBlock(rep)}</p>}
                       </div>
                     </div>
 
@@ -437,7 +470,7 @@ export default function NopTienDoSVPage() {
                               className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors"
                             >
                               <span className="material-symbols-outlined text-[16px]">post_add</span>
-                              Nộp báo cáo tuần {idx + 1}
+                              Nộp báo cáo tuần {pagination.start + idx}
                             </button>
                           )}
                         </div>
@@ -447,6 +480,7 @@ export default function NopTienDoSVPage() {
                 </div>
               )
             })}
+            <Pagination pagination={pagination} label="mốc báo cáo thực tập"/>
           </div>
         )}
       </div>
@@ -470,6 +504,7 @@ export default function NopTienDoSVPage() {
               </button>
             </div>
 
+            <DocumentAttachments key={selectedSlot.maTienDo} kind="Progress" resourceId={selectedSlot.maTienDo} />
             <form onSubmit={handleSubmitReport} className="flex flex-col gap-4">
               <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 flex justify-between">
                 <span>
@@ -504,7 +539,7 @@ export default function NopTienDoSVPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || roundLock.blocked}
                   className="px-5 py-2 rounded-xl text-xs font-bold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {isSubmitting && <span className="material-symbols-outlined text-[16px] animate-spin">sync</span>}

@@ -26,7 +26,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
     QuanTriVien: {
       hocVu: [],
       tienIch: [
-        { path: '/admin', label: 'Quản trị người dùng', icon: 'admin_panel_settings' },
+        { path: '/admin', label: 'Quản trị hệ thống', icon: 'admin_panel_settings' },
       ],
     },
     GiangVien: {
@@ -44,19 +44,19 @@ export default function Sidebar({ currentRole, onRoleChange }) {
     Khoa: {
       hocVu: [
         { path: '/khoa', label: 'Tổng quan điều hành', icon: 'analytics' },
+        { path: '/khoa/dot-thuc-tap', label: 'Cấu hình đợt thực tập', icon: 'date_range' },
+        { path: '/khoa/doanh-nghiep', label: 'Doanh nghiệp & Vị trí tuyển', icon: 'domain' },
         { path: '/khoa/duyet-gioi-thieu', label: 'Duyệt công ty đề xuất', icon: 'verified' },
+        { path: '/khoa/dang-ky', label: 'Tiếp nhận & Xét duyệt hồ sơ', icon: 'how_to_reg' },
+        { path: '/khoa/sinh-vien-theo-dot', label: 'SV theo đợt & nơi thực tập', icon: 'groups' },
         { path: '/khoa/phan-cong', label: 'Phân công GVHD', icon: 'assignment_ind' },
-        { path: '/khoa/phan-bo', label: 'Phân bổ nhanh theo công ty', icon: 'swap_horiz' },
-        { path: '/khoa/dang-ky', label: 'Duyệt đăng ký thực tập', icon: 'how_to_reg' },
+        { path: '/khoa/phan-bo', label: 'Danh sách & điều chỉnh GVHD', icon: 'swap_horiz' },
         { path: '/khoa/theo-doi', label: 'Theo dõi tiến độ toàn khoa', icon: 'trending_up' },
         { path: '/khoa/thong-ke-clo', label: 'Báo cáo thống kê CLO', icon: 'bar_chart' },
-        { path: '/khoa/hoi-dong', label: 'Hội đồng & Phản biện', icon: 'groups' },
       ],
       tienIch: [
-        { path: '/khoa/dot-thuc-tap', label: 'Cấu hình đợt thực tập', icon: 'date_range' },
-        { path: '/khoa/han-bao-cao', label: 'Hạn nộp báo cáo', icon: 'event_busy' },
-        { path: '/khoa/doanh-nghiep', label: 'Doanh nghiệp liên kết', icon: 'domain' },
-        { path: '/khoa/tieu-chi', label: 'Tiêu chí đánh giá', icon: 'rule' },
+        { path: '/khoa/han-bao-cao', label: 'Lịch hạn nộp báo cáo', icon: 'event_busy' },
+        { path: '/khoa/tieu-chi', label: 'Tiêu chí đánh giá CLO', icon: 'rule' },
         { path: '/thong-bao', label: 'Quản lý thông báo', icon: 'campaign' },
       ],
     },
@@ -64,10 +64,10 @@ export default function Sidebar({ currentRole, onRoleChange }) {
       hocVu: [
         { path: '/sinh-vien', label: 'Bảng điều khiển SV', icon: 'dashboard' },
         { path: '/sinh-vien/ho-so', label: 'Hồ sơ năng lực (CV)', icon: 'badge' },
-        { path: '/sinh-vien/dang-ky', label: 'Đăng ký & Đề xuất DN', icon: 'apartment' },
-        { path: '/sinh-vien/tien-do', label: 'Báo cáo tiến độ tuần', icon: 'pending_actions' },
+        { path: '/ai', label: 'Gợi ý nơi thực tập phù hợp', icon: 'explore' },
+        { path: '/sinh-vien/dang-ky', label: 'Đăng ký thực tập', icon: 'apartment' },
         { path: '/sinh-vien/lich-trinh', label: 'Lịch phỏng vấn & Phân bổ', icon: 'event_available' },
-        { path: '/ai', label: 'Tư vấn chọn cty (AI)', icon: 'psychology' },
+        { path: '/sinh-vien/tien-do', label: 'Báo cáo tiến độ tuần', icon: 'pending_actions' },
       ],
       tienIch: [
         { path: '/thong-bao', label: 'Thông báo từ Khoa', icon: 'notifications' },
@@ -81,7 +81,8 @@ export default function Sidebar({ currentRole, onRoleChange }) {
     },
   }
 
-  const currentGroups = roleMenuGroups[currentRole] || roleMenuGroups.GiangVien
+  const selectedGroups = roleMenuGroups[currentRole] || roleMenuGroups.GiangVien
+  const currentGroups = selectedGroups
 
   const getRoleDisplayName = (role) => {
     switch (role) {
@@ -124,7 +125,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
           <div>
             <div className="px-3 pb-2">
               <span className="text-[10px] uppercase text-slate-400 tracking-wider font-bold">
-                Học vụ & Nghiệp vụ
+                {currentRole === 'Khoa' ? 'Quản lý tiến trình đợt' : 'Học vụ & Nghiệp vụ'}
               </span>
             </div>
             <nav className="space-y-1">
@@ -152,7 +153,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
           <div>
             <div className="px-3 pb-2">
               <span className="text-[10px] uppercase text-slate-400 tracking-wider font-bold">
-                Tiện ích & Học vụ
+                {currentRole === 'Khoa' ? 'Thiết lập & Hỗ trợ' : 'Tiện ích & Học vụ'}
               </span>
             </div>
             <nav className="space-y-1">
@@ -310,7 +311,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
       {/* Modal 2 tầng: Chọn Năm học -> Đợt thực tập */}
       {showDotModal && (
         <ModalOverlay onClose={() => setShowDotModal(false)}>
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold">
@@ -361,13 +362,15 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                   ?.dots.map((dot) => {
                     const isSelected = selectedDot.maDot === dot.maDot
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={dot.maDot}
+                        aria-pressed={isSelected}
                         onClick={() => {
                           changeDot(dot)
                           setShowDotModal(false)
                         }}
-                        className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
+                        className={`w-full text-left p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between ${
                           isSelected
                             ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20'
                             : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70'
@@ -382,10 +385,11 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                               </span>
                             )}
                           </div>
-                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                          <span className="block text-xs text-slate-500 mt-0.5">Mã đợt: {dot.maDot}</span>
+                          <span className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
                             <span className="material-symbols-outlined text-[14px] text-slate-400">schedule</span>
                             Thời gian: {dot.thoiGian}
-                          </p>
+                          </span>
                         </div>
 
                         <div className="text-right">
@@ -401,7 +405,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                             {dot.labelTrangThai}
                           </span>
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
               </div>

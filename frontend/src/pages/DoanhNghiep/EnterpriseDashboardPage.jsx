@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
+import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
 
 // Trạng thái hợp tác do Khoa phê duyệt (CONGTY.trangThai)
 const HOP_TAC = {
@@ -12,7 +13,7 @@ const HOP_TAC = {
 }
 
 export default function EnterpriseDashboardPage() {
-  const { activeCompany } = useEnterprise()
+  const { activeCompany, maDot, updateChiTieu } = useEnterprise()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -21,7 +22,8 @@ export default function EnterpriseDashboardPage() {
       if (!activeCompany?.maCongTy) return
       try {
         setLoading(true)
-        const res = await doanhNghiepService.getTongQuan(activeCompany.maCongTy)
+        const res = await doanhNghiepService.getTongQuan(activeCompany.maCongTy, maDot)
+        updateChiTieu(res?.chiTieu)
         setData(res)
       } catch (err) {
         console.error('Lỗi lấy dữ liệu tổng quan:', err)
@@ -30,11 +32,11 @@ export default function EnterpriseDashboardPage() {
       }
     }
     fetchDashboard()
-  }, [activeCompany?.maCongTy])
+  }, [activeCompany?.maCongTy, maDot, updateChiTieu])
 
   const thongKe = data?.thongKe || {
     soViTriTuyen: activeCompany?.viTriTuyen ? 1 : 0,
-    soLuongNhan: activeCompany?.soLuongNhan || 0,
+    soLuongNhan: activeCompany?.chiTieu?.soLuongNhan || 0,
     soUngVien: 0,
     soChoDuyet: 0,
     soDaDuyet: 0,
@@ -64,6 +66,7 @@ export default function EnterpriseDashboardPage() {
 
   return (
     <div className="space-y-6">
+      {chiTieu && <p role="status">{chiTieu.tenDot || 'Đợt tiếp nhận'}: {recruitmentStatusLabel(chiTieu.trangThaiTuyen)}</p>}
       {/* 1. Header Banner Doanh nghiệp */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 p-8 text-white shadow-md border border-indigo-700/30">
         <div className="absolute right-0 top-0 -mt-10 -mr-10 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none"></div>
@@ -91,7 +94,7 @@ export default function EnterpriseDashboardPage() {
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px] text-indigo-400">work</span>
-                Vị trí tuyển: <strong className="text-white font-semibold">{activeCompany?.viTriTuyen || 'Chưa cập nhật'}</strong>
+                Giới thiệu vị trí chung: <strong className="text-white font-semibold">{activeCompany?.viTriTuyen || 'Chưa cập nhật'}</strong>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px] text-indigo-400">person</span>
@@ -430,8 +433,8 @@ export default function EnterpriseDashboardPage() {
                   <span className="material-symbols-outlined text-[20px]">rate_review</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-slate-800">Đánh Giá Thực Tập Sinh</div>
-                  <div className="text-[11px] text-slate-500 truncate">Phiếu nhận xét CLO4.1, CLO4.2</div>
+                  <div className="text-xs font-bold text-slate-800">Đánh giá thực tập sinh</div>
+                  <div className="text-[11px] text-slate-500 truncate">Nhập điểm doanh nghiệp theo tiêu chí CLO</div>
                 </div>
                 <span className="material-symbols-outlined text-[16px] text-slate-400 group-hover:text-purple-600">chevron_right</span>
               </Link>

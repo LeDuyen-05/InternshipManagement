@@ -1,3 +1,6 @@
+import { usePagination } from '../../hooks/usePagination'
+import Pagination from '../../components/common/Pagination'
+import DocumentAttachments from '../../components/common/DocumentAttachments'
 import { useState, useEffect } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import tienDoThucTapService from '../../services/tienDoThucTapService'
@@ -8,7 +11,7 @@ import { useIdentity } from '../../hooks/useIdentity'
 export default function TienDoThucTapSVPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { selectedDot } = useDotThucTap()
+  const { selectedDot, roundLock } = useDotThucTap()
   const { maGV: identityMaGV, role } = useIdentity() || {}
   const isStaff = role === 'VT01' || role === 'VT02'
   const currentMaGV = isStaff && searchParams.get('gv') ? searchParams.get('gv') : (identityMaGV || 'GV001')
@@ -31,14 +34,19 @@ export default function TienDoThucTapSVPage() {
   const [submitting, setSubmitting] = useState(false)
   const [toastMessage, setToastMessage] = useState('')
 
+  // Bộ lọc và tìm kiếm tiến độ
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [searchKeyword, setSearchKeyword] = useState('')
+  const [modalMode, setModalMode] = useState('duyet')
+
   // 1. Tải danh sách sinh viên do GV hướng dẫn từ cơ sở dữ liệu thật theo currentMaGV
   useEffect(() => {
     const fetchStudents = async () => {
       try {
         setLoadingStudents(true)
         const [res, resTai] = await Promise.all([
-          gvHuongDanService.getSVTheoGiangVien(currentMaGV),
-          gvHuongDanService.getGiangVienTai().catch(() => ({ data: { data: [] } })),
+          gvHuongDanService.getSVTheoGiangVien(currentMaGV, '', selectedDot?.maDot),
+          gvHuongDanService.getGiangVienTai(selectedDot?.maDot).catch(() => ({ data: { data: [] } })),
         ])
         const data = res.data?.data || res.data || []
         const taiList = resTai.data?.data || []
@@ -70,7 +78,7 @@ export default function TienDoThucTapSVPage() {
       }
     }
     fetchStudents()
-  }, [currentMaGV, urlMaSV])
+  }, [currentMaGV, urlMaSV, selectedDot?.maDot])
 
   // Đồng bộ selectedMaSV khi URL param thay đổi
   useEffect(() => {
@@ -89,7 +97,7 @@ export default function TienDoThucTapSVPage() {
       setLoading(true)
       setError(null)
       const res = await tienDoThucTapService.getTienDoBySinhVien(svId, selectedDot?.maDot)
-      const data = res.data?.data || res.data || []
+      const data = Array.isArray(res) ? res : (res.data?.data || res.data || [])
       setListTienDo(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('Lỗi tải tiến độ thực tập:', err)
@@ -118,15 +126,26 @@ export default function TienDoThucTapSVPage() {
   }
 
   const handleOpenDuyet = (item) => {
+    if (roundLock.blocked) return
+    if (item.maPhanBoLuuTru || item.trangThaiDuyet !== 'DaNop') return
     setSelectedTienDo(item)
-    setDuyetStatus(item.trangThaiDuyet === 'ChuaNop' ? 'DaDuyet' : item.trangThaiDuyet)
+    setDuyetStatus('DaDuyet')
     setNhanXetGV(item.nhanXetGV || '')
+    setModalMode('duyet')
+    setShowModal(true)
+  }
+
+  const handleOpenView = (item) => {
+    setSelectedTienDo(item)
+    setNhanXetGV(item.nhanXetGV || '')
+    setModalMode('view')
     setShowModal(true)
   }
 
   // 3. Phê duyệt tiến độ — CHỈ cập nhật UI khi database cập nhật thành công!
   const handleSaveDuyet = async () => {
-    if (!selectedTienDo) return
+    if (roundLock.blocked) return
+    if (!selectedTienDo || selectedTienDo.maPhanBoLuuTru || selectedTienDo.trangThaiDuyet !== 'DaNop') return
     try {
       setSubmitting(true)
       await tienDoThucTapService.duyetTienDo(selectedTienDo.maTienDo, duyetStatus, nhanXetGV)
@@ -177,10 +196,33 @@ export default function TienDoThucTapSVPage() {
   }
 
   // Thống kê tiến độ trực tiếp từ danh sách DB
-  const totalWeeks = listTienDo.length
-  const daDuyetCount = listTienDo.filter((t) => t.trangThaiDuyet === 'DaDuyet').length
-  const choDuyetCount = listTienDo.filter((t) => t.trangThaiDuyet === 'DaNop').length
-  const chuaNopCount = listTienDo.filter((t) => t.trangThaiDuyet === 'ChuaNop' || !t.trangThaiDuyet).length
+  const currentReports = listTienDo.filter((t) => !t.maPhanBoLuuTru)
+  const archivedCount = listTienDo.length - currentReports.length
+  const totalWeeks = currentReports.length
+  const daDuyetCount = currentReports.filter((t) => t.trangThaiDuyet === 'DaDuyet').length
+  const choDuyetCount = currentReports.filter((t) => t.trangThaiDuyet === 'DaNop').length
+  const yeuCauSuaCount = currentReports.filter((t) => t.trangThaiDuyet === 'YeuCauSua').length
+  const chuaNopCount = currentReports.filter((t) => t.trangThaiDuyet === 'ChuaNop' || !t.trangThaiDuyet).length
+
+  // Danh sách đã lọc theo trạng thái và từ khóa tìm kiếm
+  const filteredReports = listTienDo.filter((item) => {
+    if (statusFilter === 'DaNop' && item.trangThaiDuyet !== 'DaNop') return false
+    if (statusFilter === 'DaDuyet' && item.trangThaiDuyet !== 'DaDuyet') return false
+    if (statusFilter === 'YeuCauSua' && item.trangThaiDuyet !== 'YeuCauSua') return false
+    if (statusFilter === 'ChuaNop' && (item.trangThaiDuyet && item.trangThaiDuyet !== 'ChuaNop')) return false
+
+    if (searchKeyword.trim()) {
+      const kw = searchKeyword.trim().toLowerCase()
+      const matchMa = item.maTienDo?.toLowerCase().includes(kw)
+      const matchNoiDung = item.noiDungBaoCao?.toLowerCase().includes(kw)
+      const matchNhanXet = item.nhanXetGV?.toLowerCase().includes(kw)
+      const matchMoc = item.mocThoiGian ? new Date(item.mocThoiGian).toLocaleDateString('vi-VN').includes(kw) : false
+      if (!matchMa && !matchNoiDung && !matchNhanXet && !matchMoc) return false
+    }
+    return true
+  })
+
+  const pagination = usePagination(filteredReports, JSON.stringify([currentMaGV, selectedDot?.maDot, selectedMaSV, statusFilter, searchKeyword]))
 
   return (
     <div className="space-y-6">
@@ -227,7 +269,7 @@ export default function TienDoThucTapSVPage() {
         ) : studentList.length === 0 ? (
           <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
             <span className="material-symbols-outlined text-amber-600">info</span>
-            <span>Chưa có sinh viên nào được phân công cho Giảng viên GV001 trong cơ sở dữ liệu. Vui lòng vào phân công sinh viên tại cổng Cán bộ Khoa trước.</span>
+            <span>Chưa có sinh viên nào được phân công cho Giảng viên {lecturerInfo?.hoTen ? `${lecturerInfo.hoTen} (${currentMaGV})` : currentMaGV} trong cơ sở dữ liệu. Vui lòng vào phân công sinh viên tại cổng Cán bộ Khoa trước.</span>
           </div>
         ) : (
           <>
@@ -252,22 +294,61 @@ export default function TienDoThucTapSVPage() {
               </div>
 
               <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-100 text-center">
-                  <span className="text-slate-500 block">Tổng báo cáo</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                    statusFilter === 'ALL'
+                      ? 'bg-blue-100/90 border-blue-400 ring-2 ring-blue-500 shadow-sm'
+                      : 'bg-blue-50/70 border-blue-100 hover:bg-blue-100/60'
+                  }`}
+                  title="Nhấn để xem tất cả báo cáo"
+                >
+                  <span className="text-slate-500 block font-medium">Báo cáo hiện tại</span>
                   <span className="text-lg font-black text-blue-700 font-mono">{totalWeeks}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-emerald-50/70 border border-emerald-100 text-center">
-                  <span className="text-slate-500 block">Đã duyệt</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'DaDuyet' ? 'ALL' : 'DaDuyet')}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                    statusFilter === 'DaDuyet'
+                      ? 'bg-emerald-100/90 border-emerald-400 ring-2 ring-emerald-500 shadow-sm'
+                      : 'bg-emerald-50/70 border-emerald-100 hover:bg-emerald-100/60'
+                  }`}
+                  title="Nhấn để lọc báo cáo Đã duyệt đạt"
+                >
+                  <span className="text-slate-500 block font-medium">Đã duyệt</span>
                   <span className="text-lg font-black text-emerald-700 font-mono">{daDuyetCount}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-100 text-center">
-                  <span className="text-slate-500 block">Chờ duyệt</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'DaNop' ? 'ALL' : 'DaNop')}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                    statusFilter === 'DaNop'
+                      ? 'bg-amber-100/90 border-amber-400 ring-2 ring-amber-500 shadow-sm'
+                      : 'bg-amber-50/70 border-amber-100 hover:bg-amber-100/60'
+                  }`}
+                  title="Nhấn để lọc báo cáo Chờ GV duyệt"
+                >
+                  <span className="text-slate-500 block font-medium">Chờ duyệt</span>
                   <span className="text-lg font-black text-amber-700 font-mono">{choDuyetCount}</span>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-center">
-                  <span className="text-slate-500 block">Chưa nộp</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'ChuaNop' ? 'ALL' : 'ChuaNop')}
+                  className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                    statusFilter === 'ChuaNop'
+                      ? 'bg-slate-200 border-slate-400 ring-2 ring-slate-500 shadow-sm'
+                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100/70'
+                  }`}
+                  title="Nhấn để lọc báo cáo Chưa nộp"
+                >
+                  <span className="text-slate-500 block font-medium">Chưa nộp</span>
                   <span className="text-lg font-black text-slate-700 font-mono">{chuaNopCount}</span>
-                </div>
+                </button>
               </div>
             </div>
 
@@ -301,14 +382,144 @@ export default function TienDoThucTapSVPage() {
 
       {/* 2. Bảng Danh sách Tiến độ từ DB */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-200 bg-slate-50/75 flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-              Nhật Ký Báo Cáo Thực Tập Định Kỳ
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Sinh viên nộp báo cáo định kỳ theo từng tuần. Giảng viên nhận xét và phê duyệt kết quả thực tập.
-            </p>
+        <div className="p-4 border-b border-slate-200 bg-slate-50/75 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
+                Nhật Ký Báo Cáo Thực Tập Định Kỳ
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Sinh viên nộp báo cáo định kỳ theo từng tuần. Giảng viên nhận xét và phê duyệt kết quả thực tập.
+                {archivedCount > 0 && ` Có ${archivedCount} báo cáo lưu trữ trước khi đổi nơi: chỉ xem lịch sử, không tính vào số báo cáo hiện tại.`}
+              </p>
+            </div>
+          </div>
+
+          {/* Thanh công cụ Lọc trạng thái & Tìm kiếm */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 border-t border-slate-200/60">
+            {/* Tabs trạng thái */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap cursor-pointer ${
+                  statusFilter === 'ALL'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                Tất cả ({totalWeeks})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter('DaNop')}
+                className={`px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  statusFilter === 'DaNop'
+                    ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                    : 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50'
+                }`}
+              >
+                <span>Chờ GV duyệt</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  statusFilter === 'DaNop' ? 'bg-amber-800 text-white' : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {choDuyetCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter('DaDuyet')}
+                className={`px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  statusFilter === 'DaDuyet'
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                    : 'bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50'
+                }`}
+              >
+                <span>Đã duyệt đạt</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  statusFilter === 'DaDuyet' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
+                }`}>
+                  {daDuyetCount}
+                </span>
+              </button>
+
+              {yeuCauSuaCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('YeuCauSua')}
+                  className={`px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                    statusFilter === 'YeuCauSua'
+                      ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                      : 'bg-white text-rose-700 border-rose-200 hover:bg-rose-50'
+                  }`}
+                >
+                  <span>Yêu cầu sửa</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    statusFilter === 'YeuCauSua' ? 'bg-rose-800 text-white' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {yeuCauSuaCount}
+                  </span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ChuaNop')}
+                className={`px-3 py-1.5 rounded-lg border transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                  statusFilter === 'ChuaNop'
+                    ? 'bg-slate-700 text-white border-slate-700 shadow-sm'
+                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                <span>Chưa nộp</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  statusFilter === 'ChuaNop' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'
+                }`}>
+                  {chuaNopCount}
+                </span>
+              </button>
+            </div>
+
+            {/* Ô tìm kiếm nhanh */}
+            <div className="flex items-center gap-2">
+              <div className="relative w-full sm:w-64">
+                <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-base">
+                  search
+                </span>
+                <input
+                  type="text"
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder="Tìm nội dung, mã, nhận xét..."
+                  className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-white border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {searchKeyword && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchKeyword('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                )}
+              </div>
+
+              {(statusFilter !== 'ALL' || searchKeyword) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter('ALL')
+                    setSearchKeyword('')
+                  }}
+                  className="text-xs text-slate-500 hover:text-blue-600 font-medium whitespace-nowrap cursor-pointer px-2 py-1"
+                  title="Đặt lại bộ lọc"
+                >
+                  Xóa lọc
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -339,7 +550,7 @@ export default function TienDoThucTapSVPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {listTienDo.map((item, idx) => (
+                {pagination.items.map((item, idx) => (
                   <tr key={item.maTienDo || idx} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4 font-bold text-slate-800 align-top">
                       <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 font-mono">
@@ -349,12 +560,13 @@ export default function TienDoThucTapSVPage() {
                     <td className="py-3.5 px-4 text-slate-700 align-top font-medium">
                       {item.mocThoiGian
                         ? new Date(item.mocThoiGian).toLocaleDateString('vi-VN')
-                        : `Tuần ${idx + 1}`}
+                        : `Tuần ${pagination.start + idx}`}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 align-top">
                       {item.ngayNop
                         ? new Date(item.ngayNop).toLocaleDateString('vi-VN')
                         : <span className="italic text-slate-400">Chưa nộp</span>}
+                      {item.nopTre === true && <span className="block text-amber-700 text-xs">{item.hanNopBoSung ? 'Nộp bổ sung được Khoa mở' : 'Nộp sau hạn gốc — lịch sử'}</span>}
                     </td>
                     <td className="py-3.5 px-4 text-slate-700 align-top leading-relaxed">
                       {item.noiDungBaoCao ? (
@@ -374,67 +586,135 @@ export default function TienDoThucTapSVPage() {
                     </td>
                     <td className="py-3.5 px-4 text-center align-top">
                       {getStatusBadge(item.trangThaiDuyet)}
+                      {item.maPhanBoLuuTru && <div className="text-xs text-slate-500 mt-2">Lịch sử trước khi đổi nơi — chỉ xem</div>}
                     </td>
                     <td className="py-3.5 px-4 text-center align-top">
-                      <button
-                        onClick={() => handleOpenDuyet(item)}
-                        className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold transition cursor-pointer"
-                      >
-                        Duyệt
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        {!item.maPhanBoLuuTru && item.trangThaiDuyet === 'DaNop' ? (
+                          <button
+                            onClick={() => handleOpenDuyet(item)}
+                            disabled={roundLock.blocked}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-bold transition shadow-sm cursor-pointer flex items-center gap-1"
+                            title="Phê duyệt hoặc yêu cầu chỉnh sửa báo cáo"
+                          >
+                            <span className="material-symbols-outlined text-sm">rate_review</span>
+                            <span>Duyệt</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleOpenView(item)}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition cursor-pointer flex items-center gap-1 text-xs"
+                            title="Xem chi tiết nội dung và tệp minh chứng đính kèm"
+                          >
+                            <span className="material-symbols-outlined text-sm">visibility</span>
+                            <span>Chi tiết</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <Pagination pagination={pagination} label="báo cáo sinh viên hướng dẫn"/>
           </div>
         )}
       </div>
 
-      {/* Modal Duyệt Tiến Độ */}
+      {/* Modal Xem Chi Tiết / Duyệt Tiến Độ */}
       {showModal && selectedTienDo && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-slate-900">
-                Phê Duyệt Tiến Độ — {selectedTienDo.maTienDo}
-              </h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-blue-600">
+                  {modalMode === 'duyet' ? 'rate_review' : 'assignment'}
+                </span>
+                <h3 className="text-base font-bold text-slate-900">
+                  {modalMode === 'duyet' ? 'Phê Duyệt Tiến Độ' : 'Chi Tiết Báo Cáo'} — {selectedTienDo.maTienDo}
+                </h3>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-600 block mb-1">Trạng thái duyệt:</label>
-                <select
-                  value={duyetStatus}
-                  onChange={(e) => setDuyetStatus(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                >
-                  <option value="DaDuyet">Đã duyệt đạt (DaDuyet)</option>
-                  <option value="YeuCauSua">Yêu cầu sửa / bổ sung (YeuCauSua)</option>
-                  <option value="DaNop">Đã nộp chờ xem (DaNop)</option>
-                  <option value="ChuaNop">Chưa nộp (ChuaNop)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-600 block mb-1">Nội dung báo cáo của SV:</label>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 max-h-36 overflow-y-auto text-slate-700 leading-relaxed">
-                  {selectedTienDo.noiDungBaoCao || 'Sinh viên chưa nhập nội dung'}
+            <div className="space-y-3.5 text-xs">
+              {/* Thông tin mốc thời gian & ngày nộp */}
+              <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-slate-600">
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Mốc thời gian:</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedTienDo.mocThoiGian ? new Date(selectedTienDo.mocThoiGian).toLocaleDateString('vi-VN') : '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block text-[11px]">Ngày nộp:</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedTienDo.ngayNop ? new Date(selectedTienDo.ngayNop).toLocaleDateString('vi-VN') : 'Chưa nộp'}
+                  </span>
+                  {selectedTienDo.nopTre && (
+                    <span className="block text-amber-700 text-[10px]">
+                      {selectedTienDo.hanNopBoSung ? '(Nộp bổ sung được Khoa mở)' : '(Nộp sau hạn gốc)'}
+                    </span>
+                  )}
                 </div>
               </div>
 
+              {/* Form duyệt hoặc Trạng thái hiện tại */}
+              {modalMode === 'duyet' ? (
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">Quyết định phê duyệt:</label>
+                  <select
+                    value={duyetStatus}
+                    onChange={(e) => setDuyetStatus(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
+                  >
+                    <option value="DaDuyet">Đã duyệt đạt (DaDuyet)</option>
+                    <option value="YeuCauSua">Yêu cầu sửa / bổ sung (YeuCauSua)</option>
+                  </select>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="font-bold text-slate-600">Trạng thái hiện tại:</span>
+                  <div>{getStatusBadge(selectedTienDo.trangThaiDuyet)}</div>
+                </div>
+              )}
+
+              {/* Nội dung báo cáo */}
               <div>
-                <label className="font-bold text-slate-600 block mb-1">Nhận xét & Góp ý của GV:</label>
-                <textarea
-                  rows={3}
-                  value={nhanXetGV}
-                  onChange={(e) => setNhanXetGV(e.target.value)}
-                  placeholder="Nhập nhận xét, đánh giá kết quả công việc hoặc yêu cầu chỉnh sửa..."
-                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none font-sans"
-                />
+                <label className="font-bold text-slate-700 block mb-1">Nội dung báo cáo của SV:</label>
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 max-h-36 overflow-y-auto text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {selectedTienDo.noiDungBaoCao || <span className="italic text-slate-400">Sinh viên chưa nhập nội dung báo cáo</span>}
+                </div>
+              </div>
+
+              {/* Tệp đính kèm & Minh chứng */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Tệp đính kèm & Minh chứng:</label>
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                  <DocumentAttachments key={selectedTienDo.maTienDo} kind="Progress" resourceId={selectedTienDo.maTienDo} readOnly />
+                </div>
+              </div>
+
+              {/* Nhận xét của GV */}
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  {modalMode === 'duyet' ? 'Nhận xét & Góp ý của GV:' : 'Nhận xét của GV đã ghi nhận:'}
+                </label>
+                {modalMode === 'duyet' ? (
+                  <textarea
+                    rows={3}
+                    value={nhanXetGV}
+                    onChange={(e) => setNhanXetGV(e.target.value)}
+                    placeholder="Nhập nhận xét, đánh giá kết quả công việc hoặc yêu cầu chỉnh sửa..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none font-sans"
+                  />
+                ) : (
+                  <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-blue-900 leading-relaxed">
+                    {selectedTienDo.nhanXetGV || <span className="italic text-slate-400">Chưa có nhận xét nào</span>}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -442,19 +722,21 @@ export default function TienDoThucTapSVPage() {
               <button
                 type="button"
                 onClick={() => setShowModal(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl cursor-pointer"
               >
-                Hủy
+                {modalMode === 'duyet' ? 'Hủy' : 'Đóng'}
               </button>
-              <button
-                type="button"
-                onClick={handleSaveDuyet}
-                disabled={submitting}
-                className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                <span>Cập nhật vào Database</span>
-              </button>
+              {modalMode === 'duyet' && (
+                <button
+                  type="button"
+                  onClick={handleSaveDuyet}
+                  disabled={submitting || roundLock.blocked}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
+                >
+                  {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
+                  <span>Lưu phê duyệt vào Database</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
