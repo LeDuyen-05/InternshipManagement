@@ -21,11 +21,12 @@ export default function DashboardSinhVienPage() {
   const [reports, setReports] = useState([])
   const [registrations, setRegistrations] = useState([])
   const [phieuDiem, setPhieuDiem] = useState(null)
+  const [dieuKien, setDieuKien] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let active = true
-    setProfile(null); setPlacement(null); setReports([]); setRegistrations([]); setPhieuDiem(null)
+    setProfile(null); setPlacement(null); setReports([]); setRegistrations([]); setPhieuDiem(null); setDieuKien(null)
     if (!currentMaSV || !selectedDot?.maDot) {
       setLoading(false)
       return () => { active = false }
@@ -34,13 +35,16 @@ export default function DashboardSinhVienPage() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        const [profData, pbData, repData, dkData, diemData] = await Promise.allSettled([
+        const [profData, pbData, repData, dkData, diemData, dkDieuKien] = await Promise.allSettled([
           hoSoNangLucService.getHoSoBySinhVien(currentMaSV),
           phongVanService.getPhanBoThucTap(currentMaSV, selectedDot.maDot),
           tienDoThucTapService.getTienDoBySinhVien(currentMaSV, selectedDot?.maDot),
           dangKyThucTapService.getDangKyBySinhVien(currentMaSV),
           selectedDot?.maDot
             ? phieuChamDiemService.getPhieuChamBySinhVien(currentMaSV, selectedDot.maDot)
+            : Promise.resolve(null),
+          selectedDot?.maDot
+            ? dangKyThucTapService.getDieuKien(selectedDot.maDot)
             : Promise.resolve(null),
         ])
         if (!active) return
@@ -56,6 +60,7 @@ export default function DashboardSinhVienPage() {
         if (dkData.status === 'fulfilled') setRegistrations((dkData.value || []).filter(thuocDot))
         // apiClient trả về response axios → body là { success, data }
         if (diemData.status === 'fulfilled') setPhieuDiem(diemData.value?.data?.data ?? null)
+        if (dkDieuKien.status === 'fulfilled') setDieuKien(dkDieuKien.value || null)
       } catch (err) {
         console.error('Lỗi khi tải dữ liệu bảng điều khiển:', err)
       } finally {
@@ -81,6 +86,7 @@ export default function DashboardSinhVienPage() {
   const g2Done = journey.placementReady
   const g3Done = journey.reportsApproved
   const g4Done = Boolean(phieuDiem?.daDuDiem)
+  const daHoanThanhHocPhan = Boolean(dieuKien && !dieuKien.duocDangKy && dieuKien.lyDo?.includes('đạt học phần'))
   const daTrungTuyen = registrations.some((r) => r.daTiepNhan)
   const soHoSoDat = registrations.filter((r) => r.trangThai === 'DaDuyet' && !r.daTiepNhan).length
 
@@ -111,6 +117,11 @@ export default function DashboardSinhVienPage() {
               <span className="material-symbols-outlined text-[18px]">post_add</span>
               <span>Nộp báo cáo tiến độ</span>
             </Link>
+          ) : daHoanThanhHocPhan ? (
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold shadow-2xs">
+              <span className="material-symbols-outlined text-[18px] text-emerald-600">verified</span>
+              <span>Đã hoàn thành học phần</span>
+            </span>
           ) : (
             <Link
               to="/sinh-vien/dang-ky"
@@ -226,14 +237,44 @@ export default function DashboardSinhVienPage() {
                 </div>
               </div>
             </div>
+          ) : daHoanThanhHocPhan ? (
+            <div className="p-8 bg-white rounded-2xl border border-emerald-200/90 shadow-2xs text-center flex flex-col items-center">
+              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-3xl">school</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 m-0">Đã hoàn thành học phần thực tập tốt nghiệp</h3>
+              <p className="text-slate-600 text-xs max-w-xl mx-auto mt-2 mb-6 leading-relaxed">
+                {dieuKien.lyDo}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link
+                  to="/sinh-vien/lich-trinh"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 shadow-xs transition-all cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">history_edu</span>
+                  <span>Xem lịch sử phân bổ</span>
+                </Link>
+                <Link
+                  to="/sinh-vien/ho-so"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">badge</span>
+                  <span>Hồ sơ năng lực cá nhân</span>
+                </Link>
+              </div>
+            </div>
           ) : (
             <div className="p-8 bg-white rounded-2xl border border-slate-200/90 shadow-2xs text-center flex flex-col items-center">
               <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-4">
                 <span className="material-symbols-outlined text-3xl">corporate_fare</span>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 m-0">Chưa có quyết định phân bổ</h3>
+              <h3 className="text-lg font-bold text-slate-900 m-0">
+                {registrations.length > 0 ? 'Đang trong quá trình xét duyệt nguyện vọng' : 'Chưa có quyết định phân bổ'}
+              </h3>
               <p className="text-slate-500 text-xs max-w-lg mx-auto mt-1.5 mb-6 leading-relaxed">
-                Bạn chưa được phân bổ vào doanh nghiệp tiếp nhận thực tập trong đợt này. Hãy tham gia đăng ký nguyện vọng vào các doanh nghiệp đang tuyển dụng hoặc đề xuất đơn vị tiếp nhận tự tìm.
+                {registrations.length > 0
+                  ? `Bạn đã đăng ký ${registrations.length}/3 nguyện vọng trong đợt này. Vui lòng theo dõi kết quả sơ tuyển hồ sơ và lịch phỏng vấn của doanh nghiệp.`
+                  : 'Bạn chưa được phân bổ vào doanh nghiệp tiếp nhận thực tập trong đợt này. Hãy tham gia đăng ký nguyện vọng vào các doanh nghiệp đang tuyển dụng hoặc đề xuất đơn vị tiếp nhận tự tìm.'}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Link
@@ -241,16 +282,26 @@ export default function DashboardSinhVienPage() {
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-xs transition-all cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">domain</span>
-                  <span>Xem doanh nghiệp tuyển dụng</span>
+                  <span>{registrations.length > 0 ? 'Theo dõi nguyện vọng' : 'Xem doanh nghiệp tuyển dụng'}</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </Link>
-                <Link
-                  to="/sinh-vien/dang-ky?tab=tu-tim"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                  <span>Đề xuất nơi thực tập tự tìm</span>
-                </Link>
+                {registrations.length === 0 ? (
+                  <Link
+                    to="/sinh-vien/dang-ky?tab=tu-tim"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                    <span>Đề xuất nơi thực tập tự tìm</span>
+                  </Link>
+                ) : (
+                  <Link
+                    to="/sinh-vien/lich-trinh"
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">event_available</span>
+                    <span>Xem lịch phỏng vấn</span>
+                  </Link>
+                )}
               </div>
             </div>
           )}
@@ -282,13 +333,14 @@ export default function DashboardSinhVienPage() {
               </div>
               <div className="mt-3">
                 <div className="text-2xl font-extrabold text-indigo-900">
-                  {submittedReports} <span className="text-sm font-normal text-slate-400">chờ duyệt</span>
+                  {totalSlots === 0 ? '—' : submittedReports}
+                  {totalSlots > 0 && <span className="text-sm font-normal text-slate-400"> chờ duyệt</span>}
                 </div>
                 <div className="text-xs text-emerald-600 font-semibold mt-1">
-                  {approvedReports} báo cáo đã phê duyệt
+                  {totalSlots === 0 ? 'Chưa mở mốc tiến độ' : `${approvedReports} báo cáo đã phê duyệt`}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  {totalSlots === 0 ? 'Chưa có mốc tiến độ' : `${totalSlots - approvedReports - submittedReports} mốc chưa nộp`}
+                  {totalSlots === 0 ? 'Mở sau khi nhận quyết định tiếp nhận' : `${totalSlots - approvedReports - submittedReports} mốc chưa nộp`}
                 </div>
               </div>
             </div>
@@ -303,11 +355,17 @@ export default function DashboardSinhVienPage() {
                   {registrations.length} <span className="text-sm font-normal text-slate-400">/ 3</span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  {daTrungTuyen
-                    ? 'Đã trúng tuyển ✓'
-                    : soHoSoDat > 0
-                      ? `${soHoSoDat} hồ sơ đạt, chờ phỏng vấn`
-                      : 'Chưa có nguyện vọng được duyệt'}
+                  {daHoanThanhHocPhan
+                    ? 'Đã hoàn thành học phần ✓'
+                    : daTrungTuyen
+                      ? 'Đã trúng tuyển ✓'
+                      : soHoSoDat > 0
+                        ? `${soHoSoDat} hồ sơ đạt, chờ phỏng vấn`
+                        : registrations.length === 0
+                          ? 'Chưa đăng ký nguyện vọng nào'
+                          : registrations.some((r) => r.trangThai === 'ChoDuyet')
+                            ? `${registrations.filter((r) => r.trangThai === 'ChoDuyet').length} hồ sơ đang chờ xét duyệt`
+                            : 'Chưa có nguyện vọng được duyệt'}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">Tối đa 3 nguyện vọng/đợt</div>
               </div>

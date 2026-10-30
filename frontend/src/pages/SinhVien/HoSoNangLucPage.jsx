@@ -355,7 +355,7 @@ export default function HoSoNangLucPage() {
                   Kỹ năng chuyên môn &amp; Công nghệ
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Bộ tiêu chí trích xuất phục vụ tính điểm tương đồng và gợi ý công ty AI
+                  Thông tin chuyên môn phục vụ thẩm định hồ sơ và hỗ trợ gợi ý nguyện vọng thực tập
                 </p>
               </div>
             </div>

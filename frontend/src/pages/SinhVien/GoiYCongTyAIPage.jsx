@@ -127,9 +127,9 @@ export default function GoiYCongTyAIPage() {
               <span className="material-symbols-outlined text-2xl">psychology</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Gợi ý doanh nghiệp thực tập theo hồ sơ (Top-K)</h1>
+              <h1 className="text-xl font-bold text-slate-900">Gợi ý doanh nghiệp thực tập phù hợp hồ sơ</h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                <strong>{data?.thuatToan || 'Gợi ý theo hồ sơ năng lực và JD'}</strong> để tham khảo khi tìm nơi thực tập.
+                Đối sánh hồ sơ năng lực và yêu cầu tuyển dụng để hỗ trợ chọn nơi thực tập phù hợp.
               </p>
             </div>
           </div>
@@ -137,10 +137,7 @@ export default function GoiYCongTyAIPage() {
 
         {/* Gợi ý luôn áp dụng cho sinh viên đang đăng nhập. */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs">
-            <span className="text-slate-500 font-semibold">Tài khoản SV:</span>
-            <span className="font-bold text-purple-800">{selectedMaSV}</span>
-          </div>
+
 
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs">
             <span className="text-slate-500 font-semibold">Số gợi ý:</span>
@@ -160,7 +157,7 @@ export default function GoiYCongTyAIPage() {
             type="button"
             onClick={handleRecalculate}
             disabled={loading || submitting || !maDot}
-            title="Kích hoạt tính toán lại ma trận tương đồng AI"
+            title="Cập nhật danh sách gợi ý theo hồ sơ mới nhất"
             className="px-3.5 py-2 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
             <span className={`material-symbols-outlined text-base ${loading ? 'animate-spin' : ''}`}>sync</span>
@@ -169,10 +166,17 @@ export default function GoiYCongTyAIPage() {
         </div>
       </div>
 
-      <div role="status" className="p-4 rounded-xl bg-blue-50 border border-blue-200 text-sm text-blue-900">
-        <p>Đợt: <strong>{selectedDot?.tenDot || 'Hãy chọn đợt thực tập'}</strong>.</p>
-        <p>{data?.thongBao || 'Gợi ý tham khảo từ hồ sơ năng lực và JD hợp lệ trong đợt.'}</p>
-        <p>{data?.yNghiaDiem || 'Phần trăm là độ tương đồng nội dung, không phải xác suất trúng tuyển.'}</p>
+      <div role="status" className="p-4 rounded-2xl bg-blue-50/80 border border-blue-200 text-xs text-blue-900 space-y-1.5 shadow-2xs">
+        <div className="flex items-center gap-2 font-bold text-sm text-blue-950">
+          <span className="material-symbols-outlined text-blue-700 text-[18px]">verified_user</span>
+          <span>Đợt thực tập: {selectedDot?.tenDot || 'Chưa chọn đợt'}</span>
+        </div>
+        <p className="text-slate-600 m-0 leading-relaxed">
+          Hệ thống tự động đối chiếu thông tin chuyên môn của sinh viên (kỹ năng, công nghệ, dự án) với các vị trí tuyển dụng được phê duyệt trong đợt để gợi ý danh sách phù hợp nhất.
+        </p>
+        <p className="text-slate-500 m-0 italic">
+          * {data?.daSuDungModelTrain ? 'Điểm số hiển thị là điểm xếp hạng chuyên môn từ mô hình học máy (Learning to Rank), hỗ trợ định hướng thứ tự ưu tiên.' : 'Tỷ lệ phần trăm thể hiện mức độ tương đồng chuyên môn tham khảo, không đại diện cho quyết định trúng tuyển chính thức của doanh nghiệp.'}
+        </p>
       </div>
       {lyDoKhongDangKy && dieuKien != null && (
         <div role="alert" className={`p-4 rounded-xl border text-sm flex items-start gap-2 ${daCoNoiThucTap ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
@@ -186,7 +190,7 @@ export default function GoiYCongTyAIPage() {
       {loading ? (
         <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-3">
           <div className="w-10 h-10 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-sm font-semibold text-slate-600">Đang phân tích hồ sơ và các JD hợp lệ trong đợt...</p>
+          <p className="text-sm font-semibold text-slate-600">Đang đối chiếu hồ sơ và yêu cầu tuyển dụng trong đợt...</p>
         </div>
       ) : error ? (
         <div className="bg-rose-50 border border-rose-200 p-6 rounded-2xl text-center space-y-3">
@@ -249,7 +253,7 @@ export default function GoiYCongTyAIPage() {
               <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 text-xs text-purple-900 flex items-start gap-2">
                 <span className="material-symbols-outlined text-purple-600 text-base mt-0.5">dataset</span>
                 <div>
-                  <span className="font-bold">Dữ liệu nguồn AI xử lý (NDHoSo): </span>
+                  <span className="font-bold">Tóm tắt mục tiêu & định hướng thực tập: </span>
                   <span className="text-slate-700 italic">{sv.ndHoSo}</span>
                 </div>
               </div>
@@ -268,13 +272,13 @@ export default function GoiYCongTyAIPage() {
                     </span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {data?.thuatToan}. {data?.yNghiaDiem}
+                    Kết quả đối sánh hồ sơ và yêu cầu tuyển dụng (JD). {data?.daSuDungModelTrain ? 'Điểm số là điểm xếp hạng ưu tiên, không phải xác suất trúng tuyển.' : 'Tỷ lệ hiển thị là mức độ tương đồng chuyên môn, không phải xác suất trúng tuyển.'}
                   </p>
                 </div>
 
                 <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500">
                   <span className="material-symbols-outlined text-base text-emerald-600">verified</span>
-                  <span>Nguồn: <strong>{data?.nguonDuLieu}</strong></span>
+                  <span>Nguồn: <strong>Kế hoạch thực tập được Khoa phê duyệt</strong></span>
                 </div>
               </div>
             )}
@@ -359,30 +363,44 @@ export default function GoiYCongTyAIPage() {
                               <span className="material-symbols-outlined text-sm text-purple-600">auto_awesome</span>
                               Từ khóa chung:
                             </span>
-                            {item.kyNangPhuHop && item.kyNangPhuHop.length > 0 ? (
-                              item.kyNangPhuHop.map((skill) => (
-                                <span
-                                  key={skill}
-                                  className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-[11px] border border-emerald-200"
-                                >
-                                  ✓ {skill}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">Chưa có từ khóa chung để hiển thị.</span>
-                            )}
+                            {(() => {
+                              const stopWords = [
+                                // Âm tiết từ ghép bị tách
+                                'lập', 'trình', 'hệ', 'thống', 'phát', 'triển', 'kỹ', 'sư',
+                                'quản', 'lý', 'viên', 'thuật', 'dụng', 'năng', 'nghề',
+                                'công', 'nghệ', 'thông', 'tin', 'ứng', 'phần', 'mềm',
+                                'kiến', 'trúc', 'giải', 'pháp', 'điều', 'hành', 'chức',
+                                'thiết', 'kế', 'phân', 'tích', 'tích', 'hợp', 'xuất',
+                                // Từ nối / giới từ
+                                'và', 'các', 'cho', 'của', 'với', 'trong', 'theo', 'về',
+                                'từ', 'để', 'có', 'là', 'được', 'trên', 'tại', 'hoặc',
+                              ];
+                              const meaningful = (item.kyNangPhuHop || []).filter(s => !stopWords.includes(s.toLowerCase()));
+                              return meaningful.length > 0 ? (
+                                meaningful.map((skill) => (
+                                  <span
+                                    key={skill}
+                                    className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold text-[11px] border border-emerald-200"
+                                  >
+                                    ✓ {skill}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">Đang đối sánh yêu cầu công việc</span>
+                              );
+                            })()}
                           </div>
                         </div>
 
                         {/* Cột 2: Điểm tương đồng AI */}
                         <div className="flex lg:flex-col items-center lg:items-end justify-between border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 gap-2 min-w-[200px]">
-                          <RecommendationScore item={item} />
+                          <RecommendationScore item={item} index={index} total={data?.tongSoCongTyKhaoSat} />
 
                           {/* Nút tác vụ */}
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setSelectedCompany(item)}
+                              onClick={() => setSelectedCompany({ ...item, _index: index })}
                               className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
                             >
                               Xem JD
@@ -427,7 +445,7 @@ export default function GoiYCongTyAIPage() {
             </div>
 
             <p className="text-xs text-slate-500">
-              Thêm các từ khóa kỹ năng mới vào hồ sơ để thuật toán AI phân tích lại độ tương đồng với các JD công ty.
+              Cập nhật kỹ năng, công nghệ và dự án thực tế để hệ thống đối chiếu lại danh sách doanh nghiệp phù hợp nhất.
             </p>
 
             <div className="space-y-3">
@@ -522,7 +540,7 @@ export default function GoiYCongTyAIPage() {
               <div className="p-3 bg-purple-50 rounded-xl flex justify-between items-center">
                 <span>Điểm gợi ý:</span>
                 <span className="text-base font-bold font-mono text-purple-800">
-                  <RecommendationScore item={selectedCompany} />
+                  <RecommendationScore item={selectedCompany} index={selectedCompany._index} total={data?.tongSoCongTyKhaoSat} />
                 </span>
               </div>
 
