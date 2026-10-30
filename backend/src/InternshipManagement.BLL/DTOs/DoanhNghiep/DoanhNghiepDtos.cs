@@ -73,6 +73,7 @@ public class DanhGiaThucTapSinhRequest
     public string MaPhanBo { get; set; } = default!;
     public List<ChiTietDiemInput> ChiTiets { get; set; } = new();
     public string NhanXet { get; set; } = "";
+    public bool KhoaChinhThuc { get; set; } = false;
 }
 
 public record KetQuaPhongVanResult(
@@ -83,3 +84,21 @@ public record KetQuaPhongVanResult(
     int SoNguyenVongTuDongTuChoi,
     string Message,
     bool ThanhCong = true);
+
+public class ThemViTriRequest
+{
+    public string MaCongTy { get; set; } = default!;
+    public string? MaDot { get; set; }
+    public string TenViTri { get; set; } = default!;
+    public string? YeuCau { get; set; }
+    public int SoLuongNhan { get; set; } = 1;
+}
+
+public class CapNhatViTriRequest
+{
+    public string MaViTri { get; set; } = default!;
+    public string TenViTri { get; set; } = default!;
+    public string? YeuCau { get; set; }
+    public int SoLuongNhan { get; set; } = 1;
+    public bool HoatDong { get; set; } = true;
+}
