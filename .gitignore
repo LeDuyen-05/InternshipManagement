@@ -45,6 +45,7 @@ ml-service/output/
 ml-service/data_raw/
 
 # Local review and scratch output
+/tmp/
 .tmp-doc-review/
 scratch/
 
