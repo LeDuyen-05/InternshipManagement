@@ -48,6 +48,8 @@ export async function loadLecturerDashboard(maGV, maDot, { supervisors, progress
   const studentIds = new Set(students.map(s => s.maSV))
   const forms = responseList(gradeResponse).filter(g => g.maDot === maDot && studentIds.has(g.maSV))
   const completed = summarizeCompletedForms(forms)
+  const gvGradedCount = forms.filter(f => f.daChamGV === true || (f.diemGV != null && Number(f.diemGV) > 0)).length
+  const dnGradedCount = forms.filter(f => f.daChamDN === true || (f.diemDN != null && Number(f.diemDN) > 0)).length
   const reports = []
   // Limit concurrency instead of issuing an unbounded request per student at once.
   let next = 0
@@ -60,7 +62,8 @@ export async function loadLecturerDashboard(maGV, maDot, { supervisors, progress
   }))
   const uniqueReports = [...new Map(reports.map(r => [r.maTienDo, r])).values()]
   return {
-    lecturers, students, completed,
+    lecturers, students, completed, forms,
+    gvGradedCount, dnGradedCount,
     pendingReports: uniqueReports.filter(r => r.trangThaiDuyet === 'DaNop').sort((a, b) => interviewInstant(b.ngayNop) - interviewInstant(a.ngayNop)),
     weekly: weeklyReports(uniqueReports),
   }

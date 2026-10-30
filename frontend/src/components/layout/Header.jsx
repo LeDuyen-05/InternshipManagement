@@ -110,16 +110,20 @@ export default function Header({ currentRole }) {
       }
     }
 
+    const gvDisplayName = authUser?.hoTen
+      ? (authUser.hoTen.startsWith('ThS.') || authUser.hoTen.startsWith('TS.') ? authUser.hoTen : `ThS. ${authUser.hoTen}`)
+      : (code === 'GV001' ? 'ThS. Nguyễn Văn An' : name)
+
     return {
       code,
-      name,
+      name: gvDisplayName,
       role: `Giảng viên Hướng dẫn • ${code}`,
       department: 'Khoa Công nghệ Thông tin',
       faculty: 'Khoa Công nghệ Thông tin',
       email: authUser?.email || '—',
       phone: authUser?.phone || '—',
       office: 'Văn phòng Bộ môn',
-      avatar: (name.charAt(0) || 'GV').toUpperCase(),
+      avatar: (gvDisplayName.charAt(0) || 'GV').toUpperCase(),
       avatarColor: 'bg-blue-700 text-white',
       badgeColor: 'bg-blue-100 text-blue-700 border-blue-200',
     }

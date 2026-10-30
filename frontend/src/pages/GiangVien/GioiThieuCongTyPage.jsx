@@ -3,18 +3,23 @@ import Pagination from '../../components/common/Pagination'
 import { useState, useEffect, useCallback } from 'react'
 import { gioiThieuService } from '../../services/gioiThieuService'
 import { useIdentity } from '../../hooks/useIdentity'
+import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { extractJdText } from '../../utils/jdTextExtraction'
 
 export default function GioiThieuCongTyPage() {
   const { maGV, user } = useIdentity() || {}
   const currentMaGV = maGV || user?.maGV || 'GV001'
+  const { selectedDot } = useDotThucTap()
   const [activeTab, setActiveTab] = useState('mine') // 'mine' | 'all'
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
 
-  const pagination = usePagination(list, `${currentMaGV}-${activeTab}`)
+  // Bộ lọc & tìm kiếm danh sách đề xuất
+  const [keyword, setKeyword] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [selectedDetail, setSelectedDetail] = useState(null)
 
   // Form đề xuất công ty
   const [tenCongTy, setTenCongTy] = useState('')
@@ -23,6 +28,17 @@ export default function GioiThieuCongTyPage() {
   const [thoiGian, setThoiGian] = useState('Từ 15/10/2026 đến 15/01/2027')
   const [yeuCau, setYeuCau] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // Đồng bộ thời gian thực tập dự kiến theo đợt thực tập hiện tại
+  useEffect(() => {
+    if (selectedDot?.thoiGianBD && selectedDot?.thoiGianKT) {
+      const bd = new Date(selectedDot.thoiGianBD).toLocaleDateString('vi-VN')
+      const kt = new Date(selectedDot.thoiGianKT).toLocaleDateString('vi-VN')
+      setThoiGian(`Từ ${bd} đến ${kt}`)
+    } else if (selectedDot?.thoiGian) {
+      setThoiGian(selectedDot.thoiGian)
+    }
+  }, [selectedDot])
 
   // Khu vực Import / Paste JD
   const [showJdModal, setShowJdModal] = useState(false)
@@ -53,38 +69,49 @@ export default function GioiThieuCongTyPage() {
     loadData(activeTab)
   }, [activeTab, loadData])
 
+  // Lọc danh sách theo từ khóa và trạng thái
+  const filteredList = list.filter((item) => {
+    if (statusFilter !== 'ALL' && item.trangThaiKetNoi !== statusFilter) return false
+    if (keyword.trim()) {
+      const kw = keyword.trim().toLowerCase()
+      const matchTen = item.tenCongTy?.toLowerCase().includes(kw)
+      const matchViTri = item.viTriTuyen?.toLowerCase().includes(kw)
+      const matchGV = item.tenGiangVien?.toLowerCase().includes(kw)
+      const matchMa = item.maSo?.toLowerCase().includes(kw)
+      if (!matchTen && !matchViTri && !matchGV && !matchMa) return false
+    }
+    return true
+  })
+
+  const pagination = usePagination(filteredList, `${currentMaGV}-${activeTab}-${statusFilter}-${keyword}`)
+
   // Hàm bóc tách thông minh từ văn bản JD
   const parseJdText = (text) => {
     if (!text || text.trim() === '') return
 
     setParsingJd(true)
     try {
-      // 1. Tìm tên công ty (tìm các dòng có từ "Công ty", "Company", "Tập đoàn")
       const companyMatch = text.match(/(?:Công ty|Tập đoàn|Company|Doanh nghiệp)\s+([^\n\r,.]+)/i)
       if (companyMatch) {
         setTenCongTy(companyMatch[0].trim())
       }
 
-      // 2. Tìm vị trí tuyển dụng (tìm các từ Intern, Developer, Kỹ sư, Lập trình viên)
       const positionMatch = text.match(/(?:Vị trí|Position|Tuyển dụng|Tuyển)\s*:\s*([^\n\r]+)/i) ||
                             text.match(/(?:Thực tập sinh|Intern|Fresher|Junior|Lập trình viên|Kỹ sư)\s+([^\n\r,.]+)/i)
       if (positionMatch) {
         setViTriTuyen(positionMatch[1]?.trim() || positionMatch[0]?.trim())
       }
 
-      // 3. Tìm số lượng nhận
       const quantityMatch = text.match(/(?:Số lượng|Chỉ tiêu|Target)\s*:\s*(\d+)/i)
       if (quantityMatch && quantityMatch[1]) {
         setSoLuongNhan(parseInt(quantityMatch[1], 10))
       }
 
-      // 4. Tìm thời gian thực tập
       const timeMatch = text.match(/(?:Thời gian|Hạn chót|Duration)\s*:\s*([^\n\r]+)/i)
       if (timeMatch && timeMatch[1]) {
         setThoiGian(timeMatch[1].trim())
       }
 
-      // 5. Yêu cầu / Kỹ năng (lấy phần có từ "Yêu cầu", "Requirements", "Kỹ năng")
       const reqMatch = text.match(/(?:Yêu cầu|Requirements|Kỹ năng|Mô tả công việc)[\s\S]{0,300}/i)
       if (reqMatch) {
         setYeuCau(reqMatch[0].trim())
@@ -92,14 +119,14 @@ export default function GioiThieuCongTyPage() {
         setYeuCau(text.substring(0, 300) + '...')
       }
 
-      setSuccessMsg('Đã trích xuất thông tin từ JD thành công! Vui lòng rà soát lại trước khi gửi.')
+      setSuccessMsg('Đã trích xuất thông tin từ JD thành công! Thầy cô vui lòng rà soát lại trước khi gửi.')
       setShowJdModal(false)
     } finally {
       setParsingJd(false)
     }
   }
 
-  // Đọc file tải lên (hỗ trợ .txt, file văn bản)
+  // Đọc file tải lên
   const handleFileUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -145,8 +172,7 @@ export default function GioiThieuCongTyPage() {
       })
 
       if (res.data?.success) {
-        setSuccessMsg(res.data.message || 'Đề xuất công ty mới thành công!')
-        // Reset form
+        setSuccessMsg(res.data.message || 'Đề xuất doanh nghiệp mới thành công!')
         setTenCongTy('')
         setViTriTuyen('')
         setYeuCau('')
@@ -160,18 +186,8 @@ export default function GioiThieuCongTyPage() {
     }
   }
 
-  const handleUpdateStatus = async (id, newStatus) => {
-    try {
-      setError(null)
-      await gioiThieuService.updateTrangThai(id, newStatus)
-      loadData()
-    } catch (err) {
-      alert('Lỗi cập nhật: ' + (err.response?.data?.message || err.message))
-    }
-  }
-
   const handleDelete = async (id) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bản ghi giới thiệu này?')) return
+    if (!window.confirm('Thầy cô có chắc chắn muốn hủy bản ghi đề xuất này?')) return
     try {
       setError(null)
       await gioiThieuService.delete(id)
@@ -186,41 +202,51 @@ export default function GioiThieuCongTyPage() {
       case 'DaDuyet':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
             Đã duyệt
           </span>
         )
       case 'TuChoi':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-600"></span>
             Từ chối
           </span>
         )
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse"></span>
             Chờ duyệt
           </span>
         )
     }
   }
 
+  const gvDisplayName = user?.hoTen ? `ThS. ${user.hoTen} (${currentMaGV})` : currentMaGV
+
   return (
     <div className="space-y-6">
-      {/* Page Title & Breadcrumb */}
+      {/* 1. Header Trang đồng bộ chuẩn Học vụ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mb-1">
-            <span>FIT Portal</span>
+            <span>Khoa Công nghệ Thông tin</span>
             <span>/</span>
             <span>Giảng viên</span>
             <span>/</span>
-            <span className="text-blue-700 font-bold">Đề xuất Doanh nghiệp</span>
+            <span className="text-blue-700 font-bold">Giới thiệu công ty</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-            Đề xuất Doanh nghiệp Thực tập
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            Giới Thiệu & Đề Xuất Doanh Nghiệp Tiếp Nhận
+            {selectedDot?.tenDot && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                {selectedDot.tenDot}
+              </span>
+            )}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Kết nối doanh nghiệp tiếp nhận sinh viên thực tập tốt nghiệp
+            Kết nối doanh nghiệp tiếp nhận sinh viên thực tập tốt nghiệp và chuyển Khoa thẩm định phê duyệt
           </p>
         </div>
 
@@ -228,14 +254,14 @@ export default function GioiThieuCongTyPage() {
         <button
           type="button"
           onClick={() => setShowJdModal(true)}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-800 hover:to-indigo-800 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow-md"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold shadow-sm transition hover:shadow-md cursor-pointer"
         >
           <span className="material-symbols-outlined text-[18px]">upload_file</span>
           <span>Tải lên JD / Mô tả công việc</span>
         </button>
       </div>
 
-      {/* Alerts */}
+      {/* Thông báo Alert */}
       {error && (
         <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3 shadow-sm">
           <span className="material-symbols-outlined text-rose-600">error</span>
@@ -250,7 +276,7 @@ export default function GioiThieuCongTyPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* CỘT TRÁI (5 phần): FORM NHẬP THÔNG TIN CÔNG TY MỚI */}
+        {/* CỘT TRÁI (5 phần): FORM NHẬP THÔNG TIN ĐỀ XUẤT */}
         <div className="lg:col-span-5">
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 sticky top-24">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
@@ -310,8 +336,8 @@ export default function GioiThieuCongTyPage() {
                   <input
                     type="text"
                     disabled
-                    value={currentMaGV}
-                    className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 text-xs font-mono cursor-not-allowed"
+                    value={gvDisplayName}
+                    className="w-full px-3.5 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -345,7 +371,7 @@ export default function GioiThieuCongTyPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2.5 px-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50"
+                className="w-full py-2.5 px-4 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition disabled:opacity-50 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">send</span>
                 {submitting ? 'Đang gửi...' : 'Gửi Đề xuất Doanh nghiệp'}
@@ -355,9 +381,9 @@ export default function GioiThieuCongTyPage() {
         </div>
 
         {/* CỘT PHẢI (7 phần): BẢNG DANH SÁCH DOANH NGHIỆP ĐÃ ĐỀ XUẤT */}
-        <div className="lg:col-span-7">
-          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-slate-100">
+        <div className="lg:col-span-7 space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-6 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-700">corporate_fare</span>
@@ -415,6 +441,69 @@ export default function GioiThieuCongTyPage() {
               </div>
             </div>
 
+            {/* Thanh tìm kiếm & lọc trạng thái */}
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative flex-1 w-full">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                  search
+                </span>
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên doanh nghiệp, vị trí..."
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    statusFilter === 'ALL'
+                      ? 'bg-blue-50 text-blue-700 border border-blue-200 font-bold'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Tất cả
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('DangXem')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    statusFilter === 'DangXem'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200 font-bold'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Chờ duyệt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('DaDuyet')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    statusFilter === 'DaDuyet'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Đã duyệt
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('TuChoi')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition cursor-pointer ${
+                    statusFilter === 'TuChoi'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200 font-bold'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Từ chối
+                </button>
+              </div>
+            </div>
+
             {loading ? (
               <div className="py-20 text-center text-slate-400">
                 <span className="material-symbols-outlined animate-spin text-3xl mb-2 text-blue-600">
@@ -422,17 +511,19 @@ export default function GioiThieuCongTyPage() {
                 </span>
                 <p className="text-xs">Đang tải dữ liệu...</p>
               </div>
-            ) : list.length === 0 ? (
+            ) : filteredList.length === 0 ? (
               <div className="py-16 text-center space-y-2">
                 <span className="material-symbols-outlined text-4xl text-slate-300">
                   {activeTab === 'mine' ? 'contact_support' : 'domain_disabled'}
                 </span>
                 <p className="text-xs font-semibold text-slate-600">
-                  {activeTab === 'mine'
-                    ? 'Bạn chưa gửi đề xuất doanh nghiệp nào.'
+                  {keyword || statusFilter !== 'ALL'
+                    ? 'Không tìm thấy doanh nghiệp khớp với bộ lọc.'
+                    : activeTab === 'mine'
+                    ? 'Thầy cô chưa gửi đề xuất doanh nghiệp nào.'
                     : 'Chưa có giảng viên nào đề xuất doanh nghiệp.'}
                 </p>
-                {activeTab === 'mine' && (
+                {!keyword && statusFilter === 'ALL' && activeTab === 'mine' && (
                   <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
                     Điền form bên trái hoặc nhấn nút "Tải lên JD / Mô tả công việc" để gửi đề xuất doanh nghiệp đầu tiên cho Khoa xét duyệt.
                   </p>
@@ -444,7 +535,7 @@ export default function GioiThieuCongTyPage() {
                   <thead>
                     <tr className="bg-slate-50 text-slate-600 font-semibold border-y border-slate-200 uppercase tracking-wider text-[11px]">
                       <th className="py-3 px-3">Doanh nghiệp</th>
-                      <th className="py-3 px-3">Vị trí tuyển</th>
+                      <th className="py-3 px-3">Vị trí & Chỉ tiêu</th>
                       {activeTab === 'all' && <th className="py-3 px-3">Người đề xuất</th>}
                       <th className="py-3 px-3">Trạng thái</th>
                       <th className="py-3 px-3 text-right">Thao tác</th>
@@ -465,6 +556,10 @@ export default function GioiThieuCongTyPage() {
                             <span className="font-semibold text-blue-900">
                               {item.viTriTuyen || 'Chưa cập nhật'}
                             </span>
+                            <div className="text-[11px] text-slate-500 font-normal mt-0.5">
+                              Chỉ tiêu: <strong className="text-slate-700">{item.soLuongNhan || 1} SV</strong>
+                              {item.thoiGian ? ` • ${item.thoiGian}` : ''}
+                            </div>
                           </td>
                           {activeTab === 'all' && (
                             <td className="py-3 px-3">
@@ -482,25 +577,27 @@ export default function GioiThieuCongTyPage() {
                           <td className="py-3 px-3">
                             {getStatusBadge(item.trangThaiKetNoi)}
                           </td>
-                          <td className="py-3 px-3 text-right">
-                            {isOwner ? (
-                              item.trangThaiKetNoi === 'DangXem' ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(item.maSo)}
-                                  title="Hủy đề xuất này"
-                                  className="inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition cursor-pointer"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">delete</span>
-                                  <span>Hủy</span>
-                                </button>
-                              ) : item.trangThaiKetNoi === 'DaDuyet' ? (
-                                <span className="text-[11px] text-emerald-600 font-semibold">Khoa đã duyệt</span>
-                              ) : (
-                                <span className="text-[11px] text-rose-500 font-medium">Khoa từ chối</span>
-                              )
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">Đề xuất của GV khác</span>
+                          <td className="py-3 px-3 text-right space-x-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDetail(item)}
+                              title="Xem chi tiết yêu cầu & mô tả đề xuất"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg text-xs font-semibold transition cursor-pointer border border-slate-200"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">visibility</span>
+                              <span>Chi tiết</span>
+                            </button>
+
+                            {isOwner && item.trangThaiKetNoi === 'DangXem' && (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(item.maSo)}
+                                title="Hủy đề xuất này"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 text-rose-600 hover:bg-rose-50 rounded-lg text-xs font-semibold transition cursor-pointer border border-rose-200"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">delete</span>
+                                <span>Hủy</span>
+                              </button>
                             )}
                           </td>
                         </tr>
@@ -514,6 +611,71 @@ export default function GioiThieuCongTyPage() {
           </div>
         </div>
       </div>
+
+      {/* POPUP (MODAL) XEM CHI TIẾT ĐỀ XUẤT DOANH NGHIỆP */}
+      {selectedDetail && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span className="text-[10px] font-mono text-slate-400 uppercase font-bold">Mã đề xuất: {selectedDetail.maSo}</span>
+                <h3 className="text-base font-bold text-slate-900 mt-0.5">{selectedDetail.tenCongTy}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDetail(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 font-medium block">Vị trí tuyển dụng</span>
+                <span className="font-bold text-blue-900 text-sm mt-0.5 block">{selectedDetail.viTriTuyen || 'Chưa rõ'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 font-medium block">Chỉ tiêu tiếp nhận</span>
+                <span className="font-bold text-slate-800 text-sm mt-0.5 block">{selectedDetail.soLuongNhan || 1} sinh viên</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 font-medium block">Thời gian thực tập</span>
+                <span className="font-semibold text-slate-800 mt-0.5 block">{selectedDetail.thoiGian || 'Chưa cập nhật'}</span>
+              </div>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <span className="text-slate-400 font-medium block">Trạng thái phê duyệt</span>
+                <div className="mt-1">{getStatusBadge(selectedDetail.trangThaiKetNoi)}</div>
+              </div>
+            </div>
+
+            {selectedDetail.tenGiangVien && (
+              <div className="text-xs text-slate-500">
+                Cán bộ đề xuất: <strong className="text-slate-700">{selectedDetail.tenGiangVien}</strong> ({selectedDetail.maGV})
+              </div>
+            )}
+
+            <div>
+              <span className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Yêu cầu chuyên môn & Kỹ năng (Mô tả công việc):
+              </span>
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-700 whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                {selectedDetail.yeuCau || 'Không có mô tả chi tiết.'}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedDetail(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* POPUP (MODAL) BÓC TÁCH FILE JD HOẶC PASTE VĂN BẢN */}
       {showJdModal && (
@@ -574,7 +736,7 @@ export default function GioiThieuCongTyPage() {
               <button
                 type="button"
                 onClick={() => setShowJdModal(false)}
-                className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition"
+                className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
               >
                 Hủy bỏ
               </button>
@@ -582,7 +744,7 @@ export default function GioiThieuCongTyPage() {
                 type="button"
                 disabled={parsingJd || !jdRawText.trim()}
                 onClick={() => parseJdText(jdRawText)}
-                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+                className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">magic_button</span>
                 {parsingJd ? 'Đang phân tích...' : 'Tự động bóc tách'}

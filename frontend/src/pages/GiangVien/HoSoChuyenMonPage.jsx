@@ -60,7 +60,7 @@ export default function HoSoChuyenMonPage() {
         email,
         soDienThoai,
       })
-      setToastMessage('Đã cập nhật hồ sơ chuyên môn vào cơ sở dữ liệu thành công!')
+      setToastMessage('Đã cập nhật thông tin hồ sơ chuyên môn thành công!')
       setTimeout(() => setToastMessage(''), 4000)
       await fetchProfile()
     } catch (err) {
@@ -100,7 +100,7 @@ export default function HoSoChuyenMonPage() {
       {loading ? (
         <div className="p-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
           <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          Đang tải thông tin hồ sơ từ cơ sở dữ liệu...
+          Đang tải thông tin hồ sơ...
         </div>
       ) : error ? (
         <div className="p-8 text-center text-red-600 bg-white rounded-2xl border border-red-200 text-sm">

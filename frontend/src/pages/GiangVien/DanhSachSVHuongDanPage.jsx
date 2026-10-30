@@ -100,9 +100,7 @@ export default function DanhSachSVHuongDanPage() {
       { header: 'Tên', key: 'ten', width: 10, align: 'left' },
       { header: 'Họ và tên', key: 'hoTen', width: 24, align: 'left' },
       { header: 'Lớp', key: 'lop', width: 12, align: 'center' },
-      { header: 'Doanh nghiệp tiếp nhận', key: 'tenCongTy', width: 32, align: 'left' },
-      { header: 'Vị trí', key: 'viTri', width: 22, align: 'left' },
-      { header: 'Trạng thái', key: 'trangThai', width: 18, align: 'center' },
+      { header: 'Doanh nghiệp tiếp nhận', key: 'tenCongTy', width: 36, align: 'left' },
     ]
 
     const excelRows = list.map((item, idx) => {
@@ -116,13 +114,6 @@ export default function DanhSachSVHuongDanPage() {
         hoTen,
         lop: item.sinhVien?.lop || item.lop || '-',
         tenCongTy: item.congTy?.tenCongTy || item.tenCongTy || 'Chưa có',
-        viTri: item.congTy?.viTriTuyen || item.viTriTuyen || '-',
-        trangThai:
-          item.trangThai === 'DangHuongDan'
-            ? 'Đang hướng dẫn'
-            : item.trangThai === 'HoanThanh'
-            ? 'Đã hoàn thành'
-            : item.trangThai || 'Đang hướng dẫn',
       }
     })
 
@@ -131,11 +122,11 @@ export default function DanhSachSVHuongDanPage() {
       fileName,
       sheetName: 'SinhVienHuongDan',
       title: 'DANH SÁCH SINH VIÊN HƯỚNG DẪN THỰC TẬP TỐT NGHIỆP',
-      subTitle: 'Giảng viên hướng dẫn: ' + (user?.hoTen || currentMaGV) + (selectedDot?.tenDot ? (' — ' + selectedDot.tenDot) : ''),
+      subTitle: 'Giảng viên hướng dẫn: ' + (lecturerInfo?.hoTen ? (`ThS. ${lecturerInfo.hoTen} (${currentMaGV})`) : (user?.hoTen || currentMaGV)) + (selectedDot?.tenDot ? (' — ' + selectedDot.tenDot) : ''),
       columns,
       rows: excelRows,
       signatures: [
-        { title: 'GIẢNG VIÊN HƯỚNG DẪN', note: '(Ký, ghi rõ họ tên)', col: 8 },
+        { title: 'GIẢNG VIÊN HƯỚNG DẪN', note: '(Ký, ghi rõ họ tên)', col: 6 },
       ],
     })
   }
@@ -193,7 +184,7 @@ export default function DanhSachSVHuongDanPage() {
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-bold text-slate-900">{totalSV}</span>
               <span className="text-xs font-medium text-slate-400">
-                / {Math.max(10, Number(lecturerInfo?.soLuongSVHD) || 10)} chỉ tiêu
+                / {lecturerInfo?.chiTieu ?? lecturerInfo?.soLuongSVHD ?? 10} chỉ tiêu
               </span>
             </div>
           </div>

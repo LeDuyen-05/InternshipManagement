@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import apiClient from '../services/api'
 
 const AuthContext = createContext(null)
@@ -58,6 +58,16 @@ export function AuthProvider({ children }) {
       return next
     })
   }
+
+  useEffect(() => {
+    if (user && !user.hoTen) {
+      apiClient.get('/auth/profile').then((res) => {
+        if (res.data?.hoTen) {
+          updateUser({ hoTen: res.data.hoTen })
+        }
+      }).catch(() => {})
+    }
+  }, [user?.token, user?.hoTen])
 
   const value = useMemo(() => ({ user, login, logout, updateUser }), [user])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

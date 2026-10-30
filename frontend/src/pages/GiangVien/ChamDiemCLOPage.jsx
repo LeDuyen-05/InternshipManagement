@@ -197,6 +197,38 @@ export default function ChamDiemCLOPage() {
   const total = summary.total
   const grade = `${summary.xepLoai} · ${summary.ketQua}`
 
+    const gvCriteriaCount = manualCriteria.length
+  const gradedCriteriaCount = manualCriteria.filter(
+    (c) => scores[c.maTieuChi] !== '' && scores[c.maTieuChi] != null && !isNaN(Number(scores[c.maTieuChi]))
+  ).length
+  const isGvComplete = gvCriteriaCount > 0 && gradedCriteriaCount === gvCriteriaCount
+  const isGvPartial = gradedCriteriaCount > 0 && !isGvComplete
+
+  const renderGvStatusBadge = () => {
+    if (isGvComplete) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="material-symbols-outlined text-[15px]">verified</span>
+          <span>Đã nộp đủ điểm GV ({gradedCriteriaCount}/{gvCriteriaCount})</span>
+        </span>
+      )
+    }
+    if (isGvPartial) {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+          <span>Đang chấm dở dang ({gradedCriteriaCount}/{gvCriteriaCount})</span>
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+        <span className="material-symbols-outlined text-[15px]">edit_note</span>
+        <span>Chưa chấm điểm</span>
+      </span>
+    )
+  }
+
   const handleSelectStudent = (nextMaSV) => {
     setMaSV(nextMaSV)
     if (typeof setSearchParams === 'function') {
@@ -213,7 +245,7 @@ export default function ChamDiemCLOPage() {
       [c.maTieuChi]: value,
     }))
 
-  const save = async () => {
+  const save = async (options = {}) => {
     if (!student || !selectedDot?.maDot || !ready || !canEdit || saving) return
     try {
       const chiTiets = buildLecturerDetails(manualCriteria, scores)
@@ -237,7 +269,23 @@ export default function ChamDiemCLOPage() {
       setDnChuyenMon(String(rawScores[clo42?.maTieuChi] ?? ''))
       setEnterpriseConfirmed(Boolean(saved.daDoiChieuPhieuDN))
       setEnterpriseNote(saved.ghiChuPhieuDN || '')
-      setMessage(`Đã lưu phiếu của ${student.hoTen}: ${saved.daDuDiem ? 'Tổng' : 'Tạm tính'} ${Number(saved.daDuDiem ? saved.tongDiem : saved.diemTamTinh || 0).toFixed(2)}/10 · ${saved.ketQua || 'Chưa đủ điểm'}.`)
+
+      const outcomeText = saved.daDuDiem ? 'Tổng' : 'Tạm tính'
+      const outcomeScore = Number(saved.daDuDiem ? saved.tongDiem : saved.diemTamTinh || 0).toFixed(2)
+      const baseMsg = `Đã lưu & nộp điểm cho sinh viên ${student.hoTen}: ${outcomeText} ${outcomeScore}/10 · ${saved.ketQua || 'Chưa đủ điểm'}.`
+
+      if (options.next) {
+        const currentIndex = students.findIndex((s) => s.maSV === student.maSV)
+        if (currentIndex >= 0 && currentIndex < students.length - 1) {
+          const nextStudent = students[currentIndex + 1]
+          handleSelectStudent(nextStudent.maSV)
+          setMessage(`${baseMsg} Chuyển tiếp sang: ${nextStudent.hoTen} (${nextStudent.maSV}).`)
+        } else {
+          setMessage(`${baseMsg} Đã hoàn tất đến sinh viên cuối cùng trong danh sách.`)
+        }
+      } else {
+        setMessage(baseMsg)
+      }
     } catch (error) {
       alert(`Không thể lưu phiếu chấm: ${error.response?.data?.message || error.message}`)
     } finally {
@@ -402,9 +450,12 @@ export default function ChamDiemCLOPage() {
 
       {/* CLO1 – CLO3: GV nhập trực tiếp */}
       <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="p-5 border-b border-slate-200">
-          <h2 className="font-bold text-slate-900">CLO1 – CLO3: Điểm do Giảng viên chấm</h2>
-          <p className="text-xs text-slate-500 mt-1">Nhập điểm từng tiêu chí không vượt quá mức tối đa. Ô trống không phải điểm 0; khi lưu chỉ cập nhật ô đã nhập, không xóa điểm đã lưu.</p>
+        <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-slate-900">CLO1 – CLO3: Điểm do Giảng viên chấm</h2>
+            <p className="text-xs text-slate-500 mt-1">Nhập điểm từng tiêu chí không vượt quá mức tối đa. Ô trống không phải điểm 0; khi lưu chỉ cập nhật ô đã nhập, không xóa điểm đã lưu.</p>
+          </div>
+          <div>{renderGvStatusBadge()}</div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -513,29 +564,51 @@ export default function ChamDiemCLOPage() {
           />
         </div>
 
-        <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={() => setShowPrint(true)}
-            disabled={!ready || saving}
-            className="px-4 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-sm font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-base">print</span>
-            <span>Xem & In phiếu điểm PDF</span>
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || !ready || !canEdit}
-            className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-          >
-            {saving ? (
-              <span className="material-symbols-outlined text-base animate-spin">sync</span>
-            ) : (
-              <span className="material-symbols-outlined text-base">save</span>
-            )}
-            <span>{saving ? 'Đang lưu...' : 'Lưu phiếu chấm'}</span>
-          </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-2">
+            {renderGvStatusBadge()}
+            <span className="text-[11px] text-slate-400 hidden lg:inline">
+              • Điểm lưu được đồng bộ trực tiếp lên hệ thống học vụ của Khoa
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowPrint(true)}
+              disabled={!ready || saving}
+              className="px-3.5 py-2 border border-slate-200 hover:bg-slate-50 rounded-xl text-xs font-bold text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-base">print</span>
+              <span>Xem & In phiếu PDF</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => save()}
+              disabled={saving || !ready || !canEdit}
+              className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              title="Lưu và đồng bộ điểm đánh giá phần GV lên hệ thống của Khoa"
+            >
+              {saving ? (
+                <span className="material-symbols-outlined text-base animate-spin">sync</span>
+              ) : (
+                <span className="material-symbols-outlined text-base">save</span>
+              )}
+              <span>{saving ? 'Đang lưu...' : 'Lưu & Nộp điểm GV'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => save({ next: true })}
+              disabled={saving || !ready || !canEdit}
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+              title="Lưu điểm sinh viên hiện tại và chuyển sang sinh viên tiếp theo"
+            >
+              <span>Lưu & Tiếp theo</span>
+              <span className="material-symbols-outlined text-base">arrow_forward</span>
+            </button>
+          </div>
         </div>
       </section>
 

@@ -1,12 +1,23 @@
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import DocumentAttachments from '../../components/common/DocumentAttachments'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import tienDoThucTapService from '../../services/tienDoThucTapService'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
+
+// Định dạng ngày chuẩn Việt Nam DD/MM/YYYY
+const formatDateVN = (dateStr) => {
+  if (!dateStr) return '—'
+  const d = new Date(dateStr)
+  if (isNaN(d.getTime())) return dateStr
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year}`
+}
 
 export default function TienDoThucTapSVPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -36,6 +47,7 @@ export default function TienDoThucTapSVPage() {
 
   // Bộ lọc và tìm kiếm tiến độ
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [sortOrder, setSortOrder] = useState('PRIORITY')
   const [searchKeyword, setSearchKeyword] = useState('')
   const [modalMode, setModalMode] = useState('duyet')
 
@@ -72,7 +84,7 @@ export default function TienDoThucTapSVPage() {
         }
       } catch (err) {
         console.error('Lỗi tải danh sách sinh viên:', err)
-        setError('Không thể tải danh sách sinh viên hướng dẫn từ cơ sở dữ liệu: ' + (err.response?.data?.message || err.message))
+        setError('Không thể tải danh sách sinh viên hướng dẫn: ' + (err.response?.data?.message || err.message))
       } finally {
         setLoadingStudents(false)
       }
@@ -101,7 +113,7 @@ export default function TienDoThucTapSVPage() {
       setListTienDo(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('Lỗi tải tiến độ thực tập:', err)
-      setError('Lỗi khi tải tiến độ thực tập từ server: ' + (err.response?.data?.message || err.message))
+      setError('Lỗi khi tải tiến độ thực tập: ' + (err.response?.data?.message || err.message))
       setListTienDo([])
     } finally {
       setLoading(false)
@@ -154,20 +166,21 @@ export default function TienDoThucTapSVPage() {
       await loadData(selectedMaSV)
 
       setShowModal(false)
-      setToastMessage(`Đã cập nhật trạng thái duyệt cho báo cáo ${selectedTienDo.maTienDo} thành công!`)
+      setToastMessage(`Đã cập nhật trạng thái duyệt cho báo cáo Tuần ${weekMap.get(selectedTienDo.maTienDo) || selectedTienDo.maTienDo} thành công!`)
       setTimeout(() => setToastMessage(''), 4000)
     } catch (err) {
-      alert('Không thể lưu trạng thái duyệt vào cơ sở dữ liệu: ' + (err.response?.data?.message || err.message))
+      alert('Không thể lưu trạng thái duyệt: ' + (err.response?.data?.message || err.message))
     } finally {
       setSubmitting(false)
     }
   }
 
-  const getStatusBadge = (status) => {
+  const getStatusBadge = (status, mocThoiGian) => {
     switch (status) {
       case 'DaNop':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
             Chờ GV duyệt
           </span>
         )
@@ -186,12 +199,18 @@ export default function TienDoThucTapSVPage() {
           </span>
         )
       case 'ChuaNop':
-      default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-500 border border-slate-200">
-            Chưa nộp
+      default: {
+        const isPast = mocThoiGian && new Date(mocThoiGian) < new Date()
+        return isPast ? (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200" title="Đã quá hạn mốc báo cáo">
+            Chưa nộp (Quá hạn)
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50/70 text-blue-700 border border-blue-100" title="Chưa đến hạn nộp">
+            Chưa đến hạn
           </span>
         )
+      }
     }
   }
 
@@ -203,6 +222,16 @@ export default function TienDoThucTapSVPage() {
   const choDuyetCount = currentReports.filter((t) => t.trangThaiDuyet === 'DaNop').length
   const yeuCauSuaCount = currentReports.filter((t) => t.trangThaiDuyet === 'YeuCauSua').length
   const chuaNopCount = currentReports.filter((t) => t.trangThaiDuyet === 'ChuaNop' || !t.trangThaiDuyet).length
+
+    // Lập bản đồ số thứ tự tuần học vụ chuẩn theo trình tự thời gian (Tuần 1 -> Tuần N)
+  const weekMap = useMemo(() => {
+    const sorted = [...listTienDo].sort((a, b) => new Date(a.mocThoiGian || 0) - new Date(b.mocThoiGian || 0))
+    const map = new Map()
+    sorted.forEach((item, index) => {
+      map.set(item.maTienDo, index + 1)
+    })
+    return map
+  }, [listTienDo])
 
   // Danh sách đã lọc theo trạng thái và từ khóa tìm kiếm
   const filteredReports = listTienDo.filter((item) => {
@@ -216,13 +245,38 @@ export default function TienDoThucTapSVPage() {
       const matchMa = item.maTienDo?.toLowerCase().includes(kw)
       const matchNoiDung = item.noiDungBaoCao?.toLowerCase().includes(kw)
       const matchNhanXet = item.nhanXetGV?.toLowerCase().includes(kw)
-      const matchMoc = item.mocThoiGian ? new Date(item.mocThoiGian).toLocaleDateString('vi-VN').includes(kw) : false
+      const matchMoc = item.mocThoiGian ? formatDateVN(item.mocThoiGian).includes(kw) : false
       if (!matchMa && !matchNoiDung && !matchNhanXet && !matchMoc) return false
     }
     return true
   })
 
-  const pagination = usePagination(filteredReports, JSON.stringify([currentMaGV, selectedDot?.maDot, selectedMaSV, statusFilter, searchKeyword]))
+  const sortedReports = useMemo(() => {
+    const list = [...filteredReports]
+    if (sortOrder === 'PRIORITY') {
+      const getPriority = (item) => {
+        if (item.trangThaiDuyet === 'DaNop') return 1
+        if (item.trangThaiDuyet === 'YeuCauSua') return 2
+        if (item.trangThaiDuyet === 'DaDuyet') return 3
+        const isPast = item.mocThoiGian && new Date(item.mocThoiGian) < new Date()
+        if (isPast) return 4
+        return 5
+      }
+      list.sort((a, b) => {
+        const pA = getPriority(a)
+        const pB = getPriority(b)
+        if (pA !== pB) return pA - pB
+        return new Date(b.mocThoiGian || 0) - new Date(a.mocThoiGian || 0)
+      })
+    } else if (sortOrder === 'NEWEST') {
+      list.sort((a, b) => new Date(b.mocThoiGian || 0) - new Date(a.mocThoiGian || 0))
+    } else if (sortOrder === 'OLDEST') {
+      list.sort((a, b) => new Date(a.mocThoiGian || 0) - new Date(b.mocThoiGian || 0))
+    }
+    return list
+  }, [filteredReports, sortOrder])
+
+  const pagination = usePagination(sortedReports, JSON.stringify([currentMaGV, selectedDot?.maDot, selectedMaSV, statusFilter, searchKeyword, sortOrder]))
 
   return (
     <div className="space-y-6">
@@ -251,7 +305,20 @@ export default function TienDoThucTapSVPage() {
 
           {/* Phím tắt sang Chấm điểm CLO */}
           {selectedMaSV && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Dropdown sắp xếp */}
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="text-slate-500 font-medium whitespace-nowrap">Sắp xếp:</span>
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="h-8 pl-2 pr-7 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                >
+                  <option value="PRIORITY">Ưu tiên cần xử lý</option>
+                  <option value="NEWEST">Mới nhất (gần đây)</option>
+                  <option value="OLDEST">Lịch trình (Cũ → Mới)</option>
+                </select>
+              </div>
               <Link
                 to={`/giang-vien/cham-diem?sv=${selectedMaSV}`}
                 className="px-4 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200 flex items-center gap-1.5 transition-colors shadow-sm"
@@ -265,7 +332,7 @@ export default function TienDoThucTapSVPage() {
 
         {/* Bộ chọn sinh viên và thông tin tóm tắt */}
         {loadingStudents ? (
-          <div className="py-6 text-center text-slate-400 text-xs">Đang tải danh sách sinh viên từ cơ sở dữ liệu...</div>
+          <div className="py-6 text-center text-slate-400 text-xs">Đang tải danh sách sinh viên...</div>
         ) : studentList.length === 0 ? (
           <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800 flex items-center gap-2">
             <span className="material-symbols-outlined text-amber-600">info</span>
@@ -276,7 +343,7 @@ export default function TienDoThucTapSVPage() {
             <div className="pt-4 border-t border-slate-100 grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
               <div className="lg:col-span-5">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-400 block mb-1.5">
-                  Chọn sinh viên hướng dẫn ({studentList.length} SV trong DB):
+                  Chọn sinh viên hướng dẫn ({studentList.length} sinh viên):
                 </label>
                 <div className="relative">
                   <select
@@ -304,7 +371,7 @@ export default function TienDoThucTapSVPage() {
                   }`}
                   title="Nhấn để xem tất cả báo cáo"
                 >
-                  <span className="text-slate-500 block font-medium">Báo cáo hiện tại</span>
+                  <span className="text-slate-500 block font-medium">Tổng mốc báo cáo</span>
                   <span className="text-lg font-black text-blue-700 font-mono">{totalWeeks}</span>
                 </button>
 
@@ -390,7 +457,7 @@ export default function TienDoThucTapSVPage() {
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 Sinh viên nộp báo cáo định kỳ theo từng tuần. Giảng viên nhận xét và phê duyệt kết quả thực tập.
-                {archivedCount > 0 && ` Có ${archivedCount} báo cáo lưu trữ trước khi đổi nơi: chỉ xem lịch sử, không tính vào số báo cáo hiện tại.`}
+                {archivedCount > 0 && ` (Ghi nhận ${archivedCount} báo cáo trước khi chuyển đơn vị thực tập — chỉ xem lịch sử)`}
               </p>
             </div>
           </div>
@@ -540,7 +607,7 @@ export default function TienDoThucTapSVPage() {
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4 w-28">Mã tiến độ</th>
+                  <th className="py-3 px-4 min-w-[140px]">Kỳ / Mã tiến độ</th>
                   <th className="py-3 px-4 w-32">Mốc thời gian</th>
                   <th className="py-3 px-4 w-32">Ngày nộp</th>
                   <th className="py-3 px-4 min-w-[240px]">Nội dung công việc & Kết quả</th>
@@ -553,20 +620,40 @@ export default function TienDoThucTapSVPage() {
                 {pagination.items.map((item, idx) => (
                   <tr key={item.maTienDo || idx} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4 font-bold text-slate-800 align-top">
-                      <span className="inline-flex items-center px-2 py-1 rounded-md bg-slate-100 font-mono">
-                        {item.maTienDo}
-                      </span>
+                      {item.maTienDo?.length <= 8 ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-slate-900 text-xs">
+                            Tuần {weekMap.get(item.maTienDo)}
+                          </span>
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold text-[11px]">
+                            {item.maTienDo}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs"
+                            title={`Mã hệ thống: ${item.maTienDo}`}
+                          >
+                            Tuần {weekMap.get(item.maTienDo)}
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-slate-700 align-top font-medium">
-                      {item.mocThoiGian
-                        ? new Date(item.mocThoiGian).toLocaleDateString('vi-VN')
-                        : `Tuần ${pagination.start + idx}`}
+                      {formatDateVN(item.mocThoiGian)}
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 align-top">
-                      {item.ngayNop
-                        ? new Date(item.ngayNop).toLocaleDateString('vi-VN')
-                        : <span className="italic text-slate-400">Chưa nộp</span>}
-                      {item.nopTre === true && <span className="block text-amber-700 text-xs">{item.hanNopBoSung ? 'Nộp bổ sung được Khoa mở' : 'Nộp sau hạn gốc — lịch sử'}</span>}
+                      {item.ngayNop ? (
+                        <span className="font-medium text-slate-700">{formatDateVN(item.ngayNop)}</span>
+                      ) : (
+                        <span className="italic text-slate-400">Chưa nộp</span>
+                      )}
+                      {item.nopTre === true && (
+                        <span className="block text-amber-700 text-[11px] font-semibold mt-0.5">
+                          {item.hanNopBoSung ? 'Nộp bổ sung (Khoa duyệt)' : 'Nộp sau hạn gốc'}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-slate-700 align-top leading-relaxed">
                       {item.noiDungBaoCao ? (
@@ -585,8 +672,8 @@ export default function TienDoThucTapSVPage() {
                       )}
                     </td>
                     <td className="py-3.5 px-4 text-center align-top">
-                      {getStatusBadge(item.trangThaiDuyet)}
-                      {item.maPhanBoLuuTru && <div className="text-xs text-slate-500 mt-2">Lịch sử trước khi đổi nơi — chỉ xem</div>}
+                      {getStatusBadge(item.trangThaiDuyet, item.mocThoiGian)}
+                      {item.maPhanBoLuuTru && <div className="text-[11px] text-slate-500 mt-1">Lịch sử trước khi đổi nơi — chỉ xem</div>}
                     </td>
                     <td className="py-3.5 px-4 text-center align-top">
                       <div className="flex items-center justify-center gap-1.5">
@@ -594,11 +681,20 @@ export default function TienDoThucTapSVPage() {
                           <button
                             onClick={() => handleOpenDuyet(item)}
                             disabled={roundLock.blocked}
-                            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-bold transition shadow-sm cursor-pointer flex items-center gap-1"
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 font-bold transition shadow-xs cursor-pointer flex items-center gap-1 text-xs"
                             title="Phê duyệt hoặc yêu cầu chỉnh sửa báo cáo"
                           >
                             <span className="material-symbols-outlined text-sm">rate_review</span>
                             <span>Duyệt</span>
+                          </button>
+                        ) : item.trangThaiDuyet === 'ChuaNop' || !item.trangThaiDuyet ? (
+                          <button
+                            onClick={() => handleOpenView(item)}
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 font-medium transition cursor-pointer flex items-center gap-1 text-xs border border-slate-200"
+                            title="Xem chi tiết mốc thời gian"
+                          >
+                            <span className="material-symbols-outlined text-sm">event_note</span>
+                            <span>Xem mốc</span>
                           </button>
                         ) : (
                           <button
@@ -631,7 +727,7 @@ export default function TienDoThucTapSVPage() {
                   {modalMode === 'duyet' ? 'rate_review' : 'assignment'}
                 </span>
                 <h3 className="text-base font-bold text-slate-900">
-                  {modalMode === 'duyet' ? 'Phê Duyệt Tiến Độ' : 'Chi Tiết Báo Cáo'} — {selectedTienDo.maTienDo}
+                  {modalMode === 'duyet' ? 'Phê Duyệt Tiến Độ' : 'Chi Tiết Báo Cáo'} — Tuần {weekMap.get(selectedTienDo.maTienDo)}{selectedTienDo.maTienDo?.length <= 8 ? ` (${selectedTienDo.maTienDo})` : ''}
                 </h3>
               </div>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -645,13 +741,13 @@ export default function TienDoThucTapSVPage() {
                 <div>
                   <span className="text-slate-400 block text-[11px]">Mốc thời gian:</span>
                   <span className="font-semibold text-slate-800">
-                    {selectedTienDo.mocThoiGian ? new Date(selectedTienDo.mocThoiGian).toLocaleDateString('vi-VN') : '—'}
+                    {formatDateVN(selectedTienDo.mocThoiGian)}
                   </span>
                 </div>
                 <div>
                   <span className="text-slate-400 block text-[11px]">Ngày nộp:</span>
                   <span className="font-semibold text-slate-800">
-                    {selectedTienDo.ngayNop ? new Date(selectedTienDo.ngayNop).toLocaleDateString('vi-VN') : 'Chưa nộp'}
+                    {selectedTienDo.ngayNop ? formatDateVN(selectedTienDo.ngayNop) : 'Chưa nộp'}
                   </span>
                   {selectedTienDo.nopTre && (
                     <span className="block text-amber-700 text-[10px]">
@@ -670,14 +766,14 @@ export default function TienDoThucTapSVPage() {
                     onChange={(e) => setDuyetStatus(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
                   >
-                    <option value="DaDuyet">Đã duyệt đạt (DaDuyet)</option>
-                    <option value="YeuCauSua">Yêu cầu sửa / bổ sung (YeuCauSua)</option>
+                    <option value="DaDuyet">Đã duyệt đạt</option>
+                    <option value="YeuCauSua">Yêu cầu sửa / bổ sung</option>
                   </select>
                 </div>
               ) : (
                 <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
                   <span className="font-bold text-slate-600">Trạng thái hiện tại:</span>
-                  <div>{getStatusBadge(selectedTienDo.trangThaiDuyet)}</div>
+                  <div>{getStatusBadge(selectedTienDo.trangThaiDuyet, selectedTienDo.mocThoiGian)}</div>
                 </div>
               )}
 
@@ -734,7 +830,7 @@ export default function TienDoThucTapSVPage() {
                   className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
                 >
                   {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}
-                  <span>Lưu phê duyệt vào Database</span>
+                  <span>Lưu kết quả phê duyệt</span>
                 </button>
               )}
             </div>

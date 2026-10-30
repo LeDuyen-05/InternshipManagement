@@ -36,8 +36,10 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         { path: '/giang-vien/gioi-thieu', label: 'Giới thiệu công ty', icon: 'share' },
         { path: '/giang-vien/tien-do', label: 'Theo dõi tiến độ', icon: 'trending_up' },
         { path: '/giang-vien/cham-diem', label: 'Đánh giá & Chấm điểm CLO', icon: 'fact_check' },
+        { path: '/giang-vien/lich-deadline', label: 'Kế hoạch & Lịch trình', icon: 'calendar_month' },
       ],
       tienIch: [
+        { path: '/giang-vien/ho-so', label: 'Hồ sơ chuyên môn', icon: 'badge' },
         { path: '/thong-bao', label: 'Thông báo từ Khoa', icon: 'notifications' },
       ],
     },
@@ -272,7 +274,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-900 truncate">
-                  {user.hoTen || user.tenDangNhap}
+                  {user.hoTen || (user.maGV === 'GV001' ? 'ThS. Nguyễn Văn An' : user.tenDangNhap)}
                 </p>
                 <p className="text-[10px] text-slate-500 truncate">
                   {user.maSV ? `MSSV: ${user.maSV}` : user.maGV ? `Mã GV: ${user.maGV}` : user.tenVaiTro || getRoleDisplayName(currentRole)}
