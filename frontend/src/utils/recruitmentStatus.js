@@ -12,4 +12,4 @@ const labels = {
   HetHan: 'Hết hạn — đóng nhận mới',
 }
 
-export const recruitmentStatusLabel = code => labels[code] || 'Chưa tải được trạng thái nhận mới'
+export const recruitmentStatusLabel = code => (code ? (labels[code] || 'Chưa mở nhận hồ sơ') : 'Chưa có thông tin đợt')

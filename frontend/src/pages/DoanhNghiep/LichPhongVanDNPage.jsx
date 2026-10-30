@@ -282,7 +282,7 @@ export default function LichPhongVanDNPage() {
                         <div>
                           <div className="font-bold text-slate-900 text-xs">{item.hoTenSV}</div>
                           <div className="text-[11px] text-slate-400">
-                            MSSV: {item.maSinhVien} • Lớp: {item.lopSV || '—'}
+                            Mã ứng viên: {item.maSinhVien}
                           </div>
                         </div>
                       </div>
@@ -417,7 +417,7 @@ export default function LichPhongVanDNPage() {
                   <option value="">-- Chọn sinh viên --</option>
                   {candidates.map((c) => (
                     <option key={c.maSV} value={c.maSV}>
-                      {c.hoTen} ({c.maSV}) - GPA {c.gpa != null ? c.gpa : '—'} - Ưu tiên {c.thuTuUuTien}
+                      {c.hoTen} ({c.maSV}){c.viTriDangKy ? ` - Vị trí: ${c.viTriDangKy}` : ''}
                     </option>
                   ))}
                 </select>
@@ -586,7 +586,7 @@ export default function LichPhongVanDNPage() {
             <form onSubmit={handleUpdateResult} className="p-6 space-y-4 text-xs">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 space-y-1">
                 <div className="font-bold text-slate-800 text-xs">{selectedInterview.hoTenSV}</div>
-                <div className="text-slate-500">MSSV: {selectedInterview.maSinhVien} • Lớp: {selectedInterview.lopSV || '—'}</div>
+                <div className="text-slate-500">Mã ứng viên: {selectedInterview.maSinhVien}</div>
                 <div className="text-slate-500">Người PV: {selectedInterview.tenNguoiPV || '—'} {selectedInterview.chucVuNguoiPV ? `(${selectedInterview.chucVuNguoiPV})` : ''}</div>
               </div>
 

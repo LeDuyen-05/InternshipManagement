@@ -25,7 +25,6 @@ export default function EnterpriseSidebar({ activeCompany }) {
         { path: '/doanh-nghiep/phong-van', label: 'Lịch phỏng vấn', icon: 'event_note' },
         { path: '/doanh-nghiep/danh-gia', label: 'Đánh giá thực tập sinh', icon: 'description' },
         { path: '/doanh-nghiep/thong-bao', label: 'Thông báo từ Khoa', icon: 'notifications' },
-        { path: '/doanh-nghiep/tai-lieu', label: 'Biểu mẫu thực tập', icon: 'folder_open' },
       ],
     },
     ...(isManagerOrAdmin
@@ -83,18 +82,25 @@ export default function EnterpriseSidebar({ activeCompany }) {
         </div>
       </div>
 
-      {/* Bottom Session Box */}
+      {/* Bottom Session Box: Chỉ tiêu tiếp nhận */}
       <div className="p-3 m-3 rounded-xl bg-indigo-50/70 border border-indigo-200/80">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[10px] uppercase font-bold text-indigo-600">Đợt tuyển dụng</span>
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[10px] uppercase font-bold text-indigo-700 tracking-wider">Tiếp nhận SV</span>
           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${trangThai.cls}`}>
             {trangThai.label}
           </span>
         </div>
-        <div className="text-xs font-semibold text-slate-800">{chiTieu?.tenDot || 'Chưa có đợt đang diễn ra'}</div>
-        <div className="text-[11px] text-slate-500 mt-0.5">
-          {chiTieu?.maDot ? `Đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} sinh viên` : 'Khoa Công nghệ Thông tin'}
+        <div className="text-xs font-bold text-slate-800">
+          {chiTieu?.soLuongNhan ? `Đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan} sinh viên` : 'Chưa mở chỉ tiêu'}
         </div>
+        {chiTieu?.soLuongNhan > 0 && (
+          <div className="w-full bg-slate-200/80 rounded-full h-1.5 mt-2 overflow-hidden">
+            <div
+              className="bg-indigo-600 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(100, Math.round(((chiTieu.daTiepNhan || 0) / chiTieu.soLuongNhan) * 100))}%` }}
+            ></div>
+          </div>
+        )}
       </div>
     </aside>
   )

@@ -350,7 +350,7 @@ export default function EnterpriseDashboardPage() {
                       </div>
                       <div>
                         <div className="font-semibold text-slate-800">{uv.hoTen}</div>
-                        <div className="text-[11px] text-slate-500">MSSV: {uv.maSV} • Lớp: {uv.lop || '—'} • GPA: {uv.gpa != null ? uv.gpa : '—'}</div>
+                        <div className="text-[11px] text-slate-500">{uv.chuyenNganh || 'Công nghệ thông tin'}{uv.viTriDangKy ? ` • ${uv.viTriDangKy}` : ''}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -363,7 +363,7 @@ export default function EnterpriseDashboardPage() {
                       }`}>
                         {uv.trangThai === 'DaDuyet' ? 'Đã duyệt' : uv.trangThai === 'TuChoi' ? 'Từ chối' : 'Chờ duyệt'}
                       </span>
-                      <span className="text-[11px] text-slate-400">Ưu tiên {uv.thuTuUuTien || 1}</span>
+
                     </div>
                   </div>
                 ))}
