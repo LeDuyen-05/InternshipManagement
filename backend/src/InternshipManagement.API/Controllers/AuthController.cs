@@ -26,6 +26,7 @@ public class AuthController : ControllerBase
         if (account is null)
             return Unauthorized(new { message = "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản chưa được kích hoạt/bị khóa." });
 
+        var hoTen = await _service.ResolveHoTenAsync(account);
         return Ok(new LoginResponse(
             _jwt.Create(account),
             account.MaTaiKhoan,
@@ -36,7 +37,8 @@ public class AuthController : ControllerBase
             account.MaGV,
             account.MaDaiDien,
             account.Email,
-            account.SoDienThoai));
+            account.SoDienThoai,
+            hoTen));
     }
 
     [AllowAnonymous]

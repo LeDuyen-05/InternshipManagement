@@ -139,7 +139,7 @@ public class AuthService
         return ToProfileDto(account, hoTen);
     }
 
-    private async Task<string?> ResolveHoTenAsync(TaiKhoan account)
+    public async Task<string?> ResolveHoTenAsync(TaiKhoan account)
     {
         if (!string.IsNullOrEmpty(account.MaGV))
             return (await _db.GiangViens.FindAsync(account.MaGV))?.HoTen;
