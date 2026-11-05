@@ -7,6 +7,7 @@ const DashboardPage = lazy(() => import('../pages/Dashboard/DashboardPage.jsx'))
 const AdminPage = lazy(() => import('../pages/Admin/AdminPage.jsx'))
 const KhoaPage = lazy(() => import('../pages/Khoa/KhoaPage.jsx'))
 const SinhVienTheoDotPage = lazy(() => import('../pages/Khoa/SinhVienTheoDotPage.jsx'))
+const TheoDoiUngTuyenHoTroPage = lazy(() => import('../pages/Khoa/TheoDoiUngTuyenHoTroPage.jsx'))
 const PhanBoGVHDPage = lazy(() => import('../pages/Khoa/PhanBoGVHDPage.jsx'))
 const ThongKeBaoCaoPage = lazy(() => import('../pages/Khoa/ThongKeBaoCaoPage.jsx'))
 const AIPage = lazy(() => import('../pages/AI/AIPage.jsx'))
@@ -42,6 +43,7 @@ const NotFoundPage = lazy(() => import('../pages/NotFoundPage.jsx'))
 const DashboardGVPage = lazy(() => import('../pages/GiangVien/DashboardGVPage.jsx'))
 const LichDeadlinePage = lazy(() => import('../pages/GiangVien/LichDeadlinePage.jsx'))
 const HoSoChuyenMonPage = lazy(() => import('../pages/GiangVien/HoSoChuyenMonPage.jsx'))
+const NoLinkedAccount = lazy(() => import('../components/common/NoLinkedAccount.jsx'))
 
 function Guard({ children, roles }) {
   const { user } = useAuth()
@@ -54,6 +56,8 @@ function Guard({ children, roles }) {
     if (user.maVaiTro === 'VT01') return <Navigate to="/admin" replace />
     return <Navigate to="/dashboard" replace />
   }
+  if (roles?.includes('VT03') && user.maVaiTro === 'VT03' && !user.maGV)
+    return <NoLinkedAccount type="giảng viên" />
   return children
 }
 
@@ -109,6 +113,7 @@ export default function AppRoutes() {
 
         {/* Module Khoa */}
         <Route path="/khoa/sinh-vien-theo-dot" element={<Guard roles={['VT02']}><SinhVienTheoDotPage /></Guard>} />
+        <Route path="/khoa/ung-tuyen-ho-tro" element={<Guard roles={['VT02']}><TheoDoiUngTuyenHoTroPage /></Guard>} />
         <Route path="/khoa" element={<Guard roles={['VT02']}><KhoaPage /></Guard>} />
         <Route path="/khoa/dashboard" element={<Navigate to="/khoa/thong-ke-clo" replace />} />
         <Route path="/khoa/dot-thuc-tap" element={<Guard roles={['VT02']}><KhoaPage initialTab="dot" /></Guard>} />
@@ -124,7 +129,6 @@ export default function AppRoutes() {
         <Route path="/khoa/tieu-chi" element={<Guard roles={['VT02']}><KhoaCriteriaPage /></Guard>} />
         <Route path="/khoa/duyet-gioi-thieu" element={<Guard roles={['VT02']}><DuyetGioiThieuPage /></Guard>} />
         <Route path="/khoa/phan-cong" element={<Guard roles={['VT02']}><PhanCongGVHDPage /></Guard>} />
-        <Route path="/khoa/cham-diem" element={<Guard roles={['VT02']}><ChamDiemCLOPage /></Guard>} />
         <Route path="/khoa/thong-bao" element={<Guard roles={['VT02']}><ThongBaoPage /></Guard>} />
 
         {/* Module Giảng viên (Người 3) */}

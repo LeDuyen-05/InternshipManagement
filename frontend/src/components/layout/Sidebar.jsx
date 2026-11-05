@@ -3,23 +3,25 @@ import ModalOverlay from '../common/ModalOverlay.jsx'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap.js'
+import { roleLabel } from '../../utils/roleLabels'
 
 export default function Sidebar({ currentRole, onRoleChange }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const { selectedDot, changeDot, resetToCurrentDot, danhSachNamHoc } = useDotThucTap()
+  const { selectedDot, changeDot, resetToCurrentDot, danhSachNamHoc, error: roundError, refreshRounds } = useDotThucTap()
   const [showDotModal, setShowDotModal] = useState(false)
-  const [activeYearTab, setActiveYearTab] = useState(danhSachNamHoc[0]?.namHoc || '2026 - 2027')
+  const [activeYearTab, setActiveYearTab] = useState('')
+
+  useEffect(() => {
+    if (!danhSachNamHoc.some((year) => year.namHoc === activeYearTab)) {
+      setActiveYearTab(selectedDot?.namHoc || danhSachNamHoc[0]?.namHoc || '')
+    }
+  }, [danhSachNamHoc, selectedDot?.namHoc, activeYearTab])
 
   const isStudent = currentRole === 'SinhVien' || user?.maVaiTro === 'VT04'
-
-  // Sinh viên tự động chuyển về đợt đang diễn ra nếu đang bị lưu ở đợt cũ đã kết thúc
-  useEffect(() => {
-    if (isStudent && selectedDot?.trangThai === 'DaKetThuc') {
-      resetToCurrentDot()
-    }
-  }, [isStudent, selectedDot?.trangThai, resetToCurrentDot])
+  const isAdmin = currentRole === 'Admin' || currentRole === 'QuanTriVien' || user?.maVaiTro === 'VT01'
 
   // Danh mục menu phân nhóm theo từng Role
   const roleMenuGroups = {
@@ -48,13 +50,12 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         { path: '/khoa', label: 'Tổng quan điều hành', icon: 'analytics' },
         { path: '/khoa/dot-thuc-tap', label: 'Cấu hình đợt thực tập', icon: 'date_range' },
         { path: '/khoa/doanh-nghiep', label: 'Doanh nghiệp & Vị trí tuyển', icon: 'domain' },
-        { path: '/khoa/duyet-gioi-thieu', label: 'Duyệt công ty đề xuất', icon: 'verified' },
+        { path: '/khoa/sinh-vien-theo-dot', label: 'Danh sách sinh viên theo đợt', icon: 'groups' },
         { path: '/khoa/dang-ky', label: 'Tiếp nhận & Xét duyệt hồ sơ', icon: 'how_to_reg' },
-        { path: '/khoa/sinh-vien-theo-dot', label: 'SV theo đợt & nơi thực tập', icon: 'groups' },
+        { path: '/khoa/ung-tuyen-ho-tro', label: 'Theo dõi phỏng vấn & Hỗ trợ', icon: 'person_search' },
         { path: '/khoa/phan-cong', label: 'Phân công GVHD', icon: 'assignment_ind' },
-        { path: '/khoa/phan-bo', label: 'Danh sách & điều chỉnh GVHD', icon: 'swap_horiz' },
         { path: '/khoa/theo-doi', label: 'Theo dõi tiến độ toàn khoa', icon: 'trending_up' },
-        { path: '/khoa/thong-ke-clo', label: 'Báo cáo thống kê CLO', icon: 'bar_chart' },
+        { path: '/khoa/thong-ke-clo', label: 'Đánh giá CLO & Khóa đợt', icon: 'fact_check' },
       ],
       tienIch: [
         { path: '/khoa/han-bao-cao', label: 'Lịch hạn nộp báo cáo', icon: 'event_busy' },
@@ -183,17 +184,17 @@ export default function Sidebar({ currentRole, onRoleChange }) {
 
       {/* Bottom User / Role & Học vụ */}
       <div className="p-3 border-t border-slate-100 bg-slate-50/70 space-y-2">
-        {/* Thẻ Học vụ Hiện hành (Với Cán bộ/GV: bấm vào để đổi Đợt; Với Sinh viên: cố định đợt của SV) */}
+        {/* Thẻ Học vụ Hiện hành (Ẩn với Admin) */}
+        {!isAdmin && (
         <div
           onClick={() => {
-            if (!isStudent) setShowDotModal(true)
+            setShowDotModal(true)
           }}
-          className={`p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs transition-all ${
-            !isStudent
-              ? 'cursor-pointer hover:border-blue-400 hover:shadow-sm group'
-              : 'cursor-default'
-          }`}
-          title={!isStudent ? 'Bấm để chuyển đổi Năm học / Đợt thực tập' : 'Đợt thực tập hiện hành của bạn'}
+          className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs transition-all cursor-pointer hover:border-blue-400 hover:shadow-sm group"
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setShowDotModal(true) } }}
+          title="Chọn năm học / đợt thực tập"
         >
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5">
@@ -210,7 +211,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                 {isStudent ? 'Đợt thực tập của bạn' : 'Học vụ tác nghiệp'}
               </span>
             </div>
-            {!isStudent && (
+            {(
               <span className="text-[10px] text-blue-600 font-semibold group-hover:underline flex items-center gap-0.5">
                 <span>Đổi</span>
                 <span className="material-symbols-outlined text-[13px]">swap_horiz</span>
@@ -219,10 +220,10 @@ export default function Sidebar({ currentRole, onRoleChange }) {
           </div>
 
           <p className="text-xs text-slate-900 font-bold leading-tight group-hover:text-blue-700 transition-colors">
-            {selectedDot?.tenDot || 'Đợt thực tập tốt nghiệp'}
+            {formatTenDot(selectedDot)}
           </p>
 
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center justify-between mt-1 gap-1 flex-wrap">
             <span
               className={`text-[10px] font-medium ${
                 selectedDot?.trangThai === 'DangDienRa'
@@ -233,6 +234,9 @@ export default function Sidebar({ currentRole, onRoleChange }) {
               }`}
             >
               {selectedDot?.labelTrangThai || 'Đang diễn ra'}
+            </span>
+            <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+              {getLoaiThucTapInfo(selectedDot).shortLabel}
             </span>
             {selectedDot?.trangThai === 'DaKetThuc' && (
               <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200">
@@ -257,6 +261,8 @@ export default function Sidebar({ currentRole, onRoleChange }) {
           )}
         </div>
 
+        )}
+
         {/* Thông tin tài khoản người dùng đã đăng nhập (cố định theo Role thật) */}
         {user ? (
           <div className="flex items-center justify-between p-2 bg-white rounded-xl border border-slate-200/80 shadow-2xs">
@@ -274,10 +280,10 @@ export default function Sidebar({ currentRole, onRoleChange }) {
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-900 truncate">
-                  {user.hoTen || (user.maGV === 'GV001' ? 'ThS. Nguyễn Văn An' : user.tenDangNhap)}
+                  {user.hoTen || user.tenDangNhap}
                 </p>
                 <p className="text-[10px] text-slate-500 truncate">
-                  {user.maSV ? `MSSV: ${user.maSV}` : user.maGV ? `Mã GV: ${user.maGV}` : user.tenVaiTro || getRoleDisplayName(currentRole)}
+                  {user.maSV ? `MSSV: ${user.maSV}` : user.maGV ? `Mã GV: ${user.maGV}` : roleLabel(user.maVaiTro)}
                 </p>
               </div>
             </div>
@@ -320,8 +326,8 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                   <span className="material-symbols-outlined text-[18px]">calendar_month</span>
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Chọn Đợt Thực Tập Tác Nghiệp</h3>
-                  <p className="text-xs text-slate-400">Dữ liệu trên toàn hệ thống sẽ lọc theo đợt bạn chọn</p>
+                  <h3 className="text-base font-bold text-slate-900">Chọn đợt thực tập</h3>
+                  <p className="text-xs text-slate-400">Xem hồ sơ và kết quả theo đợt thực tập được chọn.</p>
                 </div>
               </div>
               <button
@@ -334,6 +340,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
             </div>
 
             {/* Tầng 1: Dropdown chọn Năm học */}
+            {roundError && <div role="alert" className="text-sm text-rose-700">{roundError} <button type="button" onClick={refreshRounds} className="underline">Tải lại</button></div>}
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
                 1. Chọn Năm học:
@@ -362,7 +369,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                 {danhSachNamHoc
                   .find((nh) => nh.namHoc === activeYearTab)
                   ?.dots.map((dot) => {
-                    const isSelected = selectedDot.maDot === dot.maDot
+                    const isSelected = selectedDot?.maDot === dot.maDot
                     return (
                       <button
                         type="button"
@@ -380,7 +387,8 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                       >
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-900 text-sm">{dot.tenDot}</span>
+                            <span className="font-bold text-slate-900 text-sm">{formatTenDot(dot)}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(dot).badgeClass}`}>{getLoaiThucTapInfo(dot).shortLabel}</span>
                             {isSelected && (
                               <span className="text-[10px] font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
                                 Đang chọn
@@ -436,4 +444,3 @@ export default function Sidebar({ currentRole, onRoleChange }) {
     </aside>
   )
 }
-

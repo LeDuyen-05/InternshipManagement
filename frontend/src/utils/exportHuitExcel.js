@@ -313,3 +313,58 @@ export function taiFileExcel(buffer, fileName) {
   document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
+
+/**
+ * Tải file từ response axios (responseType: 'blob')
+ * Xử lý lỗi JSON nằm trong blob và đọc tên file từ Content-Disposition
+ */
+export async function downloadExcelResponse(response, defaultFileName) {
+  if (
+    response.data?.type === 'application/json' ||
+    (response.data instanceof Blob && response.data.type?.includes('json'))
+  ) {
+    const text = await response.data.text()
+    const json = JSON.parse(text)
+    throw new Error(json.message || 'Lỗi khi tải tệp Excel.')
+  }
+
+  let fileName = defaultFileName
+  const disposition = response.headers?.['content-disposition']
+  if (disposition) {
+    const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/i)
+    if (match?.[1]) {
+      fileName = decodeURIComponent(match[1].replace(/['"]/g, '').trim())
+    }
+  }
+
+  const blob =
+    response.data instanceof Blob
+      ? response.data
+      : new Blob([response.data], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName.endsWith('.xlsx') ? fileName : `${fileName}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Trích xuất lỗi từ response blob (khi backend trả về lỗi 400/500 JSON dạng blob)
+ */
+export async function parseBlobError(error) {
+  if (error.response?.data instanceof Blob) {
+    try {
+      const text = await error.response.data.text()
+      const json = JSON.parse(text)
+      return json.message || text
+    } catch {
+      // not JSON
+    }
+  }
+  return error.response?.data?.message || error.message || 'Lỗi khi tải tệp Excel.'
+}

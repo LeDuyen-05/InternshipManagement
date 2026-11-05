@@ -1,6 +1,7 @@
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import StudentCatalogPanel from '../../components/khoa/StudentCatalogPanel'
 import apiClient from '../../services/api'
 import Layout from '../../components/Layout'
 import { xuatMultiSheetHuitExcel } from '../../utils/exportHuitExcel'
@@ -439,13 +440,7 @@ export default function KhoaPage({ initialTab = 'overview' }) {
 
             <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
               {tab === 'sv' && (
-                <EditableTable
-                  title="Sinh viên"
-                  headers={['Mã SV', 'Họ tên', 'Lớp', 'Chuyên ngành', 'GPA']}
-                  rows={data.sv.map((x) => [x.maSV, x.hoTen, x.lop, x.chuyenNganh, x.gpa])}
-                  items={data.sv}
-                  onEdit={setEditItem}
-                />
+                <StudentCatalogPanel onEdit={setEditItem} />
               )}
               {tab === 'gv' && (
                 <EditableTable
@@ -489,7 +484,9 @@ function CatalogImportPanel({ kind, onImported }) {
       const a = document.createElement('a')
       a.href = url
       a.download = `mau-${route}.csv`
+      document.body.appendChild(a)
       a.click()
+      a.remove()
       URL.revokeObjectURL(url)
     } catch (e) {
       setMessage(e.response?.data?.message || 'Không tải được file mẫu.')
@@ -505,7 +502,9 @@ function CatalogImportPanel({ kind, onImported }) {
       const a = document.createElement('a')
       a.href = url
       a.download = `danh-sach-${route}.csv`
+      document.body.appendChild(a)
       a.click()
+      a.remove()
       URL.revokeObjectURL(url)
     } catch (e) {
       setMessage(e.response?.data?.message || 'Không xuất được danh sách CSV.')
@@ -548,13 +547,15 @@ function CatalogImportPanel({ kind, onImported }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors"
-            type="button"
-            onClick={exportList}
-          >
-            Xuất danh sách CSV
-          </button>
+          {kind !== 'sv' && (
+            <button
+              className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors"
+              type="button"
+              onClick={exportList}
+            >
+              Xuất danh sách CSV
+            </button>
+          )}
           <button
             className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors"
             type="button"
@@ -788,6 +789,8 @@ function RoundTable({ rows, onStatus, onEdit }) {
               <th className="p-3">Mã đợt</th>
               <th className="p-3">Tên đợt thực tập</th>
               <th className="p-3">Năm học</th>
+              <th className="p-3">Loại thực tập</th>
+              <th className="p-3">Bộ tiêu chí</th>
               <th className="p-3">Bắt đầu</th>
               <th className="p-3">Kết thúc</th>
               <th className="p-3">Trạng thái</th>
@@ -818,6 +821,22 @@ function RoundRow({ row: x, onStatus, onEdit }) {
       <td className="p-3 font-mono font-bold text-slate-900">{x.maSo}</td>
       <td className="p-3 font-semibold text-slate-900">{x.tenDot}</td>
       <td className="p-3 text-slate-600">{x.namHoc}</td>
+      <td className="p-3">
+        {x.maLoaiThucTap === 'TTKS' ? (
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+            Kỹ sư (TTKS)
+          </span>
+        ) : x.maLoaiThucTap === 'TTNN' ? (
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+            Nghề nghiệp (TTNN)
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
+            Chưa phân loại
+          </span>
+        )}
+      </td>
+      <td className="p-3 font-mono text-slate-700 font-semibold">{x.maRubric || '—'}</td>
       <td className="p-3 font-mono text-slate-700">{formatDateVN(x.thoiGianBD)}</td>
       <td className="p-3 font-mono text-slate-700">{formatDateVN(x.thoiGianKT)}</td>
       <td className="p-3">
@@ -1043,7 +1062,16 @@ function CreateForm({ tab, reload, editItem, onCancel }) {
                 type="date"
                 required
                 value={f['ThoiGianBD'] ?? ''}
-                onChange={(e) => setF({ ...f, ThoiGianBD: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value
+                  const nextF = { ...f, ThoiGianBD: val }
+                  if (val && !f['ThoiGianKT']) {
+                    const d = new Date(val)
+                    d.setDate(d.getDate() + 12 * 7)
+                    nextF.ThoiGianKT = d.toISOString().slice(0, 10)
+                  }
+                  setF(nextF)
+                }}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
               />
               <p className="text-[11px] text-slate-500 mt-1">
@@ -1052,9 +1080,24 @@ function CreateForm({ tab, reload, editItem, onCancel }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Ngày kết thúc thực tập <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Ngày kết thúc thực tập <span className="text-rose-500">*</span>
+                </label>
+                {f['ThoiGianBD'] && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date(f['ThoiGianBD'])
+                      d.setDate(d.getDate() + 12 * 7)
+                      setF({ ...f, ThoiGianKT: d.toISOString().slice(0, 10) })
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                  >
+                    + Chuẩn 12 tuần
+                  </button>
+                )}
+              </div>
               <input
                 name="ThoiGianKT"
                 type="date"
@@ -1064,7 +1107,7 @@ function CreateForm({ tab, reload, editItem, onCancel }) {
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
               />
               <p className="text-[11px] text-slate-500 mt-1">
-                {f['ThoiGianKT'] ? `Kết thúc: ${formatDateVN(f['ThoiGianKT'])}` : 'Chưa thiết lập'}
+                {f['ThoiGianKT'] ? `Kết thúc: ${formatDateVN(f['ThoiGianKT'])}` : 'Thời lượng chuẩn: 12 tuần (áp dụng chung TTKS & TTNN)'}
               </p>
             </div>
 

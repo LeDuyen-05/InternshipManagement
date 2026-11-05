@@ -85,7 +85,7 @@ export default function LichTrinhPhongVanPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {legacyCount > 0 && <p className="alert">Có {legacyCount} lịch cũ chưa xác định đợt. Liên hệ Khoa đối chiếu; chưa tính các lịch này vào đợt đang chọn.</p>}
+      {legacyCount > 0 && <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2"><span className="material-symbols-outlined text-amber-600 text-[18px]">info</span><span>Có {legacyCount} lịch phỏng vấn trước đây chưa gán đợt thực tập. Vui lòng liên hệ Văn phòng Khoa để đối chiếu và chuẩn hóa hồ sơ.</span></div>}
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -225,7 +225,7 @@ export default function LichTrinhPhongVanPage() {
                 </p>
               )}
               {placement.trangThai === 'ChuaNhanViec' && !placement.daDuocKhoaDuyet && <p role="status" className="mb-4 text-sm text-amber-700">{placement.hanXacNhanSV ? `Hạn xác nhận: ${new Date(placement.hanXacNhanSV).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam).` : 'Khoa chưa cấu hình hạn xác nhận.'} {confirmationBlocked && 'Đã quá hạn. Liên hệ Khoa rà soát; hồ sơ vẫn giữ chỗ, chưa bị hủy.'}</p>}
-              {placement.trangThai === 'ChoKhoaDuyet' && <p className="mb-4 text-sm text-amber-700">Bạn đã xác nhận nhận việc. Chờ Khoa chốt phân bổ trước khi được phân công GVHD và nộp tiến độ.</p>}
+              {placement.trangThai === 'ChoKhoaDuyet' && <div role="status" className="mb-4 p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-center gap-2"><span className="material-symbols-outlined text-[18px] text-blue-600">hourglass_top</span><span>Bạn đã xác nhận đồng ý tiếp nhận. Văn phòng Khoa sẽ hoàn tất danh sách phân bổ chính thức và phân công Giảng viên hướng dẫn.</span></div>}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Mentor Doanh Nghiệp */}

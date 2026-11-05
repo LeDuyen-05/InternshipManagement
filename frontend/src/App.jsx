@@ -1,6 +1,7 @@
 import AppRoutes from './routes/AppRoutes.jsx'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { DotThucTapProvider } from './contexts/DotThucTapContext.jsx'
+import { ToastProvider } from './contexts/ToastContext.jsx'
 import ErrorBoundary from './components/common/ErrorBoundary.jsx'
 
 export default function App() {
@@ -8,11 +9,11 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         <DotThucTapProvider>
-          <AppRoutes />
+          <ToastProvider>
+            <AppRoutes />
+          </ToastProvider>
         </DotThucTapProvider>
       </AuthProvider>
     </ErrorBoundary>
   )
 }
-
-

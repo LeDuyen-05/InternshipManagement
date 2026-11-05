@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Layout from '../../components/Layout'
-import apiClient from '../../services/api'
+import ModalOverlay from '../../components/common/ModalOverlay'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
+import { rubricService } from '../../services/rubricService'
 
 const NHOM = {
   GV: {
@@ -20,7 +21,7 @@ const NHOM = {
   },
 }
 
-const createInitialForm = (rubric = 'CNTT_CLO_V1') => ({
+const createInitialForm = (rubric = 'TTKS_V1') => ({
   maTieuChi: '',
   maCLO: '',
   maRubric: rubric,
@@ -32,12 +33,17 @@ const createInitialForm = (rubric = 'CNTT_CLO_V1') => ({
 
 export default function KhoaCriteriaPage() {
   const { selectedDot } = useDotThucTap()
-  const activeDotRubric = selectedDot?.maRubric || 'CNTT_CLO_V1'
+  const activeDotRubric = selectedDot?.maRubric || 'TTKS_V1'
 
+  const [loaiList, setLoaiList] = useState([])
+  const [selectedLoai, setSelectedLoai] = useState('ALL')
+  const [rubricList, setRubricList] = useState([])
+  const [selectedRubric, setSelectedRubric] = useState('TTKS_V1')
+  const [rubricDetail, setRubricDetail] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedRubric, setSelectedRubric] = useState('CNTT_CLO_V1')
-  const [form, setForm] = useState(() => createInitialForm('CNTT_CLO_V1'))
+
+  const [form, setForm] = useState(() => createInitialForm('TTKS_V1'))
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -46,66 +52,104 @@ export default function KhoaCriteriaPage() {
   const [filterNhom, setFilterNhom] = useState('ALL') // 'ALL' | 'GV' | 'DN'
   const [searchKeyword, setSearchKeyword] = useState('')
 
-  // Tải danh sách tiêu chí từ backend
-  const load = async () => {
+  // Modal tạo / sao chép bộ tiêu chí
+  const [isRubricModalOpen, setIsRubricModalOpen] = useState(false)
+  const [rubricForm, setRubricForm] = useState({
+    maRubric: '',
+    tenBo: '',
+    maLoaiThucTap: 'TTKS',
+    phienBan: 2,
+    saoChepTu: '',
+  })
+
+  // Tải danh sách loại thực tập
+  useEffect(() => {
+    async function loadLoai() {
+      try {
+        const types = await rubricService.getLoaiThucTap()
+        setLoaiList(types)
+      } catch (_e) {
+        // ignore
+      }
+    }
+    loadLoai()
+  }, [])
+
+  // Tải danh sách bộ tiêu chí theo loại
+  const loadRubrics = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await apiClient.get('/khoa/tieu-chi')
-      const data = Array.isArray(res.data) ? res.data : []
-      setItems(data)
-      setError('')
+      const rubrics = await rubricService.getBoTieuChi(
+        selectedLoai === 'ALL' ? undefined : selectedLoai
+      )
+      const validRubrics = (rubrics || []).filter(
+        (r) => r.maLoaiThucTap && r.maRubric !== 'CNTT_CLO_V1'
+      )
+      setRubricList(validRubrics)
 
-      const rubrics = Array.from(new Set(data.map((x) => x.maRubric).filter(Boolean)))
-      if (rubrics.length > 0) {
-        if (selectedDot?.maRubric && rubrics.includes(selectedDot.maRubric)) {
-          setSelectedRubric(selectedDot.maRubric)
-        } else if (rubrics.includes('CNTT_CLO_V1')) {
-          setSelectedRubric('CNTT_CLO_V1')
-        } else {
-          setSelectedRubric(rubrics[0])
+      // Chọn rubric hợp lệ
+      if (validRubrics.length > 0) {
+        const currentFound = validRubrics.find((r) => r.maRubric === selectedRubric)
+        if (!currentFound) {
+          const dotMatch = validRubrics.find((r) => r.maRubric === activeDotRubric)
+          setSelectedRubric(dotMatch?.maRubric || validRubrics[0].maRubric)
         }
       }
     } catch (e) {
-      setError(e.response?.data?.message || 'Không thể tải danh sách tiêu chí đánh giá.')
+      setError(e.response?.data?.message || 'Không thể tải danh sách bộ tiêu chí.')
+    } finally {
+      setLoading(false)
+    }
+  }, [selectedLoai, selectedRubric, activeDotRubric])
+
+  useEffect(() => {
+    loadRubrics()
+  }, [loadRubrics])
+
+  // Tải chi tiết bộ tiêu chí đang chọn
+  const loadRubricDetail = useCallback(async () => {
+    if (!selectedRubric) return
+    try {
+      setLoading(true)
+      const detail = await rubricService.getBoTieuChiDetail(selectedRubric)
+      setRubricDetail(detail)
+      setItems(detail?.tieuChis || [])
+      setError('')
+    } catch (e) {
+      setError(e.response?.data?.message || 'Không thể tải chi tiết bộ tiêu chí.')
       setItems([])
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedRubric])
 
   useEffect(() => {
-    load()
-  }, [selectedDot?.maDot])
+    loadRubricDetail()
+  }, [loadRubricDetail])
 
-  // Danh sách các bộ rubric hiện có
-  const rubricList = useMemo(() => {
-    const set = new Set()
-    if (activeDotRubric) set.add(activeDotRubric)
-    set.add('CNTT_CLO_V1')
-    items.forEach((x) => {
-      if (x.maRubric) set.add(x.maRubric)
-    })
-    return Array.from(set)
-  }, [items, activeDotRubric])
+  const currentRubricInfo = useMemo(() => {
+    return rubricList.find((r) => r.maRubric === selectedRubric) || rubricDetail?.boTieuChi
+  }, [rubricList, selectedRubric, rubricDetail])
 
-  const handleSelectRubric = (rubric) => {
-    setSelectedRubric(rubric)
-    setForm(createInitialForm(rubric))
+  const isPublished = currentRubricInfo?.trangThai === 'PhatHanh'
+  const isRetired = currentRubricInfo?.trangThai === 'NgungApDung'
+  const isDraft = !isPublished && !isRetired
+
+  const handleSelectRubric = (rubricId) => {
+    setSelectedRubric(rubricId)
+    setForm(createInitialForm(rubricId))
   }
 
   // Danh sách tiêu chí thuộc bộ rubric đang chọn
   const rubricItems = useMemo(() => {
-    return items
-      .filter((x) => (x.maRubric || 'CNTT_CLO_V1') === selectedRubric)
-      .sort((a, b) => {
-        // Ưu tiên GV trước, DN sau; sau đó theo thuTu
-        if (a.nhomDanhGia !== b.nhomDanhGia) {
-          if (a.nhomDanhGia === 'GV') return -1
-          if (b.nhomDanhGia === 'GV') return 1
-        }
-        return (a.thuTu || 0) - (b.thuTu || 0) || a.maTieuChi.localeCompare(b.maTieuChi)
-      })
-  }, [items, selectedRubric])
+    return [...items].sort((a, b) => {
+      if (a.nhomDanhGia !== b.nhomDanhGia) {
+        if (a.nhomDanhGia === 'GV') return -1
+        if (b.nhomDanhGia === 'GV') return 1
+      }
+      return (a.thuTu || 0) - (b.thuTu || 0) || a.maTieuChi.localeCompare(b.maTieuChi)
+    })
+  }, [items])
 
   // Lọc theo nhóm người chấm & từ khóa tìm kiếm
   const displayItems = useMemo(() => {
@@ -148,16 +192,24 @@ export default function KhoaCriteriaPage() {
     [rubricItems]
   )
 
-  // Mở modal Thêm mới
+  // Mở modal Thêm mới tiêu chí
   const handleOpenAdd = () => {
+    if (isRetired) {
+      setError('Bộ tiêu chí này đã ngừng áp dụng. Không thể thêm tiêu chí.')
+      return
+    }
     setForm(createInitialForm(selectedRubric))
     setEditing(false)
     setError('')
     setIsModalOpen(true)
   }
 
-  // Mở modal Chỉnh sửa
+  // Mở modal Chỉnh sửa tiêu chí
   const handleEdit = (item) => {
+    if (isRetired) {
+      setError('Bộ tiêu chí này đã ngừng áp dụng. Không thể chỉnh sửa.')
+      return
+    }
     setForm({
       maTieuChi: item.maTieuChi,
       maCLO: item.maCLO || item.maTieuChi,
@@ -172,13 +224,7 @@ export default function KhoaCriteriaPage() {
     setIsModalOpen(true)
   }
 
-  // Đóng modal
-  const handleCloseModal = () => {
-    setIsModalOpen(false)
-    setEditing(false)
-  }
-
-  // Lưu (Thêm mới hoặc Cập nhật)
+  // Lưu tiêu chí (Thêm mới hoặc Cập nhật)
   const handleSave = async (e) => {
     e.preventDefault()
     setError('')
@@ -214,17 +260,10 @@ export default function KhoaCriteriaPage() {
     }
 
     try {
-      if (editing) {
-        await apiClient.put(`/khoa/tieu-chi/${encodeURIComponent(form.maTieuChi)}`, payload)
-        setNotice(`Đã cập nhật tiêu chí ${form.maTieuChi} thành công.`)
-      } else {
-        await apiClient.post('/khoa/tieu-chi', payload)
-        setNotice(
-          `Đã thêm mới tiêu chí ${payload.maTieuChi} vào bộ rubric ${payload.maRubric} thành công.`
-        )
-      }
+      await rubricService.saveTieuChi(payload, editing)
+      setNotice(`Đã lưu tiêu chí ${payload.maTieuChi} thành công.`)
       setIsModalOpen(false)
-      await load()
+      await loadRubricDetail()
     } catch (err) {
       setError(
         err.response?.data?.message || 'Không thể lưu tiêu chí. Vui lòng kiểm tra lại thông tin.'
@@ -236,19 +275,106 @@ export default function KhoaCriteriaPage() {
 
   // Xóa tiêu chí
   const handleRemove = async (item) => {
+    if (isRetired) {
+      setError('Bộ tiêu chí này đã ngừng áp dụng. Không thể xóa tiêu chí.')
+      return
+    }
     const confirmMsg = `Bạn có chắc chắn muốn xóa tiêu chí "${item.maTieuChi} - ${item.tenTieuChi}"?`
     if (!window.confirm(confirmMsg)) return
 
     try {
-      await apiClient.delete(`/khoa/tieu-chi/${encodeURIComponent(item.maTieuChi)}`)
+      await rubricService.deleteTieuChi(item.maTieuChi)
       setNotice(`Đã xóa tiêu chí ${item.maTieuChi} thành công.`)
       setError('')
-      await load()
+      await loadRubricDetail()
     } catch (err) {
       setError(
         err.response?.data?.message ||
-          'Không thể xóa tiêu chí. Tiêu chí đã được sử dụng trong các phiếu chấm điểm của sinh viên nên được hệ thống bảo toàn lịch sử.'
+          'Không thể xóa tiêu chí. Tiêu chí đã được sử dụng nên được bảo toàn lịch sử.'
       )
+    }
+  }
+
+  // Phát hành bộ tiêu chí
+  const handlePublish = async () => {
+    const version = currentRubricInfo?.phienBanCapNhat ?? 0
+    if (Math.abs(totalScore - 10) > 0.001) {
+      setError(`Tổng điểm của bộ tiêu chí phải bằng 10.00 (hiện tại: ${totalScore.toFixed(2)}).`)
+      return
+    }
+    if (Math.abs(totalGV - 5) > 0.001) {
+      setError(`Tổng điểm phần GVHD phải bằng 5.00 (hiện tại: ${totalGV.toFixed(2)}).`)
+      return
+    }
+    if (Math.abs(totalDN - 5) > 0.001) {
+      setError(`Tổng điểm phần Doanh nghiệp phải bằng 5.00 (hiện tại: ${totalDN.toFixed(2)}).`)
+      return
+    }
+
+    if (!window.confirm(`Xác nhận phát hành bộ tiêu chí "${selectedRubric}"? Sau khi phát hành, nội dung và điểm của bộ sẽ không thể sửa đổi.`)) {
+      return
+    }
+
+    try {
+      await rubricService.phatHanhBoTieuChi(selectedRubric, version)
+      setNotice(`Đã phát hành bộ tiêu chí "${selectedRubric}" thành công.`)
+      setError('')
+      await loadRubrics()
+      await loadRubricDetail()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể phát hành bộ tiêu chí. Kiểm tra lại phiên bản.')
+    }
+  }
+
+  // Ngừng áp dụng bộ tiêu chí
+  const handleRetire = async () => {
+    const version = currentRubricInfo?.phienBanCapNhat ?? 0
+    if (!window.confirm(`Xác nhận ngừng áp dụng bộ tiêu chí "${selectedRubric}"? Các đợt thực tập mới sẽ không thể chọn bộ này.`)) {
+      return
+    }
+
+    try {
+      await rubricService.ngungApDungBoTieuChi(selectedRubric, version)
+      setNotice(`Đã ngừng áp dụng bộ tiêu chí "${selectedRubric}".`)
+      setError('')
+      await loadRubrics()
+      await loadRubricDetail()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể ngừng áp dụng bộ tiêu chí.')
+    }
+  }
+
+  // Tạo / sao chép bộ mới
+  const handleCreateRubric = async (e) => {
+    e.preventDefault()
+    if (!rubricForm.maRubric.trim()) {
+      setError('Vui lòng nhập mã bộ tiêu chí!')
+      return
+    }
+    if (!rubricForm.tenBo.trim()) {
+      setError('Vui lòng nhập tên bộ tiêu chí!')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    setNotice('')
+    try {
+      await rubricService.createBoTieuChi({
+        maRubric: rubricForm.maRubric.trim().toUpperCase(),
+        tenBo: rubricForm.tenBo.trim(),
+        maLoaiThucTap: rubricForm.maLoaiThucTap,
+        phienBan: Number(rubricForm.phienBan) || 1,
+        saoChepTu: rubricForm.saoChepTu || null,
+      })
+      setNotice(`Đã tạo thành công bộ tiêu chí nháp "${rubricForm.maRubric.toUpperCase()}".`)
+      setIsRubricModalOpen(false)
+      setSelectedRubric(rubricForm.maRubric.toUpperCase())
+      await loadRubrics()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Không thể tạo bộ tiêu chí mới.')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -260,26 +386,29 @@ export default function KhoaCriteriaPage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
-                CẤU HÌNH HỌC VỤ & CHUẨN ĐẦU RA
+                QUẢN LÝ BỘ ĐIỂM THEO LOẠI THỰC TẬP
               </span>
               {selectedDot && (
                 <span className="text-xs text-slate-500 font-medium flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  Đợt: {selectedDot.tenDot}
+                  Đợt: {selectedDot.tenDot} ({selectedDot.maLoaiThucTap || 'TTKS'})
                 </span>
               )}
             </div>
             <h1 className="text-2xl font-bold text-slate-900 mt-1 tracking-tight">
-              Tiêu chí đánh giá & Chuẩn đầu ra (CLO)
+              Tiêu chí đánh giá &amp; Chuẩn đầu ra (CLO)
             </h1>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-2xl">
-              Quản lý chuẩn 11 tiêu chí CLO theo mẫu quy chuẩn của Khoa CNTT (GVHD chấm 5.00 điểm gồm CLO1.1–CLO3.4; Đơn vị thực tập chấm 5.00 điểm gồm CLO4.1–CLO4.2).
+              Khung tiêu chí đánh giá chuẩn đầu ra học phần Thực tập tốt nghiệp. Tổng điểm thang 10 gồm Giảng viên hướng dẫn đánh giá 5.00 điểm và Đơn vị thực tập đánh giá 5.00 điểm.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={load}
+              onClick={() => {
+                loadRubrics()
+                loadRubricDetail()
+              }}
               disabled={loading}
               className="px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
               title="Tải lại danh sách tiêu chí"
@@ -289,20 +418,45 @@ export default function KhoaCriteriaPage() {
               </span>
               <span>Làm mới</span>
             </button>
+
             <button
-              onClick={handleOpenAdd}
-              className="px-3.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              onClick={() => {
+                setRubricForm({
+                  maRubric: '',
+                  tenBo: '',
+                  maLoaiThucTap: currentRubricInfo?.maLoaiThucTap || 'TTKS',
+                  phienBan: (currentRubricInfo?.phienBan || 1) + 1,
+                  saoChepTu: selectedRubric || '',
+                })
+                setIsRubricModalOpen(true)
+              }}
+              className="px-3.5 py-2 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
             >
-              <span className="material-symbols-outlined text-sm">add_circle</span>
-              <span>Thêm tiêu chí CLO</span>
+              <span className="material-symbols-outlined text-sm">content_copy</span>
+              <span>Tạo phiên bản mới</span>
             </button>
-            <a
-              href="/khoa/thong-ke-clo"
-              className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-200/70 flex items-center gap-1.5 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-sm">analytics</span>
-              <span>Báo cáo thống kê CLO</span>
-            </a>
+
+
+
+            {isDraft && (
+              <button
+                onClick={handlePublish}
+                className="px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">verified</span>
+                <span>Ban hành chính thức</span>
+              </button>
+            )}
+
+            {isPublished && (
+              <button
+                onClick={handleRetire}
+                className="px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-sm">block</span>
+                <span>Ngừng áp dụng</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -337,30 +491,44 @@ export default function KhoaCriteriaPage() {
           </div>
         )}
 
+        {/* Banner trạng thái bộ tiêu chí */}
+        {isRetired && (
+          <div className="p-4 rounded-2xl border bg-rose-50 border-rose-200 text-xs flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-rose-600 text-lg">
+                block
+              </span>
+              <span className="text-slate-700 font-medium">
+                Bộ tiêu chí <strong>{selectedRubric}</strong> đã ngừng áp dụng. Dữ liệu chỉ dùng để tra cứu lịch sử đánh giá.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* 4 Thẻ Bento KPI Thống Kê Điểm Chuẩn */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Bento 1: Tổng điểm bộ Rubric */}
           <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                Tổng điểm bộ Rubric
+                Tổng điểm đánh giá
               </span>
               <div
                 className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                  totalScore === 10
+                  Math.abs(totalScore - 10) < 0.001
                     ? 'bg-emerald-50 text-emerald-600'
                     : 'bg-amber-50 text-amber-600'
                 }`}
               >
                 <span className="material-symbols-outlined text-lg">
-                  {totalScore === 10 ? 'verified' : 'warning'}
+                  {Math.abs(totalScore - 10) < 0.001 ? 'verified' : 'warning'}
                 </span>
               </div>
             </div>
             <div className="mt-3 flex items-baseline gap-1.5">
               <span
                 className={`text-2xl font-bold tracking-tight ${
-                  totalScore === 10 ? 'text-emerald-600' : 'text-amber-600'
+                  Math.abs(totalScore - 10) < 0.001 ? 'text-emerald-600' : 'text-amber-600'
                 }`}
               >
                 {totalScore.toFixed(2)}
@@ -368,7 +536,7 @@ export default function KhoaCriteriaPage() {
               <span className="text-sm font-semibold text-slate-400">/ 10.00 điểm</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 font-medium">
-              {totalScore === 10 ? '✓ Đạt chuẩn 10.00 điểm HUIT' : '⚠ Chưa đủ/vượt thang điểm 10.00'}
+              {Math.abs(totalScore - 10) < 0.001 ? '✓ Đạt chuẩn thang điểm 10.00' : '⚠ Chưa đạt tổng điểm 10.00'}
             </p>
           </div>
 
@@ -389,7 +557,7 @@ export default function KhoaCriteriaPage() {
               <span className="text-sm font-semibold text-slate-400">/ 5.00 điểm</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1">
-              {countGV} tiêu chí (CLO1.1 – CLO3.4)
+              {countGV} tiêu chí ({currentRubricInfo?.maLoaiThucTap === 'TTKS' ? 'CLO1.1–CLO3.5' : 'CLO1.1–CLO3.4'})
             </p>
           </div>
 
@@ -410,7 +578,7 @@ export default function KhoaCriteriaPage() {
               <span className="text-sm font-semibold text-slate-400">/ 5.00 điểm</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1">
-              {countDN} tiêu chí (CLO4.1 – CLO4.2)
+              {countDN} tiêu chí (CLO4.1=2.00, CLO4.2=3.00)
             </p>
           </div>
 
@@ -428,41 +596,69 @@ export default function KhoaCriteriaPage() {
               <span className="text-2xl font-bold text-slate-800 tracking-tight">
                 {rubricItems.length}
               </span>
-              <span className="text-sm font-semibold text-slate-400">tiêu chí chuẩn</span>
+              <span className="text-sm font-semibold text-slate-400">
+                tiêu chí ({currentRubricInfo?.maLoaiThucTap || 'TTKS'})
+              </span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-1 truncate" title={`Bộ rubric: ${selectedRubric}`}>
-              Bộ: <span className="font-semibold text-slate-700">{selectedRubric}</span>
-            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              {isPublished ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800">
+                  Đã ban hành
+                </span>
+              ) : isRetired ? (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-slate-200 text-slate-700">
+                  Ngừng áp dụng
+                </span>
+              ) : (
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800">
+                  Bản dự thảo
+                </span>
+              )}
+              <span className="text-[11px] text-slate-400 font-mono">
+                v{currentRubricInfo?.phienBan ?? 1}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Thanh chọn bộ Rubric */}
+        {/* Thanh chọn loại và bộ Rubric */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-slate-400 text-lg">schema</span>
-            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-              Bộ Rubric đang quản lý:
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-slate-400 text-lg">filter_alt</span>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                Loại:
+              </label>
+              <select
+                value={selectedLoai}
+                onChange={(e) => setSelectedLoai(e.target.value)}
+                className="px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800"
+              >
+                <option value="ALL">Tất cả loại thực tập</option>
+                {loaiList.map((l) => (
+                  <option key={l.maLoai} value={l.maLoai}>
+                    {l.tenLoai} ({l.maLoai})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {rubricList.map((rubric) => {
-              const isSelected = rubric === selectedRubric
-              const isDotActive = rubric === activeDotRubric
-              const countInRubric = items.filter(
-                (x) => (x.maRubric || 'CNTT_CLO_V1') === rubric
-              ).length
+              const isSelected = rubric.maRubric === selectedRubric
+              const isDotActive = rubric.maRubric === activeDotRubric
               return (
                 <button
-                  key={rubric}
-                  onClick={() => handleSelectRubric(rubric)}
+                  key={rubric.maRubric}
+                  onClick={() => handleSelectRubric(rubric.maRubric)}
                   className={`px-3 py-1.5 text-xs font-semibold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
                     isSelected
                       ? 'bg-indigo-600 text-white shadow-indigo-100'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
-                  <span>{rubric}</span>
+                  <span>{rubric.maRubric}</span>
                   <span
                     className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                       isSelected
@@ -470,18 +666,35 @@ export default function KhoaCriteriaPage() {
                         : 'bg-slate-200 text-slate-600'
                     }`}
                   >
-                    {countInRubric}
+                    {rubric.soTieuChi || rubric.tieuChis?.length || 0}
                   </span>
-                  {isDotActive && (
+                  {rubric.trangThai === 'PhatHanh' ? (
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded-md font-bold uppercase ${
-                        isSelected
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-emerald-100 text-emerald-800'
+                      className={`text-[9px] px-1 rounded-md font-bold uppercase ${
+                        isSelected ? 'bg-emerald-500 text-white' : 'bg-emerald-100 text-emerald-800'
                       }`}
                     >
-                      Đang áp dụng
+                      Ban hành
                     </span>
+                  ) : rubric.trangThai === 'NgungApDung' ? (
+                    <span
+                      className={`text-[9px] px-1 rounded-md font-bold uppercase ${
+                        isSelected ? 'bg-slate-500 text-white' : 'bg-slate-200 text-slate-700'
+                      }`}
+                    >
+                      Ngừng
+                    </span>
+                  ) : (
+                    <span
+                      className={`text-[9px] px-1 rounded-md font-bold uppercase ${
+                        isSelected ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      Dự thảo
+                    </span>
+                  )}
+                  {isDotActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Đợt đang chọn áp dụng bộ này"></span>
                   )}
                 </button>
               )
@@ -489,7 +702,7 @@ export default function KhoaCriteriaPage() {
           </div>
         </div>
 
-        {/* BẢNG DANH MỤC TIÊU CHÍ (Hiển thị toàn bộ 11 tiêu chí trực quan, không cắt vụn trang) */}
+        {/* BẢNG DANH MỤC TIÊU CHÍ */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
           {/* Header Bảng & Bộ Lọc */}
           <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -498,10 +711,12 @@ export default function KhoaCriteriaPage() {
                 <span className="material-symbols-outlined text-indigo-600 text-lg">
                   format_list_bulleted
                 </span>
-                <span>Danh mục tiêu chí CLO ({selectedRubric})</span>
+                <span>
+                  Danh mục tiêu chí ({selectedRubric} - {currentRubricInfo?.tenBo || 'Bộ tiêu chí'})
+                </span>
               </h2>
               <p className="text-xs text-slate-500 mt-0.5 m-0">
-                Hiển thị {displayItems.length} / {rubricItems.length} tiêu chí chuẩn
+                Hiển thị {displayItems.length} / {rubricItems.length} tiêu chí • Loại: {currentRubricInfo?.maLoaiThucTap || 'TTKS'}
               </p>
             </div>
 
@@ -552,7 +767,7 @@ export default function KhoaCriteriaPage() {
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
                   placeholder="Tìm mã hoặc tên tiêu chí..."
-                  className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 w-56 text-slate-900 placeholder:text-slate-400 shadow-2xs"
+                  className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 w-48 text-slate-900 placeholder:text-slate-400 shadow-2xs"
                 />
                 {searchKeyword && (
                   <button
@@ -563,6 +778,19 @@ export default function KhoaCriteriaPage() {
                   </button>
                 )}
               </div>
+
+              {/* Nút Thêm tiêu chí đặt đúng trên thanh công cụ bảng */}
+              {!isRetired && (
+                <button
+                  type="button"
+                  onClick={handleOpenAdd}
+                  className="px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  title="Thêm một tiêu chí đánh giá mới vào bảng này"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                  <span>Thêm tiêu chí</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -572,12 +800,11 @@ export default function KhoaCriteriaPage() {
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                   <th className="py-3 px-3 w-14 text-center">STT</th>
-                  <th className="py-3 px-4 w-28">Mã tiêu chí</th>
-                  <th className="py-3 px-3 w-28">Mã CLO</th>
-                  <th className="py-3 px-4">Tên chuẩn đầu ra / Tiêu chí đánh giá</th>
-                  <th className="py-3 px-3 w-40">Người chấm</th>
+                  <th className="py-3 px-4 w-28 text-center">Mã CLO</th>
+                  <th className="py-3 px-4">Nội dung chuẩn đầu ra / Tiêu chí đánh giá</th>
+                  <th className="py-3 px-3 w-36 text-center">Phụ trách chấm</th>
                   <th className="py-3 px-3 w-28 text-center">Điểm tối đa</th>
-                  <th className="py-3 px-4 w-32 text-center">Thao tác</th>
+                  <th className="py-3 px-4 w-24 text-center">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
@@ -598,75 +825,61 @@ export default function KhoaCriteriaPage() {
                       <div className="flex flex-col items-center justify-center gap-2 text-slate-400">
                         <span className="material-symbols-outlined text-3xl text-slate-300">rule</span>
                         <span className="text-xs font-medium text-slate-500">
-                          {rubricItems.length === 0
-                            ? `Chưa có tiêu chí nào trong bộ rubric "${selectedRubric}". Bấm nút "Thêm tiêu chí CLO" ở trên để bổ sung.`
-                            : 'Không tìm thấy tiêu chí nào phù hợp với từ khóa tìm kiếm.'}
+                          {searchKeyword
+                            ? 'Không tìm thấy tiêu chí nào phù hợp với từ khóa'
+                            : 'Chưa có tiêu chí nào trong bộ rubric này'}
                         </span>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  displayItems.map((item, index) => {
-                    const nhomConfig = NHOM[item.nhomDanhGia] || {
-                      label: 'Chưa phân nhóm',
-                      color: 'bg-slate-100 text-slate-600',
-                      icon: 'help',
-                    }
+                  displayItems.map((item, idx) => {
+                    const nhom = NHOM[item.nhomDanhGia] || NHOM.GV
                     return (
-                      <tr
-                        key={item.maTieuChi}
-                        className="transition-colors hover:bg-slate-50/80"
-                      >
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-400">
-                          {item.thuTu || index + 1}
+                      <tr key={item.maTieuChi} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-3 text-center text-slate-500 font-medium">
+                          {item.thuTu || idx + 1}
                         </td>
-                        <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200/80 text-[11px]">
-                            {item.maTieuChi}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-3">
-                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold border border-blue-200/60 text-[11px]">
+                        <td className="py-3 px-4 text-center">
+                          <span className="font-bold text-indigo-700 bg-indigo-50/70 px-2.5 py-1 rounded-md text-xs font-mono" title={`Mã hệ thống: ${item.maTieuChi}`}>
                             {item.maCLO || item.maTieuChi}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-medium text-slate-900 leading-relaxed">
+                        <td className="py-3 px-4 text-slate-800 font-medium">
                           {item.tenTieuChi}
                         </td>
-                        <td className="py-3.5 px-3">
+                        <td className="py-3 px-3 text-center">
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${nhomConfig.color}`}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border ${nhom.color}`}
                           >
-                            <span className="material-symbols-outlined text-[13px]">
-                              {nhomConfig.icon}
-                            </span>
-                            <span>{nhomConfig.label}</span>
+                            <span className="material-symbols-outlined text-[13px]">{nhom.icon}</span>
+                            <span>{nhom.label}</span>
                           </span>
                         </td>
-                        <td className="py-3.5 px-3 text-center font-bold text-slate-800">
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-100 font-mono text-xs">
-                            {Number(item.diemToiDa).toFixed(2)} đ
-                          </span>
+                        <td className="py-3 px-3 text-center font-bold text-slate-900 font-mono">
+                          {Number(item.diemToiDa).toFixed(2)}
                         </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleEdit(item)}
-                              className="px-2.5 py-1 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                              title="Chỉnh sửa thông tin tiêu chí"
-                            >
-                              <span className="material-symbols-outlined text-xs">edit</span>
-                              <span>Sửa</span>
-                            </button>
-                            <button
-                              onClick={() => handleRemove(item)}
-                              className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-                              title="Xóa tiêu chí khỏi bộ rubric"
-                            >
-                              <span className="material-symbols-outlined text-xs">delete</span>
-                              <span>Xóa</span>
-                            </button>
-                          </div>
+                        <td className="py-3 px-4 text-center">
+                          {!isRetired ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleEdit(item)}
+                                className="w-7 h-7 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-colors cursor-pointer"
+                                title="Chỉnh sửa tiêu chí"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit</span>
+                              </button>
+                              <button
+                                onClick={() => handleRemove(item)}
+                                className="w-7 h-7 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
+                                title="Xóa tiêu chí"
+                              >
+                                <span className="material-symbols-outlined text-sm">delete</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 italic">Đã khóa</span>
+                          )}
                         </td>
                       </tr>
                     )
@@ -675,365 +888,283 @@ export default function KhoaCriteriaPage() {
               </tbody>
             </table>
           </div>
-
-          {/* Footer tóm tắt */}
-          <div className="p-4 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-slate-500">
-            <div>
-              Hiển thị đầy đủ <strong className="text-slate-800">{displayItems.length} tiêu chí</strong> trong bộ rubric <strong className="text-indigo-700">{selectedRubric}</strong>.
-            </div>
-            <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                <span>GVHD chấm: <strong>{totalGV.toFixed(2)} / 5.00 đ</strong></span>
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-teal-600"></span>
-                <span>Đơn vị TT: <strong>{totalDN.toFixed(2)} / 5.00 đ</strong></span>
-              </span>
-              <span className="flex items-center gap-1 font-bold text-slate-800">
-                <span>Tổng: <strong>{totalScore.toFixed(2)} / 10.00 đ</strong></span>
-              </span>
-            </div>
-          </div>
         </div>
-
-        {/* Khung Nguyên Tắc Đánh Giá Chuẩn Đầu Ra (CLO) */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          <div className="px-5 py-4 bg-gradient-to-r from-slate-50 via-indigo-50/20 to-white border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-lg">verified</span>
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-900 m-0">
-                  Khung đánh giá & Nguyên tắc phân bổ Chuẩn đầu ra (CLO)
-                </h4>
-                <p className="text-[11px] text-slate-500 m-0">
-                  Áp dụng theo chuẩn kiểm định chất lượng đào tạo Khoa Công nghệ Thông tin
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 self-start sm:self-auto">
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/60">
-                Thang điểm 10.00
-              </span>
-              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                Tỷ lệ 50% - 50%
-              </span>
-            </div>
-          </div>
-
-          <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Nhánh 1: Giảng viên hướng dẫn */}
-            <div className="p-4 rounded-xl bg-slate-50/60 border border-slate-200/70 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm">school</span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-900 block">
-                      Giảng viên hướng dẫn đánh giá
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      Năng lực chuyên môn, tiến độ & báo cáo đề tài
-                    </span>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200/60">
-                  5.00 / 10.00 đ (50%)
-                </span>
-              </div>
-
-              <div className="space-y-2 text-xs text-slate-600">
-                <p className="m-0 leading-relaxed">
-                  Đánh giá trực tiếp trên hệ thống qua <strong>9 tiêu chí</strong> thành phần từ <strong>CLO1.1 đến CLO3.4</strong>:
-                </p>
-                <div className="grid grid-cols-1 gap-1.5 text-[11px]">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100">
-                    <span className="text-slate-700">Mục tiêu, nội dung & Giới thiệu đơn vị thực tập (CLO1.1, CLO1.2)</span>
-                    <strong className="text-indigo-700 font-mono">1.50 đ</strong>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100">
-                    <span className="text-slate-700">Vị trí thực tập & Kế hoạch làm việc (CLO1.3)</span>
-                    <strong className="text-indigo-700 font-mono">0.50 đ</strong>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100">
-                    <span className="text-slate-700">Vận dụng kiến thức & Phương pháp giải quyết (CLO2.1, CLO2.2)</span>
-                    <strong className="text-indigo-700 font-mono">1.00 đ</strong>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100">
-                    <span className="text-slate-700">Yêu cầu công việc & Quyển báo cáo đề tài (CLO3.1, CLO3.2)</span>
-                    <strong className="text-indigo-700 font-mono">1.00 đ</strong>
-                  </div>
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100">
-                    <span className="text-slate-700">Thuyết trình đề tài & Trả lời vấn đáp (CLO3.3, CLO3.4)</span>
-                    <strong className="text-indigo-700 font-mono">1.00 đ</strong>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Nhánh 2: Đơn vị thực tập */}
-            <div className="p-4 rounded-xl bg-slate-50/60 border border-slate-200/70 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-200/60 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-sm">apartment</span>
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-slate-900 block">
-                      Đơn vị thực tập đánh giá
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      Tác phong công nghiệp & Khả năng vận dụng thực tiễn
-                    </span>
-                  </div>
-                </div>
-                <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-md border border-teal-200/60">
-                  5.00 / 10.00 đ (50%)
-                </span>
-              </div>
-
-              <div className="space-y-2 text-xs text-slate-600">
-                <p className="m-0 leading-relaxed">
-                  Đánh giá qua Phiếu nhận xét doanh nghiệp bằng <strong>2 tiêu chí</strong> chuẩn đầu ra <strong>CLO4.1 và CLO4.2</strong>:
-                </p>
-                <div className="grid grid-cols-1 gap-1.5 text-[11px]">
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-100">
-                    <div>
-                      <span className="font-semibold text-slate-800 block">CLO4.1 — Ý thức tổ chức kỷ luật</span>
-                      <span className="text-[10px] text-slate-500">Tinh thần trách nhiệm, văn hóa doanh nghiệp, tuân thủ nội quy</span>
-                    </div>
-                    <strong className="text-teal-700 font-mono text-xs">2.00 đ</strong>
-                  </div>
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-slate-100">
-                    <div>
-                      <span className="font-semibold text-slate-800 block">CLO4.2 — Khả năng vận dụng vào thực tế</span>
-                      <span className="text-[10px] text-slate-500">Kỹ năng kỹ thuật, giải quyết công việc được giao tại cơ sở</span>
-                    </div>
-                    <strong className="text-teal-700 font-mono text-xs">3.00 đ</strong>
-                  </div>
-                  <div className="p-2 rounded-lg bg-teal-50/50 border border-teal-100 text-[10px] text-teal-800 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-xs">info</span>
-                    <span>Điểm doanh nghiệp được quy đổi trực tiếp vào hệ thống học vụ theo thang điểm chính thức.</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-xs text-slate-400">rule</span>
-              <span>Điểm tổng kết học phần = Điểm Giảng viên hướng dẫn (thang 5) + Điểm Doanh nghiệp (thang 5).</span>
-            </span>
-            <span className="font-medium text-slate-600">
-              Quy chuẩn làm tròn 1 chữ số thập phân trước khi xếp loại
-            </span>
-          </div>
-        </div>
-
-        {/* BENTO MODAL POPUP: THÊM / CHỈNH SỬA TIÊU CHÍ */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200">
-              {/* Modal Header */}
-              <div className="p-5 sm:p-6 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                      editing
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-indigo-100 text-indigo-700'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-xl">
-                      {editing ? 'edit_note' : 'add_circle'}
-                    </span>
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 m-0">
-                      {editing
-                        ? `Chỉnh sửa tiêu chí: ${form.maTieuChi}`
-                        : 'Thêm tiêu chí CLO mới'}
-                    </h3>
-                    <p className="text-xs text-slate-500 m-0 mt-0.5">
-                      Bộ rubric: <strong className="text-indigo-700">{form.maRubric || selectedRubric}</strong>
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleCloseModal}
-                  className="w-8 h-8 rounded-xl bg-slate-200/60 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-lg">close</span>
-                </button>
-              </div>
-
-              {/* Modal Body */}
-              <form onSubmit={handleSave} className="p-5 sm:p-6 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Mã tiêu chí */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Mã tiêu chí <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      maxLength="20"
-                      disabled={editing}
-                      value={form.maTieuChi}
-                      onChange={(e) =>
-                        setForm({ ...form, maTieuChi: e.target.value.toUpperCase().trim() })
-                      }
-                      placeholder="VD: CLO1.1, CLO4.1..."
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-900 font-mono font-bold shadow-2xs disabled:bg-slate-100 disabled:text-slate-500"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1 m-0">
-                      Khóa duy nhất (không đổi sau khi tạo)
-                    </p>
-                  </div>
-
-                  {/* Mã CLO */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Mã CLO chuẩn <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      maxLength="20"
-                      value={form.maCLO}
-                      onChange={(e) =>
-                        setForm({ ...form, maCLO: e.target.value.toUpperCase().trim() })
-                      }
-                      placeholder="VD: CLO1.1, CLO4.1..."
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-900 font-semibold shadow-2xs"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1 m-0">
-                      Ánh xạ chuẩn đầu ra chương trình
-                    </p>
-                  </div>
-
-                  {/* Người chấm */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Người chấm <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      value={form.nhomDanhGia}
-                      onChange={(e) => setForm({ ...form, nhomDanhGia: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 bg-white text-slate-900 font-semibold shadow-2xs cursor-pointer"
-                    >
-                      <option value="GV">Giảng viên hướng dẫn (chấm tối đa 5.00đ)</option>
-                      <option value="DN">Đơn vị thực tập (chấm tối đa 5.00đ)</option>
-                    </select>
-                    <p className="text-[10px] text-slate-400 mt-1 m-0">
-                      Phân quyền nhập điểm thành phần
-                    </p>
-                  </div>
-
-                  {/* Điểm tối đa */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Điểm tối đa <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.05"
-                      min="0.1"
-                      max="10"
-                      required
-                      value={form.diemToiDa}
-                      onChange={(e) => setForm({ ...form, diemToiDa: e.target.value })}
-                      placeholder="VD: 0.50, 0.75, 2.00, 3.00..."
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-900 font-mono font-bold shadow-2xs"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1 m-0">
-                      Thang điểm thành phần
-                    </p>
-                  </div>
-
-                  {/* Thứ tự hiển thị */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Thứ tự hiển thị
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="99"
-                      value={form.thuTu}
-                      onChange={(e) => setForm({ ...form, thuTu: e.target.value })}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-900 font-semibold shadow-2xs"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1 m-0">
-                      Thứ tự 1 đến 11 trên phiếu chấm
-                    </p>
-                  </div>
-
-                  {/* Bộ rubric */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Bộ rubric
-                    </label>
-                    <input
-                      type="text"
-                      disabled
-                      value={form.maRubric}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-200 bg-slate-100 text-slate-600 font-mono shadow-2xs"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1 m-0">
-                      Bộ rubric đang thao tác
-                    </p>
-                  </div>
-                </div>
-
-                {/* Tên tiêu chí */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Tên tiêu chí / Nội dung chuẩn đầu ra <span className="text-rose-500">*</span>
-                  </label>
-                  <textarea
-                    rows="3"
-                    required
-                    maxLength="200"
-                    value={form.tenTieuChi}
-                    onChange={(e) => setForm({ ...form, tenTieuChi: e.target.value })}
-                    placeholder="Nhập nội dung mô tả chuẩn đầu ra sinh viên cần đạt được..."
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 text-slate-900 shadow-2xs resize-none"
-                  ></textarea>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-4 py-2.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-                  >
-                    Hủy bỏ
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {submitting ? 'progress_activity' : 'save'}
-                    </span>
-                    <span>{submitting ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Thêm tiêu chí'}</span>
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Modal Thêm / Chỉnh sửa Tiêu chí */}
+      {isModalOpen && (
+        <ModalOverlay isOpen={isModalOpen} onClose={() => setIsModalOpen(false)}>
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <h3 className="text-base font-bold text-slate-900">
+                {editing ? 'Chỉnh sửa tiêu chí đánh giá' : 'Thêm tiêu chí CLO mới'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+          <form onSubmit={handleSave} className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Mã chuẩn đầu ra (CLO) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: CLO3.5"
+                  value={form.maCLO}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setForm({
+                      ...form,
+                      maCLO: val,
+                      maTieuChi: editing ? form.maTieuChi : (selectedRubric + '_' + val.trim().toUpperCase()),
+                    });
+                  }}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Bộ tiêu chí áp dụng
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value={selectedRubric + ' (' + (currentRubricInfo?.tenBo || '') + ')'}
+                  className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-600 font-semibold"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tên tiêu chí / Nội dung chuẩn đầu ra <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                rows={3}
+                required
+                placeholder="VD: Trả lời câu hỏi của Giảng viên hướng dẫn..."
+                value={form.tenTieuChi}
+                onChange={(e) => setForm({ ...form, tenTieuChi: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Người chấm <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={form.nhomDanhGia}
+                  onChange={(e) => setForm({ ...form, nhomDanhGia: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                >
+                  <option value="GV">GVHD chấm</option>
+                  <option value="DN">Đơn vị TT chấm</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Điểm tối đa <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0.1"
+                  max="10"
+                  required
+                  placeholder="0.50"
+                  value={form.diemToiDa}
+                  onChange={(e) => setForm({ ...form, diemToiDa: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Thứ tự sắp xếp
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  value={form.thuTu}
+                  onChange={(e) => setForm({ ...form, thuTu: e.target.value })}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                {submitting ? 'Đang lưu...' : editing ? 'Cập nhật tiêu chí' : 'Thêm tiêu chí'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </ModalOverlay>
+      )}
+
+      {/* Modal Tạo / Sao chép Bộ Rubric */}
+      {isRubricModalOpen && (
+        <ModalOverlay isOpen={isRubricModalOpen} onClose={() => setIsRubricModalOpen(false)}>
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <h3 className="text-base font-bold text-slate-900">
+                Tạo phiên bản bộ tiêu chí mới
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsRubricModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRubric} className="space-y-4 text-xs">
+              {error && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[18px]">error</span>
+                  <span>{error}</span>
+                </div>
+              )}
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Mã bộ tiêu chí mới <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={12}
+                placeholder="VD: TTKS_V2"
+                value={rubricForm.maRubric}
+                onChange={(e) =>
+                  setRubricForm({
+                    ...rubricForm,
+                    maRubric: e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''),
+                  })
+                }
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs font-bold text-slate-800"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Mã viết liền không dấu, tối đa 12 ký tự (Ví dụ: TTKS_V2, TTNN_V2).
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Tên bộ tiêu chí <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                maxLength={200}
+                placeholder="VD: Tiêu chí Thực tập kỹ sư (Ban hành 2026)"
+                value={rubricForm.tenBo}
+                onChange={(e) => setRubricForm({ ...rubricForm, tenBo: e.target.value })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Loại thực tập <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={rubricForm.maLoaiThucTap}
+                  onChange={(e) =>
+                    setRubricForm({ ...rubricForm, maLoaiThucTap: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+                >
+                  <option value="TTKS">Thực tập kỹ sư (TTKS)</option>
+                  <option value="TTNN">Thực tập nghề nghiệp (TTNN)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Số phiên bản
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  value={rubricForm.phienBan}
+                  onChange={(e) =>
+                    setRubricForm({ ...rubricForm, phienBan: Number(e.target.value) })
+                  }
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Kế thừa dữ liệu từ bộ tiêu chí hiện có (tùy chọn)
+              </label>
+              <select
+                value={rubricForm.saoChepTu}
+                onChange={(e) =>
+                  setRubricForm({ ...rubricForm, saoChepTu: e.target.value })
+                }
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800"
+              >
+                <option value="">-- Khởi tạo bộ tiêu chí trống --</option>
+                {rubricList.map((r) => (
+                  <option key={r.maRubric} value={r.maRubric}>
+                    {r.maRubric} - {r.tenBo} ({r.soTieuChi || r.tieuChis?.length || 0} tiêu chí)
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Hệ thống sẽ sao chép toàn bộ danh mục tiêu chí và điểm số từ bộ đã chọn sang phiên bản mới.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsRubricModalOpen(false)}
+                className="px-4 py-2 border border-slate-200 text-slate-600 rounded-xl font-semibold hover:bg-slate-50 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all cursor-pointer disabled:opacity-50"
+              >
+                {submitting ? 'Đang lưu...' : 'Lưu bộ tiêu chí'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </ModalOverlay>
+      )}
     </Layout>
   )
 }

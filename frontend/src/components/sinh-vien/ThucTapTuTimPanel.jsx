@@ -435,7 +435,7 @@ export default function ThucTapTuTimPanel({
                           </span>
                         </div>
                         <Link
-                          to="/sinh-vien/lich-phong-van"
+                          to="/sinh-vien/lich-trinh"
                           className="shrink-0 px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-lg transition-colors"
                         >
                           Xác nhận nhận việc →

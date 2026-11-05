@@ -106,14 +106,14 @@ export default function BoTriBanDauPanel({ maDot, student, onClose, onChanged })
     >
       <section
         className="info-card bg-white rounded-2xl border border-slate-200/90 shadow-2xl max-w-xl w-full p-5 sm:p-6 space-y-4 my-8"
-        aria-label="Bố trí nơi thực tập ban đầu"
+        aria-label="Chỉ định nơi thực tập cho sinh viên"
       >
         {/* Header */}
         <div className="page-head flex items-start justify-between gap-3 border-b border-slate-100 pb-3">
           <div className="space-y-1">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-100">
               <span className="material-symbols-outlined text-[13px]">add_business</span>
-              HỖ TRỢ BỐ TRÍ
+              CHỈ ĐỊNH TIẾP NHẬN
             </span>
             <h3 className="text-base sm:text-lg font-black text-slate-900">
               Bố trí nơi thực tập ban đầu
@@ -223,7 +223,7 @@ export default function BoTriBanDauPanel({ maDot, student, onClose, onChanged })
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-xs font-bold text-slate-700">
-                  Lý do bố trí <span className="text-rose-500">*</span>
+                  Lý do tiếp nhận / điều chuyển <span className="text-rose-500">*</span>
                 </label>
                 <span className="text-[10px] text-slate-400 font-mono">
                   {reason.length}/1000
@@ -313,7 +313,7 @@ export default function BoTriBanDauPanel({ maDot, student, onClose, onChanged })
                   !accepted
                 }
               >
-                {saving ? 'Đang bố trí…' : 'Xác nhận bố trí ban đầu'}
+                {saving ? 'Đang bố trí…' : 'Xác nhận phân bổ'}
               </button>
             </div>
           </form>

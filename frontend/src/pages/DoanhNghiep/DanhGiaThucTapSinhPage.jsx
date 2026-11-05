@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import { phieuChamDiemService } from '../../services/phieuChamDiemService'
@@ -8,6 +9,7 @@ import { useGradeDeadline } from '../../hooks/useGradeDeadline'
 import GradeDeadlineNotice from '../../components/common/GradeDeadlineNotice'
 import ModalOverlay from '../../components/common/ModalOverlay'
 import DocumentAttachments from '../../components/common/DocumentAttachments'
+import { enterprisePrintScore, enterpriseGradeComplete } from '../../utils/enterprisePrintScore'
 
 // Gợi ý nhận xét học vụ chuẩn mực giúp người hướng dẫn điền nhanh
 const QUICK_REMARKS = [
@@ -82,14 +84,15 @@ function ConfirmLockModal({ intern, totalScore, onConfirm, onCancel, busy }) {
 
 // Modal Xem Trước & In Phiếu Nhận Xét Sinh Viên Thực Tập Chuẩn HUIT
 function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
-  const score41 = (intern.chiTietDiemDN || []).find((x) => x.maTieuChi === 'CLO4.1')?.diemCham
-  const score42 = (intern.chiTietDiemDN || []).find((x) => x.maTieuChi === 'CLO4.2')?.diemCham
-
-  const num41 = score41 !== undefined ? Number(score41) : null
-  const num42 = score42 !== undefined ? Number(score42) : null
+  const point41 = enterprisePrintScore(intern.chiTietDiemDN, 'CLO4.1', 2)
+  const point42 = enterprisePrintScore(intern.chiTietDiemDN, 'CLO4.2', 3)
+  const num41 = point41.score
+  const num42 = point42.score
   // Quy đổi ngược về thang 10 tương ứng trên phiếu giấy
-  const scorePhongCach10 = num41 !== null ? (num41 * 5).toFixed(1) : ''
-  const scoreChuyenMon10 = num42 !== null ? (num42 * (10 / 3)).toFixed(1) : ''
+  const scorePhongCach10 = point41.scoreOutOfTen
+  const scoreChuyenMon10 = point42.scoreOutOfTen
+  const internshipName = intern.maLoaiThucTap === 'TTNN' ? 'THỰC TẬP NGHỀ NGHIỆP'
+    : intern.maLoaiThucTap === 'TTKS' ? 'THỰC TẬP KỸ SƯ' : 'THỰC TẬP'
 
   const handlePrint = () => {
     window.print()
@@ -153,7 +156,7 @@ function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
             {/* Tiêu đề phiếu */}
             <div className="text-center my-5">
               <h2 className="font-bold uppercase text-lg tracking-wide text-slate-900">
-                PHIẾU NHẬN XÉT SINH VIÊN THỰC TẬP
+                PHIẾU NHẬN XÉT SINH VIÊN {internshipName}
               </h2>
             </div>
 
@@ -274,7 +277,7 @@ function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">Thang 10 tương ứng: {scorePhongCach10 ? `${scorePhongCach10} / 10đ` : '—'}</div>
                   <div className="text-base font-black text-indigo-950 mt-1">
-                    Điểm chuẩn CLO4.1: {num41 !== null ? `${num41.toFixed(2)} / 2.00đ` : '—'}
+                    Điểm chuẩn CLO4.1: {num41 !== null ? `${num41.toFixed(2)} / ${point41.maximum.toFixed(2)}đ` : '—'}
                   </div>
                 </div>
 
@@ -284,13 +287,13 @@ function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
                   </div>
                   <div className="text-[11px] text-slate-500 mt-0.5">Thang 10 tương ứng: {scoreChuyenMon10 ? `${scoreChuyenMon10} / 10đ` : '—'}</div>
                   <div className="text-base font-black text-indigo-950 mt-1">
-                    Điểm chuẩn CLO4.2: {num42 !== null ? `${num42.toFixed(2)} / 3.00đ` : '—'}
+                    Điểm chuẩn CLO4.2: {num42 !== null ? `${num42.toFixed(2)} / ${point42.maximum.toFixed(2)}đ` : '—'}
                   </div>
                 </div>
               </div>
 
               <div className="text-right font-black text-sm text-slate-900 pr-2">
-                TỔNG ĐIỂM DOANH NGHIỆP: {(num41 !== null && num42 !== null) ? `${(num41 + num42).toFixed(2)} / 5.00 điểm` : '—'}
+                TỔNG ĐIỂM DOANH NGHIỆP: {(num41 !== null && num42 !== null) ? `${(num41 + num42).toFixed(2)} / ${(point41.maximum + point42.maximum).toFixed(2)} điểm` : '—'}
               </div>
             </div>
 
@@ -334,7 +337,8 @@ function GradeInternModal({
   drafts,
   deadline,
 }) {
-  const isLocked = Boolean(intern.daKhoaDiem)
+  const correctingSubmitted = Boolean(intern.daKhoaDiem && deadline.canCorrectSubmitted)
+  const isLocked = Boolean(intern.daKhoaDiem && !correctingSubmitted)
   const [criteria, setCriteria] = useState([])
   const [scores, setScores] = useState(() => drafts.current[intern.maPhanBo]?.scores || {})
   const [review, setReview] = useState(() => drafts.current[intern.maPhanBo]?.review ?? intern.danhGia ?? '')
@@ -420,11 +424,14 @@ function GradeInternModal({
   // Lưu điểm tạm (khoaChinhThuc = false)
   const performSave = async (khoaChinhThuc = false) => {
     const chiTiets = validateAndPrepare()
+    if (correctingSubmitted && chiTiets.length !== criteria.length) {
+      throw new Error('Vui lòng nhập đủ tiêu chí trước khi lưu đính chính phiếu đã nộp.')
+    }
     await doanhNghiepService.danhGia({
       maPhanBo: intern.maPhanBo,
       chiTiets,
       nhanXet: review.trim(),
-      khoaChinhThuc,
+      khoaChinhThuc: khoaChinhThuc || correctingSubmitted,
     })
     delete drafts.current[intern.maPhanBo]
     await onSaved()
@@ -436,7 +443,7 @@ function GradeInternModal({
     setError('')
     try {
       await performSave(false)
-      setSaveToast('Đã lưu điểm và nhận xét thành công (lưu tạm)!')
+      setSaveToast(correctingSubmitted ? 'Đã lưu đính chính phiếu đánh giá.' : 'Đã lưu tạm điểm và nhận xét.')
       setTimeout(() => setSaveToast(''), 3000)
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Không thể lưu kết quả đánh giá.')
@@ -518,6 +525,9 @@ function GradeInternModal({
                       <span className="material-symbols-outlined text-[13px]">lock</span>
                       Đã nộp & Khóa điểm
                     </span>
+                  )}
+                  {correctingSubmitted && (
+                    <span className="text-xs font-semibold text-indigo-700">Đang mở đính chính</span>
                   )}
                 </div>
                 <div className="text-xs text-indigo-700 font-medium mt-0.5">
@@ -793,8 +803,9 @@ function GradeInternModal({
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div className="text-[11px] text-slate-500 italic">
               {isLocked
-                ? 'Bảng điểm đã được khóa chính thức và đồng bộ học vụ Khoa CNTT.'
-                : 'Điểm và nhận xét sẽ được đồng bộ trực tiếp sang hệ thống quản lý học vụ Khoa CNTT.'}
+                ? 'Phiếu đã nộp chính thức. Liên hệ Khoa nếu cần đính chính.'
+                : correctingSubmitted ? 'Khoa đã mở đính chính có thời hạn. Phiếu đã nộp được giữ trong lịch sử chốt.'
+                : 'Lưu tạm để tiếp tục chỉnh sửa; nộp chính thức khi đã kiểm tra đủ điểm.'}
             </div>
 
             <div className="flex items-center gap-2 justify-end">
@@ -814,10 +825,10 @@ function GradeInternModal({
                     onClick={handleSaveOnly}
                     disabled={busy || !deadline.canGrade}
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs shadow-2xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Lưu điểm tạm (vẫn có thể chỉnh sửa lại)"
+                    title={correctingSubmitted ? 'Lưu đính chính phiếu đã nộp' : 'Lưu tạm điểm đánh giá'}
                   >
                     <span className="material-symbols-outlined text-[16px]">{busy ? 'sync' : 'save'}</span>
-                    <span>{busy ? 'Đang lưu…' : 'Lưu tạm'}</span>
+                    <span>{busy ? 'Đang lưu…' : correctingSubmitted ? 'Lưu đính chính' : 'Lưu tạm'}</span>
                   </button>
 
                   <button
@@ -828,7 +839,7 @@ function GradeInternModal({
                     title="Nộp bảng điểm chính thức và khóa không cho chỉnh sửa thêm"
                   >
                     <span className="material-symbols-outlined text-[16px]">lock</span>
-                    <span>Nộp & Khóa điểm chính thức</span>
+                    <span>{correctingSubmitted ? 'Xác nhận đính chính' : 'Nộp & Khóa điểm chính thức'}</span>
                   </button>
 
                   {hasNext && (
@@ -897,10 +908,9 @@ export default function DanhGiaThucTapSinhPage() {
       if (version === requestVersion.current) {
         const list = Array.isArray(data) ? data : []
         setInterns(list)
-        if (activeModalIntern) {
-          const updated = list.find((x) => x.maPhanBo === activeModalIntern.maPhanBo)
-          if (updated) setActiveModalIntern(updated)
-        }
+        setActiveModalIntern(previous => previous
+          ? list.find((x) => x.maPhanBo === previous.maPhanBo) || previous
+          : previous)
       }
     } catch (err) {
       if (version === requestVersion.current) {
@@ -910,7 +920,7 @@ export default function DanhGiaThucTapSinhPage() {
     } finally {
       if (version === requestVersion.current) setLoading(false)
     }
-  }, [activeCompany?.maCongTy, maDot, companyLoading, activeModalIntern])
+  }, [activeCompany?.maCongTy, maDot, companyLoading])
 
   useEffect(() => {
     const activeRequestVersion = requestVersion
@@ -929,7 +939,7 @@ export default function DanhGiaThucTapSinhPage() {
         (item.maSinhVien && item.maSinhVien.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (item.viTriThucTap && item.viTriThucTap.toLowerCase().includes(searchTerm.toLowerCase()))
 
-      const isGraded = item.chiTietDiemDN && item.chiTietDiemDN.length >= 2
+      const isGraded = enterpriseGradeComplete(item)
       const isLocked = Boolean(item.daKhoaDiem)
 
       if (statusFilter === 'LOCKED') return matchSearch && isLocked
@@ -944,19 +954,10 @@ export default function DanhGiaThucTapSinhPage() {
   // Thống kê nhanh
   const totalCount = interns.length
   const lockedCount = interns.filter((x) => x.daKhoaDiem).length
-  const draftCount = interns.filter((x) => x.chiTietDiemDN && x.chiTietDiemDN.length >= 2 && !x.daKhoaDiem).length
-  const pendingCount = totalCount - (lockedCount + draftCount)
-  const gradedCount = lockedCount + draftCount
-
-  const avgScore =
-    gradedCount > 0
-      ? (
-          interns.reduce((sum, x) => {
-            const s = (x.chiTietDiemDN || []).reduce((acc, c) => acc + (Number(c.diemCham) || 0), 0)
-            return sum + s
-          }, 0) / gradedCount
-        ).toFixed(2)
-      : '0.00'
+  const draftCount = interns.filter((x) => enterpriseGradeComplete(x) && !x.daKhoaDiem).length
+  const gradedCount = interns.filter(enterpriseGradeComplete).length
+  const pendingCount = totalCount - gradedCount
+  const incompleteLockedCount = interns.filter((x) => x.daKhoaDiem && !enterpriseGradeComplete(x)).length
 
   const progressPercent = totalCount > 0 ? Math.round((gradedCount / totalCount) * 100) : 0
 
@@ -980,7 +981,7 @@ export default function DanhGiaThucTapSinhPage() {
       setToastMessage(`Đã nộp và khóa điểm chính thức cho sinh viên ${lockingIntern.hoTenSV} thành công!`)
       setTimeout(() => setToastMessage(''), 4000)
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể khóa điểm.')
+      toast.error(err.response?.data?.message || err.message || 'Không thể khóa điểm.')
     } finally {
       setLockRowBusy(false)
     }
@@ -1068,7 +1069,7 @@ export default function DanhGiaThucTapSinhPage() {
               <span className="material-symbols-outlined text-[18px] text-emerald-600">lock</span>
             </div>
             <div className="text-2xl font-black text-emerald-900">{lockedCount}</div>
-            <div className="text-[10px] text-emerald-700 mt-0.5">Đã nộp kết quả đến Khoa</div>
+            <div className="text-[10px] text-emerald-700 mt-0.5">Trạng thái khóa trên hồ sơ</div>
           </div>
 
           <div className="bg-blue-50/60 border border-blue-200/70 rounded-xl p-3.5">
@@ -1093,6 +1094,13 @@ export default function DanhGiaThucTapSinhPage() {
 
       {/* Thông báo thời hạn chấm điểm duy nhất cho toàn trang */}
       <GradeDeadlineNotice deadline={globalDeadline} group="DN" />
+
+      {incompleteLockedCount > 0 && (
+        <div role="status" className="p-3 rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm">
+          Có {incompleteLockedCount} hồ sơ đã khóa nhưng thiếu điểm hợp lệ theo bộ tiêu chí của đợt. Liên hệ Khoa để rà soát.
+          <button type="button" onClick={() => setStatusFilter('PENDING')} className="ml-2 font-semibold underline">Xem hồ sơ thiếu điểm</button>
+        </div>
+      )}
 
       {/* Thông báo lỗi nếu có */}
       {error && (
@@ -1243,17 +1251,17 @@ export default function DanhGiaThucTapSinhPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {pagination.items.map((intern, idx) => {
-                  const score41 = (intern.chiTietDiemDN || []).find((x) => x.maTieuChi === 'CLO4.1')?.diemCham
-                  const score42 = (intern.chiTietDiemDN || []).find((x) => x.maTieuChi === 'CLO4.2')?.diemCham
-                  const total = (Number(score41) || 0) + (Number(score42) || 0)
-                  const isGraded = score41 !== undefined && score42 !== undefined
+                  const score41 = enterprisePrintScore(intern.chiTietDiemDN, 'CLO4.1', 2).score
+                  const score42 = enterprisePrintScore(intern.chiTietDiemDN, 'CLO4.2', 3).score
+                  const isGraded = enterpriseGradeComplete(intern)
+                  const total = isGraded && score41 !== null && score42 !== null ? score41 + score42 : null
                   const isLocked = Boolean(intern.daKhoaDiem)
 
                   return (
                     <tr key={intern.maPhanBo} className="hover:bg-slate-50/80 transition-colors">
                       {/* STT */}
                       <td className="py-3.5 px-4 text-center font-bold text-slate-400">
-                        {pagination.startIndex + idx + 1}
+                        {pagination.start + idx}
                       </td>
 
                       {/* Thông tin Sinh viên */}
@@ -1285,7 +1293,7 @@ export default function DanhGiaThucTapSinhPage() {
 
                       {/* CLO4.1 */}
                       <td className="py-3.5 px-3 text-center font-bold">
-                        {score41 !== undefined ? (
+                        {score41 !== null ? (
                           <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 font-extrabold">
                             {Number(score41).toFixed(2)}
                           </span>
@@ -1296,7 +1304,7 @@ export default function DanhGiaThucTapSinhPage() {
 
                       {/* CLO4.2 */}
                       <td className="py-3.5 px-3 text-center font-bold">
-                        {score42 !== undefined ? (
+                        {score42 !== null ? (
                           <span className="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100 font-extrabold">
                             {Number(score42).toFixed(2)}
                           </span>
@@ -1316,7 +1324,7 @@ export default function DanhGiaThucTapSinhPage() {
                               : 'bg-slate-100 text-slate-400'
                           }`}
                         >
-                          {total.toFixed(2)}
+                          {total !== null ? total.toFixed(2) : '—'}
                           <span className="text-[10px] font-normal text-slate-400 ml-1">/ 5.0</span>
                         </span>
                       </td>
@@ -1337,7 +1345,7 @@ export default function DanhGiaThucTapSinhPage() {
                         {isLocked ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
                             <span className="material-symbols-outlined text-[13px] text-emerald-700">lock</span>
-                            <span>Đã khóa chính thức</span>
+                            <span>{isGraded ? 'Đã khóa chính thức' : 'Đã khóa · thiếu điểm'}</span>
                           </span>
                         ) : isGraded ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
@@ -1380,7 +1388,7 @@ export default function DanhGiaThucTapSinhPage() {
                             <span className="material-symbols-outlined text-[15px]">
                               {isLocked ? 'visibility' : isGraded ? 'edit' : 'edit_square'}
                             </span>
-                            <span>{isLocked ? 'Xem chi tiết' : isGraded ? 'Sửa điểm' : 'Chấm điểm'}</span>
+                            <span>{isLocked && globalDeadline.canCorrectSubmitted ? 'Đính chính điểm' : isLocked ? 'Xem chi tiết' : isGraded ? 'Sửa điểm' : 'Chấm điểm'}</span>
                           </button>
 
                           {/* Nút Khóa nhanh từ bảng nếu đã có đủ điểm nhưng chưa khóa */}

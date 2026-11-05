@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
@@ -10,6 +11,7 @@ import { restoreEnterpriseScores } from '../../utils/diemDoanhNghiep'
 import { buildLecturerDetails, restoreLecturerScores, summarizeGrade } from '../../utils/diemGiangVien'
 import { useGradeDeadline } from '../../hooks/useGradeDeadline'
 import GradeDeadlineNotice from '../../components/common/GradeDeadlineNotice'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 
 export default function ChamDiemCLOPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -87,6 +89,9 @@ export default function ChamDiemCLOPage() {
           lop: x.sinhVien?.lop || x.lop || '—',
           chuyenNganh: x.sinhVien?.chuyenNganh || x.chuyenNganh || 'Công nghệ thông tin',
           tenCongTy: x.congTy?.tenCongTy || x.tenCongTy || 'Chưa phân bổ',
+          maLoaiThucTap: x.maLoaiThucTap || x.dotThucTap?.maLoaiThucTap,
+          tenDot: x.tenDot || x.dotThucTap?.tenDot,
+          maRubric: x.maRubric || x.dotThucTap?.maRubric,
         }))
         setStudents(mapped)
 
@@ -191,7 +196,7 @@ export default function ChamDiemCLOPage() {
   const student = students.find((x) => x.maSV === maSV)
   const currentLecturer = lecturers.find((l) => l.maGV === maGV)
   const lecturerFullName = currentLecturer?.hoTen || user?.hoTen || 'Giảng viên hướng dẫn'
-  const lecturerDisplayName = currentLecturer?.hoTen ? `ThS. ${currentLecturer.hoTen}` : lecturerFullName
+  const lecturerDisplayName = lecturerFullName
 
   const summary = summarizeGrade(criteria, scores)
   const total = summary.total
@@ -249,7 +254,7 @@ export default function ChamDiemCLOPage() {
     if (!student || !selectedDot?.maDot || !ready || !canEdit || saving) return
     try {
       const chiTiets = buildLecturerDetails(manualCriteria, scores)
-      if (!chiTiets.length) return alert('Vui lòng nhập ít nhất một tiêu chí điểm GV trước khi lưu.')
+      if (!chiTiets.length) return toast.warning('Vui lòng nhập ít nhất một tiêu chí điểm GV trước khi lưu.')
       setSaving(true)
       const response = await phieuChamDiemService.chamDiem({
         maSV: student.maSV,
@@ -287,7 +292,7 @@ export default function ChamDiemCLOPage() {
         setMessage(baseMsg)
       }
     } catch (error) {
-      alert(`Không thể lưu phiếu chấm: ${error.response?.data?.message || error.message}`)
+      toast.error(`Không thể lưu phiếu chấm: ${error.response?.data?.message || error.message}`)
     } finally {
       setSaving(false)
     }
@@ -299,7 +304,7 @@ export default function ChamDiemCLOPage() {
       {/* Header */}
       <header className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
         <div>
-          <p className="text-xs font-bold uppercase text-blue-600">{selectedDot?.tenDot || 'Chọn đợt thực tập'}</p>
+          <p className="text-xs font-bold uppercase text-blue-600">{formatTenDot(selectedDot)}</p>
           <h1 className="text-xl font-bold text-slate-900">Đánh giá thực tập theo rubric CNTT</h1>
           <p className="text-sm text-slate-500">CLO1–CLO3 do GV nhập trực tiếp. Điểm doanh nghiệp do doanh nghiệp cập nhật, GVHD chỉ xem.</p>
         </div>
@@ -417,11 +422,14 @@ export default function ChamDiemCLOPage() {
                 onChange={(e) => handleSelectStudent(e.target.value)}
                 className="w-full border border-slate-300 rounded-xl p-3 font-semibold text-slate-800 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {students.map((s) => (
-                  <option key={s.maSV} value={s.maSV}>
-                    {s.hoTen} ({s.maSV}) — {s.lop}
-                  </option>
-                ))}
+                {students.map((s) => {
+                  const sInfo = getLoaiThucTapInfo(s.maLoaiThucTap ? { maLoaiThucTap: s.maLoaiThucTap, tenDot: s.tenDot } : selectedDot)
+                  return (
+                    <option key={s.maSV} value={s.maSV}>
+                      {s.hoTen} ({s.maSV}) — {s.lop} [{sInfo.shortLabel}]
+                    </option>
+                  )
+                })}
               </select>
             ) : isErrorMessage ? (
               <div className="p-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl font-medium">
@@ -433,9 +441,23 @@ export default function ChamDiemCLOPage() {
               </div>
             )}
           </div>
-          <p className="mt-3 text-sm text-slate-600 truncate" title={student?.tenCongTy || '-'}>
-            Doanh nghiệp: <b>{student?.tenCongTy || '-'}</b>
-          </p>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-500">Chương trình:</span>
+              {(() => {
+                const sInfo = getLoaiThucTapInfo(student?.maLoaiThucTap ? { maLoaiThucTap: student.maLoaiThucTap, tenDot: student.tenDot } : selectedDot)
+                return (
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold border ${sInfo.badgeClass}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                    {sInfo.label} ({sInfo.tieuChiCount} CLO)
+                  </span>
+                )
+              })()}
+            </div>
+            <p className="text-xs text-slate-600 truncate m-0" title={student?.tenCongTy || '-'}>
+              Doanh nghiệp: <b>{student?.tenCongTy || '-'}</b>
+            </p>
+          </div>
         </div>
 
         {/* Tổng điểm */}

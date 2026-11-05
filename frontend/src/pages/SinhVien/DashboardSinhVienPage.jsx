@@ -11,6 +11,7 @@ import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import { PHAN_BO } from '../../utils/trangThai'
 import { studentJourney } from '../../utils/studentJourney'
 import DanhSachDuKienPanel from '../../components/common/DanhSachDuKienPanel'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 
 export default function DashboardSinhVienPage() {
   const { user, maSV: currentMaSV } = useIdentity()
@@ -22,11 +23,13 @@ export default function DashboardSinhVienPage() {
   const [registrations, setRegistrations] = useState([])
   const [phieuDiem, setPhieuDiem] = useState(null)
   const [dieuKien, setDieuKien] = useState(null)
+  const [registrationContext, setRegistrationContext] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     let active = true
     setProfile(null); setPlacement(null); setReports([]); setRegistrations([]); setPhieuDiem(null); setDieuKien(null)
+    setRegistrationContext(null)
     if (!currentMaSV || !selectedDot?.maDot) {
       setLoading(false)
       return () => { active = false }
@@ -35,7 +38,7 @@ export default function DashboardSinhVienPage() {
     const fetchData = async () => {
       setLoading(true)
       try {
-        const [profData, pbData, repData, dkData, diemData, dkDieuKien] = await Promise.allSettled([
+        const [profData, pbData, repData, dkData, diemData, dkDieuKien, registrationInfo] = await Promise.allSettled([
           hoSoNangLucService.getHoSoBySinhVien(currentMaSV),
           phongVanService.getPhanBoThucTap(currentMaSV, selectedDot.maDot),
           tienDoThucTapService.getTienDoBySinhVien(currentMaSV, selectedDot?.maDot),
@@ -46,6 +49,7 @@ export default function DashboardSinhVienPage() {
           selectedDot?.maDot
             ? dangKyThucTapService.getDieuKien(selectedDot.maDot)
             : Promise.resolve(null),
+          dangKyThucTapService.getLanDangKy(selectedDot.maDot),
         ])
         if (!active) return
 
@@ -61,6 +65,7 @@ export default function DashboardSinhVienPage() {
         // apiClient trả về response axios → body là { success, data }
         if (diemData.status === 'fulfilled') setPhieuDiem(diemData.value?.data?.data ?? null)
         if (dkDieuKien.status === 'fulfilled') setDieuKien(dkDieuKien.value || null)
+        if (registrationInfo.status === 'fulfilled') setRegistrationContext(registrationInfo.value || null)
       } catch (err) {
         console.error('Lỗi khi tải dữ liệu bảng điều khiển:', err)
       } finally {
@@ -89,6 +94,8 @@ export default function DashboardSinhVienPage() {
   const daHoanThanhHocPhan = Boolean(dieuKien && !dieuKien.duocDangKy && dieuKien.lyDo?.includes('đạt học phần'))
   const daTrungTuyen = registrations.some((r) => r.daTiepNhan)
   const soHoSoDat = registrations.filter((r) => r.trangThai === 'DaDuyet' && !r.daTiepNhan).length
+  const coHoSoDangXuLy = registrations.some((r) => ['ChoDuyet', 'DaDuyet'].includes(r.trangThai))
+  const remainingExtra = registrationContext?.duocDangKy ? (registrationContext.cacLanHoTro || []).filter(s => s.dangKyBoSung).reduce((n, s) => n + s.soLuotConLai, 0) : 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -102,10 +109,20 @@ export default function DashboardSinhVienPage() {
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight m-0">
             Bảng Điều Khiển Sinh Viên
           </h1>
-          <p className="text-sm text-slate-500 mt-1 mb-0">
-            Chào mừng {profile?.hoTen || user?.hoTen || user?.tenDangNhap || 'Sinh viên'} (MSSV: {currentMaSV})
-            {selectedDot ? ` • ${selectedDot.tenDot}` : ''}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <span className="text-sm text-slate-600">
+              Chào mừng {profile?.hoTen || user?.hoTen || user?.tenDangNhap || 'Sinh viên'} (MSSV: <b>{currentMaSV}</b>)
+            </span>
+            {selectedDot && (
+              <>
+                <span className="text-slate-300">•</span>
+                <span className="text-xs font-semibold text-slate-700">{formatTenDot(selectedDot)}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+                  {getLoaiThucTapInfo(selectedDot).label}
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -149,11 +166,20 @@ export default function DashboardSinhVienPage() {
             <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs flex flex-col xl:flex-row gap-6 justify-between items-stretch">
               <div className="flex-1 flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                      {placement.tenDot || selectedDot?.tenDot || 'Đợt thực tập'}
+                      {formatTenDot(placement?.tenDot || selectedDot)}
                     </span>
+                    {(() => {
+                      const info = getLoaiThucTapInfo(placement?.maLoaiThucTap ? { maLoaiThucTap: placement.maLoaiThucTap, tenDot: placement.tenDot } : selectedDot)
+                      return (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold border ${info.badgeClass}`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                          {info.label} ({info.code})
+                        </span>
+                      )
+                    })()}
                     {placement.maPhanBo && (
                       <span className="text-xs text-slate-400 font-mono">Mã PB: {placement.maPhanBo}</span>
                     )}
@@ -231,7 +257,15 @@ export default function DashboardSinhVienPage() {
                     </Link>
                   )}
                 </div>
-                <div className="pt-3 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
+                <div className="pt-2.5 border-t border-slate-700/80 flex items-center justify-between text-xs text-slate-300">
+                  <span>Học phần thực tập:</span>
+                  <span className="text-white font-bold">{getLoaiThucTapInfo(placement?.maLoaiThucTap ? { maLoaiThucTap: placement.maLoaiThucTap, tenDot: placement.tenDot } : selectedDot).label}</span>
+                </div>
+                <div className="pt-1.5 flex items-center justify-between text-xs text-slate-300">
+                  <span>Thời lượng chuẩn:</span>
+                  <span className="text-emerald-400 font-semibold">12 tuần</span>
+                </div>
+                <div className="pt-1.5 flex items-center justify-between text-xs text-slate-300">
                   <span>Mã đợt thực tập:</span>
                   <span className="text-white font-mono font-bold">{selectedDot?.maDot || placement.maDot || '—'}</span>
                 </div>
@@ -269,12 +303,18 @@ export default function DashboardSinhVienPage() {
                 <span className="material-symbols-outlined text-3xl">corporate_fare</span>
               </div>
               <h3 className="text-lg font-bold text-slate-900 m-0">
-                {registrations.length > 0 ? 'Đang trong quá trình xét duyệt nguyện vọng' : 'Chưa có quyết định phân bổ'}
+                {coHoSoDangXuLy ? 'Đang xử lý hồ sơ ứng tuyển' : remainingExtra > 0 ? 'Được đăng ký bổ sung theo hỗ trợ' : registrations.length >= 3 ? 'Cần Khoa hỗ trợ bố trí' : 'Chưa có quyết định phân bổ'}
               </h3>
               <p className="text-slate-500 text-xs max-w-lg mx-auto mt-1.5 mb-6 leading-relaxed">
-                {registrations.length > 0
-                  ? `Bạn đã đăng ký ${registrations.length}/3 nguyện vọng trong đợt này. Vui lòng theo dõi kết quả sơ tuyển hồ sơ và lịch phỏng vấn của doanh nghiệp.`
-                  : 'Bạn chưa được phân bổ vào doanh nghiệp tiếp nhận thực tập trong đợt này. Hãy tham gia đăng ký nguyện vọng vào các doanh nghiệp đang tuyển dụng hoặc đề xuất đơn vị tiếp nhận tự tìm.'}
+                {coHoSoDangXuLy
+                  ? `Bạn đã dùng ${registrations.length} lượt trong đợt này. Theo dõi hồ sơ hiện tại; chỉ ứng tuyển công ty khác sau khi hồ sơ đã kết thúc.`
+                  : remainingExtra > 0
+                    ? `Khoa đã mở bổ sung; bạn còn ${remainingExtra} lượt có hiệu lực. Xem thời hạn tại trang đăng ký, mỗi lần chỉ ứng tuyển một công ty.`
+                  : registrations.length >= 3
+                    ? 'Bạn đã dùng đủ 3 lượt và chưa có nơi tiếp nhận. Liên hệ Khoa để được hỗ trợ bố trí nơi thực tập.'
+                    : registrations.length > 0
+                      ? `Hồ sơ trước đã kết thúc. Bạn còn ${3 - registrations.length} lượt để ứng tuyển công ty khác nếu vị trí còn thời hạn và chỉ tiêu.`
+                      : 'Mỗi thời điểm chỉ ứng tuyển một công ty, có 3 lượt thông thường; lượt bổ sung do Khoa chấp thuận riêng. Nếu đã được đơn vị tiếp nhận bên ngoài, khai báo nơi tự tìm để Khoa xác minh.'}
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <Link
@@ -282,7 +322,7 @@ export default function DashboardSinhVienPage() {
                   className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 shadow-xs transition-all cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[18px]">domain</span>
-                  <span>{registrations.length > 0 ? 'Theo dõi nguyện vọng' : 'Xem doanh nghiệp tuyển dụng'}</span>
+                  <span>{coHoSoDangXuLy ? 'Theo dõi hồ sơ ứng tuyển' : remainingExtra > 0 ? 'Đăng ký bổ sung' : registrations.length >= 3 ? 'Xem hồ sơ và hỗ trợ' : 'Xem doanh nghiệp tiếp nhận'}</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </Link>
                 {registrations.length === 0 ? (
@@ -352,7 +392,7 @@ export default function DashboardSinhVienPage() {
               </div>
               <div className="mt-3">
                 <div className="text-2xl font-extrabold text-slate-900">
-                  {registrations.length} <span className="text-sm font-normal text-slate-400">/ 3</span>
+                  {registrations.length} <span className="text-sm font-normal text-slate-400">lượt đã dùng</span>
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
                   {daHoanThanhHocPhan
@@ -367,7 +407,7 @@ export default function DashboardSinhVienPage() {
                             ? `${registrations.filter((r) => r.trangThai === 'ChoDuyet').length} hồ sơ đang chờ xét duyệt`
                             : 'Chưa có nguyện vọng được duyệt'}
                 </div>
-                <div className="text-xs text-slate-400 mt-1">Tối đa 3 nguyện vọng/đợt</div>
+                <div className="text-xs text-slate-400 mt-1">3 lượt thông thường; bổ sung theo quyết định của Khoa</div>
               </div>
             </div>
 

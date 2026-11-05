@@ -167,7 +167,9 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
       const a = document.createElement('a')
       a.href = url
       a.download = `lich-su-${maDot}-${item.phienBan}-${item.loai}.json`
+      document.body.appendChild(a)
       a.click()
+      a.remove()
       URL.revokeObjectURL(url)
     } catch {
       setErrorMsg('Không tải được bản lưu trữ lịch sử.')
@@ -433,8 +435,7 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-relaxed m-0">
-                    Sinh viên đã hoàn thành thực tập nhưng GVHD hoặc Doanh nghiệp chưa gửi đủ điểm rubric. 
-                    Khoa có thể <strong>đôn đốc chấm online</strong>, <strong>nhập điểm từ phiếu giấy</strong> bằng nút <span className="font-semibold text-emerald-700">"Nhập điểm học vụ"</span>, hoặc <strong>gia hạn chấm điểm</strong> nếu đã hết hạn.
+                    Sinh viên đã hoàn thành thực tập nhưng Giảng viên hướng dẫn hoặc Doanh nghiệp chưa gửi đủ điểm đánh giá rubric. Khoa vui lòng <strong>liên hệ đôn đốc Giảng viên / Doanh nghiệp hoàn tất chấm điểm trực tuyến</strong>, hoặc <strong>gia hạn thời hạn chấm điểm</strong> nếu đợt chấm đã hết hạn.
                   </p>
                   <div className="flex items-center gap-2 pt-1 flex-wrap">
                     <Link
@@ -451,7 +452,7 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
               <div className="p-3 bg-white/70 rounded-xl border border-amber-200/60 text-[11px] text-slate-600 flex items-start gap-2">
                 <span className="material-symbols-outlined text-amber-600 text-base shrink-0 mt-0.5">info</span>
                 <div>
-                  <strong>Quy định học vụ về nút "Xét dừng TT":</strong> Chỉ áp dụng cho các trường hợp sinh viên thực tế đã bỏ học, dừng thực tập hoặc chuyển đợt có xác nhận / biên bản của Khoa. Tuyệt đối không dùng nút này để giải quyết các trường hợp sinh viên đang chờ GV/DN hoàn thành chấm điểm.
+                  <strong>Lưu ý quy chế học vụ:</strong> Quyết định xác nhận không hoàn tất chỉ áp dụng đối với sinh viên thực tế đã có đơn hoặc biên bản xác nhận dừng thực tập, thôi học hoặc chuyển đợt được Khoa phê duyệt. Tuyệt đối không áp dụng đối với sinh viên đang trong quá trình chờ Giảng viên hoặc Doanh nghiệp hoàn thành đánh giá.
                 </div>
               </div>
             </div>
@@ -630,15 +631,15 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
                                 </Link>
                               )}
 
-                              {/* Nếu thiếu điểm: Cho phép Khoa nhập điểm học vụ từ phiếu điểm giấy */}
-                              {(x.thieuGV || x.thieuDN || (!x.duDiem && !x.khongHoanTat)) && (
+                              {/* Nếu thiếu điểm: Cho phép dẫn đến Quản lý hạn nộp & gia hạn chấm điểm */}
+                              {(x.thieuGV || x.thieuDN) && (
                                 <Link
-                                  to={`/khoa/cham-diem?sv=${x.maSV}`}
-                                  className="px-2.5 py-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors inline-flex items-center gap-1"
-                                  title="Nhập điểm học vụ từ phiếu đánh giá bản cứng"
+                                  to="/khoa/han-bao-cao"
+                                  className="px-2.5 py-1 text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors inline-flex items-center gap-1"
+                                  title="Xem và điều chỉnh gia hạn thời hạn chấm điểm cho Giảng viên hoặc Doanh nghiệp"
                                 >
-                                  <span className="material-symbols-outlined text-[13px]">edit_note</span>
-                                  <span>Nhập điểm học vụ</span>
+                                  <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                  <span>Gia hạn chấm</span>
                                 </Link>
                               )}
 
@@ -647,10 +648,11 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
                                 <button
                                   type="button"
                                   onClick={() => handlePickNonComplete(x.maSV)}
-                                  className="px-2.5 py-1 text-[11px] font-medium text-slate-500 hover:text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
-                                  title="Chỉ sử dụng khi sinh viên thực tế đã bỏ/dừng thực tập có xác minh của Khoa"
+                                  className="px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
+                                  title="Chỉ áp dụng khi sinh viên thực tế đã thôi học hoặc dừng thực tập có biên bản xác nhận của Khoa"
                                 >
-                                  <span>{x.khongHoanTat ? 'Xem xác nhận' : 'Xét dừng TT'}</span>
+                                  <span className="material-symbols-outlined text-[13px]">person_off</span>
+                                  <span>{x.khongHoanTat ? 'Xem xác nhận dừng' : 'Dừng thực tập'}</span>
                                 </button>
                               )}
                             </div>
@@ -773,7 +775,7 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
                     Xác nhận / Thu hồi kết quả Không hoàn tất
                   </h3>
                   <p className="text-xs text-slate-500 m-0 mt-0.5">
-                    Dành cho SV từng có nơi thực tập nhưng thực tế đã bỏ/dừng có xác minh của Khoa. Giữ lịch sử học vụ, tuyệt đối không tự cho 0 điểm.
+                    Áp dụng đối với sinh viên đã có quyết định hoặc biên bản xác nhận dừng thực tập / chuyển đợt. Bảo lưu dữ liệu học vụ, tuyệt đối không tự gán điểm 0.
                   </p>
                 </div>
               </div>
@@ -824,7 +826,7 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
                   className="rounded text-indigo-600 w-4 h-4"
                 />
                 <span className="font-medium">
-                  Khoa xác nhận sinh viên này thực tế đã bỏ hoặc dừng thực tập (không phải chỉ đang thiếu điểm chờ chấm).
+                  Khoa xác nhận sinh viên này thực tế đã nộp đơn/có biên bản dừng thực tập hoặc thôi học (không áp dụng đối với trường hợp đang chờ Giảng viên hoặc Doanh nghiệp gửi điểm).
                 </span>
               </label>
 

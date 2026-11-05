@@ -3,8 +3,9 @@ import { createPortal } from 'react-dom'
 
 // Lớp nền mờ cho popup: render thẳng vào <body> (portal) để luôn phủ trên header/sidebar cố định,
 // khóa cuộn trang phía sau, đóng bằng phím Esc hoặc bấm ra ngoài popup.
-export default function ModalOverlay({ children, onClose }) {
+export default function ModalOverlay({ children, onClose, isOpen = true }) {
   useEffect(() => {
+    if (!isOpen) return
     const prevOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     const onKey = (e) => {
@@ -15,7 +16,9 @@ export default function ModalOverlay({ children, onClose }) {
       document.body.style.overflow = prevOverflow
       window.removeEventListener('keydown', onKey)
     }
-  }, [onClose])
+  }, [onClose, isOpen])
+
+  if (!isOpen) return null
 
   return createPortal(
     <div

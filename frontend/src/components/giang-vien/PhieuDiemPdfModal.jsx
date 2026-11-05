@@ -16,7 +16,7 @@ export default function PhieuDiemPdfModal({
 }) {
   if (!isOpen || !currentStudent) return null
 
-  const clo1to3 = criteria.filter((c) => c.maCLO !== 'CLO4.1' && c.maCLO !== 'CLO4.2')
+  const clo1to3 = criteria.filter((c) => c.nhomDanhGia === 'GV' || (c.maCLO !== 'CLO4.1' && c.maCLO !== 'CLO4.2'))
   const clo41 = criteria.find((c) => c.maCLO === 'CLO4.1')
   const clo42 = criteria.find((c) => c.maCLO === 'CLO4.2')
 
@@ -30,6 +30,20 @@ export default function PhieuDiemPdfModal({
 
   const currentDate = new Date()
 
+  const title =
+    selectedDot?.maLoaiThucTap === 'TTKS'
+      ? 'PHIẾU ĐÁNH GIÁ KẾT QUẢ THỰC TẬP KỸ SƯ'
+      : selectedDot?.maLoaiThucTap === 'TTNN'
+      ? 'PHIẾU ĐÁNH GIÁ KẾT QUẢ THỰC TẬP NGHỀ NGHIỆP'
+      : 'PHIẾU ĐÁNH GIÁ KẾT QUẢ THỰC TẬP TỐT NGHIỆP'
+
+  const loaiLabel =
+    selectedDot?.maLoaiThucTap === 'TTKS'
+      ? 'Thực tập kỹ sư'
+      : selectedDot?.maLoaiThucTap === 'TTNN'
+      ? 'Thực tập nghề nghiệp'
+      : 'Thực tập tốt nghiệp'
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 p-4 flex items-center justify-center print:p-0 print:bg-white">
       <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[94vh] overflow-auto shadow-2xl print:max-w-none print:max-h-none print:shadow-none print:rounded-none">
@@ -37,7 +51,7 @@ export default function PhieuDiemPdfModal({
         <header className="p-4 bg-slate-900 text-white flex justify-between items-center print:hidden">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-blue-400">description</span>
-            <b className="text-sm">Bản in Phiếu đánh giá thực tập tốt nghiệp (Rubric CLO)</b>
+            <b className="text-sm">Bản in {title} (Rubric CLO)</b>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -80,10 +94,10 @@ export default function PhieuDiemPdfModal({
           <div className="text-center my-6 space-y-1">
             <p className="font-bold text-amber-800">BẢN XEM TRƯỚC — CHƯA PHẢI QUYẾT ĐỊNH CHỐT ĐIỂM{!summary.complete ? ' — CHƯA ĐỦ ĐIỂM' : ''}</p>
             <h1 className="text-base sm:text-lg font-black uppercase text-slate-900 tracking-wide">
-              PHIẾU ĐÁNH GIÁ KẾT QUẢ THỰC TẬP TỐT NGHIỆP
+              {title}
             </h1>
             <p className="font-semibold text-blue-800 text-xs">
-              {selectedDot?.tenDot || 'Đợt thực tập tốt nghiệp'} • Năm học: {selectedDot?.namHoc || '2026 - 2027'}
+              {selectedDot?.tenDot || 'Đợt thực tập'} • Năm học: {selectedDot?.namHoc || '2026 - 2027'} • Loại: {loaiLabel}
             </p>
             <p className="text-[11px] text-slate-500 italic">
               (Áp dụng chuẩn đầu ra CLO - Khung đánh giá kết hợp Giảng viên hướng dẫn &amp; Doanh nghiệp)

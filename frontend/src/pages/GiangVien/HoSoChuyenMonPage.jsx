@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
@@ -33,9 +34,8 @@ export default function HoSoChuyenMonPage() {
       if (data) {
         setProfile(data)
         setChuyenMon(data.chuyenMon || '')
-        const defaultEmail = currentMaGV === 'GV001' ? 'an.nv@huit.edu.vn' : `${currentMaGV.toLowerCase()}@huit.edu.vn`
-        setEmail(data.email && !data.email.startsWith('gv') ? data.email : defaultEmail)
-        setSoDienThoai(data.soDienThoai || '028.3816.1673')
+        setEmail(data.email || '')
+        setSoDienThoai(data.soDienThoai || '')
       }
     } catch (err) {
       console.error('Lỗi tải hồ sơ giảng viên:', err)
@@ -64,7 +64,7 @@ export default function HoSoChuyenMonPage() {
       setTimeout(() => setToastMessage(''), 4000)
       await fetchProfile()
     } catch (err) {
-      alert('Không thể cập nhật hồ sơ: ' + (err.response?.data?.message || err.message))
+      toast.error('Không thể cập nhật hồ sơ: ' + (err.response?.data?.message || err.message))
     } finally {
       setSaving(false)
     }
@@ -117,11 +117,11 @@ export default function HoSoChuyenMonPage() {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900 mt-4">{profile.hoTen}</h2>
                 <p className="text-xs font-semibold text-blue-600 mt-0.5">
-                  {profile.hocVi || 'ThS.'} • Mã GV: <span className="font-mono">{profile.maGV}</span>
+                  {profile.hocVi ? `${profile.hocVi} • ` : ''}Mã GV: <span className="font-mono">{profile.maGV}</span>
                 </p>
                 <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  <span>Tài khoản HUIT SSO đã xác thực</span>
+                  <span>Hồ sơ giảng viên</span>
                 </div>
               </div>
 

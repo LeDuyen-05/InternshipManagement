@@ -23,6 +23,11 @@ export default function GradeDeadlineNotice({ deadline, group }) {
           )}
         </span>
       </div>
+      {deadline.correctionUntil && (
+        <p className="text-indigo-800 text-xs font-medium pl-6">
+          Khoa mở lại đợt để đính chính đến {deadlineText(deadline.correctionUntil)}. Sau khi rà soát, Khoa thực hiện chốt lại.
+        </p>
+      )}
       {isActualBlock && !isDuplicateLockError && (
         <p className="text-amber-800 text-xs font-medium pl-6">{deadline.block}</p>
       )}

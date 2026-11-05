@@ -1,15 +1,26 @@
-import { useEffect, useState, useMemo, useRef } from 'react'
+import ExcelJS from 'exceljs'
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import apiClient from '../../services/api'
 import Layout from '../../components/Layout'
 import EnterpriseOnboardingPanel from '../../components/khoa/EnterpriseOnboardingPanel'
+import { downloadExcelResponse, parseBlobError } from '../../utils/exportHuitExcel'
+import { roleLabel } from '../../utils/roleLabels'
+import StudentImportPreview from '../../components/admin/StudentImportPreview'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState('accounts') // 'accounts' | 'enterprises'
-  const [accounts, setAccounts] = useState([])
+  const [pagedData, setPagedData] = useState({
+    items: [],
+    totalCount: 0,
+    page: 1,
+    pageSize: 20,
+    summary: { total: 0, hoatDong: 0, biKhoa: 0, chuaKichHoat: 0 },
+  })
   const [roles, setRoles] = useState([])
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [enterpriseList, setEnterpriseList] = useState([])
   const [enterpriseOwner, setEnterpriseOwner] = useState(null)
   const [enterpriseRefresh, setEnterpriseRefresh] = useState(0)
@@ -25,13 +36,33 @@ export default function AdminPage() {
 
   // State bộ lọc (Filter & Search)
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedRole, setSelectedRole] = useState('ALL')
   const [selectedStatus, setSelectedStatus] = useState('ALL')
+  const [selectedDot, setSelectedDot] = useState('ALL')
+  const [roundsList, setRoundsList] = useState([])
+
+  // Modal Nhập Excel tài khoản
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importPreview, setImportPreview] = useState(null)
+  const importVersion = useRef(0)
+  const [importRows, setImportRows] = useState([])
+  const [importFileName, setImportFileName] = useState('')
+  const [importModalError, setImportModalError] = useState('')
+  const [importModalSuccess, setImportModalSuccess] = useState('')
+  useEffect(() => {
+    importVersion.current++
+    setImportPreview(null)
+    setImportRows([])
+    setImporting(false)
+  }, [showImportModal])
 
   // State Phân trang (Pagination)
-  const [pageSize, setPageSize] = useState(10)
+  const [pageSize, setPageSize] = useState(20)
   const [currentPage, setCurrentPage] = useState(1)
   const [pageInput, setPageInput] = useState('')
+  const requestVersion = useRef(0)
 
   // State Modal Reset Mật khẩu
   const [confirmResetAccount, setConfirmResetAccount] = useState(null)
@@ -40,27 +71,83 @@ export default function AdminPage() {
 
   const formRef = useRef(null)
 
-  const load = async () => {
-    try {
-      setLoading(true)
-      const [a, r, eo] = await Promise.all([
-        apiClient.get('/admin/accounts'),
-        apiClient.get('/admin/roles'),
-        apiClient.get('/admin/enterprise-onboarding').catch(() => ({ data: [] })),
-      ])
-      setAccounts(Array.isArray(a.data) ? a.data : [])
-      setRoles(Array.isArray(r.data) ? r.data : [])
-      setEnterpriseList(Array.isArray(eo.data) ? eo.data : [])
-    } catch (e) {
-      setError(e.response?.data?.message || 'Không tải được dữ liệu người dùng & vai trò.')
-    } finally {
-      setLoading(false)
+  // Load metadata (roles, enterprise onboarding)
+  useEffect(() => {
+    async function loadMeta() {
+      try {
+        const [r, eo] = await Promise.all([
+          apiClient.get('/admin/roles'),
+          apiClient.get('/admin/enterprise-onboarding').catch(() => ({ data: [] })),
+        ])
+        setRoles(Array.isArray(r.data) ? r.data : [])
+        setEnterpriseList(Array.isArray(eo.data) ? eo.data : [])
+      } catch (_e) {
+        // ignore
+      }
     }
-  }
+    loadMeta()
+  }, [enterpriseRefresh])
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchKeyword.trim())
+      setCurrentPage(1)
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [searchKeyword])
+
+  // Load danh sách đợt thực tập để lọc
+  useEffect(() => {
+    async function loadRounds() {
+      try {
+        const res = await apiClient.get('/DotThucTap')
+        const list = Array.isArray(res.data) ? res.data : []
+        setRoundsList(list)
+      } catch {
+        setError('Không thể tải danh sách đợt thực tập để lọc tài khoản.')
+      }
+    }
+    loadRounds()
+  }, [])
+
+  // Load server paged accounts
+  const loadAccounts = useCallback(async () => {
+    const v = ++requestVersion.current
+    setLoading(true)
+    setError('')
+    try {
+      const cleanParams = {
+        page: currentPage,
+        pageSize: pageSize,
+      }
+      if (debouncedSearch) cleanParams.search = debouncedSearch
+      if (selectedRole && selectedRole !== 'ALL') cleanParams.maVaiTro = selectedRole
+      if (selectedStatus && selectedStatus !== 'ALL') cleanParams.trangThai = selectedStatus
+      if (selectedDot && selectedDot !== 'ALL') cleanParams.maDot = selectedDot
+
+      const res = await apiClient.get('/admin/accounts/paged', { params: cleanParams })
+      if (v === requestVersion.current) {
+        setPagedData(res.data || { items: [], totalCount: 0, page: 1, pageSize, summary: {} })
+      }
+    } catch (e) {
+      if (v === requestVersion.current) {
+        setError(e.response?.data?.message || 'Không tải được danh sách tài khoản.')
+      }
+    } finally {
+      if (v === requestVersion.current) setLoading(false)
+    }
+  }, [currentPage, pageSize, debouncedSearch, selectedRole, selectedStatus, selectedDot])
 
   useEffect(() => {
-    load()
-  }, [])
+    if (activeTab === 'accounts') {
+      loadAccounts()
+    }
+  }, [activeTab, loadAccounts])
+
+  const load = () => {
+    loadAccounts()
+  }
 
   const create = async (e) => {
     e.preventDefault()
@@ -133,50 +220,20 @@ export default function AdminPage() {
     }
   }
 
-  // Lọc tài khoản theo Search Keyword, Vai trò, Trạng thái
-  const filteredAccounts = useMemo(() => {
-    return accounts.filter((acc) => {
-      // 1. Lọc theo từ khóa (Mã TK, Tên đăng nhập, Mã SV/GV/ĐD)
-      if (searchKeyword.trim()) {
-        const kw = searchKeyword.trim().toLowerCase()
-        const matchTk = acc.maTaiKhoan?.toLowerCase().includes(kw)
-        const matchUser = acc.tenDangNhap?.toLowerCase().includes(kw)
-        const matchOwner =
-          acc.maSV?.toLowerCase().includes(kw) ||
-          acc.maGV?.toLowerCase().includes(kw) ||
-          acc.maDaiDien?.toLowerCase().includes(kw)
-        if (!matchTk && !matchUser && !matchOwner) return false
-      }
-
-      // 2. Lọc theo Vai trò
-      if (selectedRole !== 'ALL' && acc.maVaiTro !== selectedRole) {
-        return false
-      }
-
-      // 3. Lọc theo Trạng thái
-      if (selectedStatus !== 'ALL' && acc.trangThai !== selectedStatus) {
-        return false
-      }
-
-      return true
-    })
-  }, [accounts, searchKeyword, selectedRole, selectedStatus])
-
-  // Reset về trang 1 khi thay đổi bộ lọc
+  // Reset về trang 1 khi thay đổi bộ lọc vai trò, trạng thái hoặc pageSize
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchKeyword, selectedRole, selectedStatus, pageSize])
+  }, [selectedRole, selectedStatus, selectedDot, pageSize])
 
-  // Tính toán số liệu phân trang
-  const totalItems = filteredAccounts.length
+  // Tính toán số liệu phân trang server
+  const totalItems = pagedData.totalCount ?? 0
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const startIndex = (safeCurrentPage - 1) * pageSize
   const endIndex = Math.min(startIndex + pageSize, totalItems)
 
-  const paginatedAccounts = useMemo(() => {
-    return filteredAccounts.slice(startIndex, endIndex)
-  }, [filteredAccounts, startIndex, endIndex])
+  // Danh sách tài khoản trang hiện tại
+  const paginatedAccounts = pagedData.items || []
 
   // Tạo danh sách nút phân trang thông minh (kèm dấu ...)
   const getPaginationButtons = () => {
@@ -212,11 +269,182 @@ export default function AdminPage() {
     }
   }
 
-  // Thống kê nhanh KPI
-  const totalCount = accounts.length
-  const activeCount = accounts.filter((a) => a.trangThai === 'HoatDong').length
-  const pendingCount = accounts.filter((a) => a.trangThai === 'ChuaKichHoat').length
-  const lockedCount = accounts.filter((a) => a.trangThai === 'BiKhoa').length
+  // Trợ giúp lấy text an toàn từ ô Excel
+  const getCellText = (cell) => {
+    if (!cell || cell.value === null || cell.value === undefined) return ''
+    if (typeof cell.value === 'object') {
+      if (cell.value.text) return String(cell.value.text).trim()
+      if (Array.isArray(cell.value.richText)) return cell.value.richText.map(part => part.text || '').join('').trim()
+      if (cell.value.result !== undefined) return String(cell.value.result).trim()
+    }
+    if (typeof cell.value === 'number' && /^0+$/.test(cell.numFmt || '') && Number.isSafeInteger(cell.value)) return String(cell.value).padStart(cell.numFmt.length, '0')
+    return String(cell.value).trim()
+  }
+
+  // Xử lý đọc file Excel tài khoản
+  const handleFileImportChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const version = ++importVersion.current
+    setImporting(false)
+    setImportRows([])
+    setImportPreview(null)
+    setImportModalError('')
+    setImportModalSuccess('')
+    setImportFileName(file.name)
+    if (file.size > 5 * 1024 * 1024) { setImportModalError('File Excel không được vượt quá 5 MB.'); return }
+    setImporting(true)
+    try {
+      const buffer = await file.arrayBuffer()
+      const workbook = new ExcelJS.Workbook()
+      await workbook.xlsx.load(buffer)
+      if (version !== importVersion.current) return
+      const worksheet = workbook.worksheets[0]
+      if (!worksheet) {
+        setImportModalError('File Excel không có trang tính hợp lệ.')
+        return
+      }
+
+      // Đọc hàng tiêu đề
+      const headerRow = worksheet.getRow(1)
+      const colMap = {}
+      headerRow.eachCell((cell, colNum) => {
+        const val = getCellText(cell).toLowerCase()
+        if (val.includes('mssv') || val.includes('mã sv') || val.includes('masv')) colMap.maSV = colNum
+        else if (val.includes('họ') || val.includes('tên') || val.includes('hoten')) colMap.hoTen = colNum
+        else if (val.includes('lớp') || val.includes('lop')) colMap.lop = colNum
+        else if (val.includes('email') || val.includes('thư')) colMap.email = colNum
+      })
+
+      // Nếu không tìm thấy header, lấy theo vị trí mặc định cột 1: MSSV, 2: Họ tên, 3: Lớp, 4: Email
+      if (!colMap.maSV) colMap.maSV = 1
+      if (!colMap.hoTen) colMap.hoTen = 2
+      if (!colMap.lop) colMap.lop = 3
+      if (!colMap.email) colMap.email = 4
+
+      const rows = []
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return // Bỏ dòng tiêu đề
+        const maSV = getCellText(row.getCell(colMap.maSV))
+        const hoTen = getCellText(row.getCell(colMap.hoTen))
+        const lop = getCellText(row.getCell(colMap.lop))
+        const email = getCellText(row.getCell(colMap.email))
+
+        if (maSV || hoTen || lop || email) {
+          rows.push({ maSV, hoTen, lop, email, dong: rowNumber })
+        }
+      })
+
+      if (rows.length === 0) {
+        setImportModalError('Không tìm thấy dòng dữ liệu sinh viên nào trong file.')
+        return
+      }
+
+      if (rows.length > 5000) { setImportModalError('Mỗi lần nhập tối đa 5.000 dòng sinh viên.'); return }
+      const result = await apiClient.post('/admin/accounts/import-students/preview', { rows })
+      if (version !== importVersion.current) return
+      setImportRows(rows)
+      setImportPreview(result.data)
+      setImportModalSuccess(`Đã kiểm tra ${result.data.totalRows} dòng. Có ${result.data.accountsToCreate} tài khoản cần cấp; ${result.data.alreadyRegistered} dòng đã có tài khoản.`)
+    } catch (error) {
+      if (version === importVersion.current) setImportModalError(error.response?.data?.message || 'Không đọc được file Excel. Kiểm tra định dạng .xlsx và dữ liệu trong file.')
+    } finally {
+      if (version === importVersion.current) setImporting(false)
+    }
+  }
+
+  // Tải file Excel mẫu
+  const handleDownloadTemplate = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook()
+      const sheet = workbook.addWorksheet('DanhSachSinhVien')
+      sheet.columns = [
+        { header: 'MSSV', key: 'maSV', width: 16 },
+        { header: 'Họ và tên', key: 'hoTen', width: 26 },
+        { header: 'Lớp', key: 'lop', width: 16 },
+        { header: 'Email', key: 'email', width: 28 },
+      ]
+      sheet.getColumn('maSV').numFmt = '@'
+      sheet.addRow({ maSV: '2001215001', hoTen: 'Nguyễn Văn A', lop: '12DHTH01', email: '2001215001@huit.edu.vn' })
+      sheet.addRow({ maSV: '2001215002', hoTen: 'Trần Thị B', lop: '12DHTH02', email: '2001215002@huit.edu.vn' })
+
+      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
+
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'Mau_DanhSach_SinhVien_CapTaiKhoan.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch {
+      setImportModalError('Không thể tạo file mẫu.')
+    }
+  }
+
+  // Xác nhận import và tạo tài khoản
+  const handleConfirmImport = async () => {
+    if (!importPreview?.canImport || importing) {
+      setImportModalError('Cần kiểm tra và sửa dữ liệu trước khi cấp tài khoản.')
+      return
+    }
+    setImporting(true)
+    setImportModalError('')
+    setImportModalSuccess('')
+    try {
+      const res = await apiClient.post('/admin/accounts/import-students', {
+        rows: importRows,
+      })
+      const msg = res.data?.message || `Đã khởi tạo thành công ${res.data?.createdCount || 0} tài khoản mới.`
+      setSuccessMsg(msg)
+      setShowImportModal(false)
+      setImportRows([])
+      setImportFileName('')
+      setImportModalError('')
+      setImportModalSuccess('')
+      await loadAccounts()
+    } catch (err) {
+      setImportModalError(err.response?.data?.message || 'Có lỗi khi nạp tài khoản từ file.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  // Xuất Excel danh sách tài khoản theo bộ lọc hiện tại
+  const handleExportAccounts = async () => {
+    try {
+      setExporting(true)
+      setError('')
+      const cleanParams = {}
+      if (debouncedSearch) cleanParams.search = debouncedSearch
+      if (selectedRole && selectedRole !== 'ALL') cleanParams.maVaiTro = selectedRole
+      if (selectedStatus && selectedStatus !== 'ALL') cleanParams.trangThai = selectedStatus
+      if (selectedDot && selectedDot !== 'ALL') cleanParams.maDot = selectedDot
+
+      const res = await apiClient.get('/admin/accounts/export-xlsx', {
+        params: cleanParams,
+        responseType: 'blob',
+      })
+      await downloadExcelResponse(res, 'DanhSach_TaiKhoan.xlsx')
+      setSuccessMsg('Đã xuất file Excel danh sách tài khoản!')
+      setTimeout(() => setSuccessMsg(''), 4000)
+    } catch (err) {
+      const msg = await parseBlobError(err)
+      setError(msg)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  // Thống kê KPI từ server summary (không tính trên trang hiện tại)
+  const totalCount = pagedData.summary?.total ?? totalItems
+  const activeCount = pagedData.summary?.hoatDong ?? 0
+  const pendingCount = pagedData.summary?.chuaKichHoat ?? 0
+  const lockedCount = pagedData.summary?.biKhoa ?? 0
 
   const availableEnterpriseReps = useMemo(() => {
     const list = []
@@ -236,16 +464,16 @@ export default function AdminPage() {
     return list
   }, [enterpriseList])
 
-  const existingOwnerAccount = useMemo(() => {
+  const _existingOwnerAccount = useMemo(() => {
     const owner = form.OwnerId.trim().toLowerCase()
     if (!owner || !['VT03', 'VT04', 'VT05'].includes(form.MaVaiTro)) return null
-    return accounts.find((a) => {
+    return (pagedData.items || []).find((a) => {
       if (form.MaVaiTro === 'VT04') return a.maSV?.toLowerCase() === owner
       if (form.MaVaiTro === 'VT03') return a.maGV?.toLowerCase() === owner
       if (form.MaVaiTro === 'VT05') return a.maDaiDien?.toLowerCase() === owner
       return false
     })
-  }, [form.OwnerId, form.MaVaiTro, accounts])
+  }, [form.OwnerId, form.MaVaiTro, pagedData.items])
 
   const getRoleBadgeStyle = (maVaiTro) => {
     switch (maVaiTro) {
@@ -412,8 +640,6 @@ export default function AdminPage() {
           </svg>
           <span>Danh bạ doanh nghiệp</span>
         </button>
-
-        
       </div>
 
       {/* ===================== TAB 1: TÀI KHOẢN & PHÂN QUYỀN ===================== */}
@@ -491,18 +717,35 @@ export default function AdminPage() {
             ref={formRef}
             className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 transition-all"
           >
-            <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 m-0">Tạo tài khoản người dùng</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Tạo thủ công từng tài khoản hoặc nhập danh sách sinh viên từ file Excel để tạo hàng loạt.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-base font-bold text-slate-900 m-0">Tạo tài khoản mới</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Khởi tạo thông tin đăng nhập và gán vai trò truy cập trong hệ thống.
-                </p>
-              </div>
+
+              {/* Nút Nhập danh sách từ Excel đặt đúng ngữ cảnh Tạo tài khoản */}
+              <button
+                type="button"
+                onClick={() => {
+                  setImportRows([])
+                  setImportFileName('')
+                  setShowImportModal(true)
+                }}
+                className="inline-flex items-center gap-2 py-2 px-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer shrink-0 self-start sm:self-auto"
+                title="Tải lên file Excel để tự động khởi tạo hàng loạt tài khoản sinh viên"
+              >
+                <span className="material-symbols-outlined text-[16px]">upload_file</span>
+                <span>Nhập sinh viên từ Excel (.xlsx)</span>
+              </button>
             </div>
 
             <form onSubmit={create} className="mt-5 space-y-4">
@@ -553,7 +796,7 @@ export default function AdminPage() {
                   >
                     {roles.map((r) => (
                       <option key={r.maVaiTro} value={r.maVaiTro}>
-                        {r.maVaiTro} - {r.tenVaiTro}
+                        {r.maVaiTro} - {roleLabel(r.maVaiTro)}
                       </option>
                     ))}
                   </select>
@@ -615,7 +858,23 @@ export default function AdminPage() {
                       readOnly={['VT01', 'VT02'].includes(form.MaVaiTro)}
                       required={['VT03', 'VT04'].includes(form.MaVaiTro)}
                       value={form.OwnerId}
-                      onChange={(e) => setForm({ ...form, OwnerId: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        const trimmed = val.trim()
+                        setForm((prev) => {
+                          const updated = { ...prev, OwnerId: val }
+                          if (prev.MaVaiTro === 'VT04' && trimmed) {
+                            if (!prev.MaTaiKhoan || prev.MaTaiKhoan.startsWith('TK_')) updated.MaTaiKhoan = `TK_${trimmed}`
+                            if (!prev.TenDangNhap || prev.TenDangNhap === prev.OwnerId.toLowerCase()) updated.TenDangNhap = trimmed.toLowerCase()
+                            if (!prev.MatKhau) updated.MatKhau = '123456'
+                          } else if (prev.MaVaiTro === 'VT03' && trimmed) {
+                            if (!prev.MaTaiKhoan || prev.MaTaiKhoan.startsWith('TK_')) updated.MaTaiKhoan = `TK_${trimmed.toUpperCase()}`
+                            if (!prev.TenDangNhap || prev.TenDangNhap === prev.OwnerId.toLowerCase()) updated.TenDangNhap = trimmed.toLowerCase()
+                            if (!prev.MatKhau) updated.MatKhau = '123456'
+                          }
+                          return updated
+                        })
+                      }}
                       className={`w-full px-3 py-2 rounded-xl border text-xs transition-all font-mono ${
                         ['VT01', 'VT02'].includes(form.MaVaiTro)
                           ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed'
@@ -718,7 +977,7 @@ export default function AdminPage() {
                   <option value="ALL">Tất cả vai trò</option>
                   {roles.map((r) => (
                     <option key={r.maVaiTro} value={r.maVaiTro}>
-                      {r.tenVaiTro} ({r.maVaiTro})
+                      {roleLabel(r.maVaiTro)} ({r.maVaiTro})
                     </option>
                   ))}
                 </select>
@@ -735,20 +994,50 @@ export default function AdminPage() {
                   <option value="BiKhoa">Đã bị khóa</option>
                 </select>
 
+                {/* Dropdown lọc theo Đợt thực tập / Năm học */}
+                <select
+                  value={selectedDot}
+                  onChange={(e) => setSelectedDot(e.target.value)}
+                  className="py-2 px-3 rounded-xl border border-slate-200 text-xs bg-slate-50/70 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer max-w-[210px] truncate"
+                  title="Lọc tài khoản sinh viên theo đợt thực tập"
+                >
+                  <option value="ALL">Tất cả đợt thực tập</option>
+                  {roundsList.map((rd) => (
+                    <option key={rd.maSo} value={rd.maSo}>
+                      {rd.tenDot} ({rd.namHoc})
+                    </option>
+                  ))}
+                </select>
+
                 {/* Nút đặt lại bộ lọc */}
-                {(searchKeyword || selectedRole !== 'ALL' || selectedStatus !== 'ALL') && (
+                {(searchKeyword || selectedRole !== 'ALL' || selectedStatus !== 'ALL' || selectedDot !== 'ALL') && (
                   <button
                     type="button"
                     onClick={() => {
                       setSearchKeyword('')
                       setSelectedRole('ALL')
                       setSelectedStatus('ALL')
+                      setSelectedDot('ALL')
                     }}
                     className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-colors cursor-pointer"
                   >
                     Đặt lại
                   </button>
                 )}
+
+                {/* Nút xuất Excel .xlsx */}
+                <button
+                  type="button"
+                  onClick={handleExportAccounts}
+                  disabled={exporting || loading || totalItems === 0}
+                  className="inline-flex items-center gap-1.5 py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  title="Xuất danh sách theo bộ lọc hiện tại"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <span>{exporting ? 'Đang xuất…' : 'Xuất Excel (.xlsx)'}</span>
+                </button>
               </div>
             </div>
 
@@ -826,7 +1115,7 @@ export default function AdminPage() {
                                   x.maVaiTro
                                 )}`}
                               >
-                                {x.tenVaiTro || x.vaiTro?.tenVaiTro || x.maVaiTro}
+                                {roleLabel(x.maVaiTro || x.vaiTro?.maVaiTro)}
                               </span>
                             </td>
                             <td className="py-3 px-4">
@@ -1075,7 +1364,7 @@ export default function AdminPage() {
                         {x.maVaiTro}
                       </span>
                       <strong className="text-sm font-bold text-slate-900 truncate">
-                        {x.tenVaiTro}
+                        {roleLabel(x.maVaiTro)}
                       </strong>
                     </div>
                     <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{x.moTa}</p>
@@ -1094,6 +1383,159 @@ export default function AdminPage() {
           onSelect={handleSelectEnterpriseRep}
           onChanged={load}
         />
+      )}
+
+      {/* Modal Nhập Sinh Viên Từ Excel & Khởi Tạo Tài Khoản Hàng Loạt */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100/70 text-blue-700 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">upload_file</span>
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 m-0">
+                    Nhập sinh viên từ Excel & Khởi tạo tài khoản
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Hệ thống tự động cấp tài khoản sinh viên hàng loạt theo danh sách file.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!importing) {
+                    setShowImportModal(false)
+                    setImportModalError('')
+                    setImportModalSuccess('')
+                  }
+                }}
+                disabled={importing}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+              {importModalError && (
+                <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
+                  <svg className="w-4 h-4 text-rose-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span>{importModalError}</span>
+                </div>
+              )}
+              {importModalSuccess && (
+                <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                  <svg className="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>{importModalSuccess}</span>
+                </div>
+              )}
+
+              <p className="text-xs text-slate-600">Quản trị viên nhập hồ sơ và cấp tài khoản. Khoa quản lý danh sách sinh viên tham gia từng đợt thực tập.</p>
+              <p className="text-xs text-slate-600">1. Tải file mẫu và điền danh sách. 2. Chọn file để kiểm tra. 3. Rà các dòng trùng, sửa lỗi rồi xác nhận cấp tài khoản.</p>
+
+              {/* Tải file mẫu & Hướng dẫn */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-blue-50/60 border border-blue-100 text-xs text-blue-900">
+                <div className="space-y-0.5">
+                  <strong className="font-bold text-blue-950">Định dạng file Excel chuẩn</strong>
+                  <p className="text-[11px] text-blue-700">
+                    File cần chứa các cột: <code>MSSV</code>, <code>Họ và tên</code>, <code>Lớp</code>, <code>Email</code>.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadTemplate}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-blue-200 hover:bg-blue-50 text-blue-700 font-bold text-xs transition-colors shadow-2xs shrink-0 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[16px]">download</span>
+                  <span>Tải file mẫu (.xlsx)</span>
+                </button>
+              </div>
+
+              {/* Vùng chọn file */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Chọn file danh sách sinh viên (.xlsx) <strong className="text-rose-500">*</strong>
+                </label>
+                <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-300 hover:border-blue-400 rounded-xl bg-slate-50/50 hover:bg-blue-50/20 cursor-pointer transition-all">
+                  <span className="material-symbols-outlined text-[36px] text-blue-600 mb-2">upload_file</span>
+                  <span className="text-xs font-bold text-slate-700">
+                    {importFileName ? importFileName : 'Nhấp vào đây để chọn file Excel từ máy tính'}
+                  </span>
+                  <span className="text-[11px] text-slate-400 mt-1">Định dạng .xlsx, tối đa 5 MB và 5.000 dòng</span>
+                  <input
+                    type="file"
+                    accept=".xlsx"
+                    disabled={importing}
+                    onChange={handleFileImportChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {importPreview && <StudentImportPreview key={importFileName} report={importPreview} />}
+
+              {/* Ghi chú quy tắc cấp tài khoản */}
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                <span className="font-bold text-slate-800 block">Quy tắc khởi tạo tài khoản:</span>
+                <ul className="list-disc list-inside space-y-0.5 text-[11px] text-slate-600">
+                  <li><strong>Tên đăng nhập:</strong> Trùng với Mã số sinh viên (MSSV).</li>
+                  <li><strong>Mật khẩu mặc định:</strong> <code>123456</code> (người dùng đổi mật khẩu ở lần đăng nhập đầu).</li>
+                  <li><strong>Bảo toàn dữ liệu:</strong> Sinh viên đã có tài khoản sẽ tự động được giữ nguyên (không ghi đè mật khẩu hiện tại).</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+              <button
+                type="button"
+                disabled={importing}
+                onClick={() => {
+                  setShowImportModal(false)
+                  setImportModalError('')
+                  setImportModalSuccess('')
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                disabled={importing || !importPreview?.canImport}
+                onClick={handleConfirmImport}
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {importing ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    <span>Đang xử lý danh sách…</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+                    <span>
+                      {importPreview?.accountsToCreate > 0
+                        ? `Cấp ${importPreview.accountsToCreate} tài khoản sinh viên`
+                        : 'Chọn file để tiếp tục'}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal Xác nhận Đặt lại Mật khẩu */}

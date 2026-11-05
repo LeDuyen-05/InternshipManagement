@@ -1,7 +1,8 @@
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import DocumentAttachments from '../common/DocumentAttachments'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import apiClient from '../../services/api'
 import { thucTapTuTimService } from '../../services/thucTapTuTimService'
 
@@ -16,7 +17,32 @@ export default function ThucTapTuTimFacultyPanel({ maDot, canEdit = true }) {
   const roundRef = useRef(maDot)
   const loadVersion = useRef(0)
   roundRef.current = maDot
-  const pagination = usePagination(items, maDot)
+
+  const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+
+  const counts = useMemo(() => {
+    return {
+      all: items.length,
+      pending: items.filter((x) => x.hoSo.trangThai === 'ChoDuyet').length,
+      approved: items.filter((x) => x.hoSo.trangThai === 'DaDuyet').length,
+      rejected: items.filter((x) => x.hoSo.trangThai === 'TuChoi').length,
+    }
+  }, [items])
+
+  const filteredItems = useMemo(() => {
+    return items.filter(({ hoSo: item, hoTen }) => {
+      if (statusFilter !== 'ALL' && item.trangThai !== statusFilter) return false
+      if (searchTerm.trim()) {
+        const kw = searchTerm.trim().toLowerCase()
+        const text = `${item.maSV} ${hoTen} ${item.tenCongTy} ${item.viTri || ''}`.toLowerCase()
+        return text.includes(kw)
+      }
+      return true
+    })
+  }, [items, searchTerm, statusFilter])
+
+  const pagination = usePagination(filteredItems, `${maDot}|${statusFilter}|${searchTerm}`)
 
   const load = useCallback(async () => {
     if (!maDot) return
@@ -114,19 +140,64 @@ export default function ThucTapTuTimFacultyPanel({ maDot, canEdit = true }) {
         </div>
       )}
 
-      {/* Header toolbar */}
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <span className="text-xs font-bold text-slate-700">
-          Danh sách hồ sơ tự tìm trong đợt ({items.length})
-        </span>
-        <button
-          type="button"
-          disabled={!!busy || loading}
-          onClick={load}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer disabled:opacity-50"
-        >
-          Làm mới hồ sơ tự tìm
-        </button>
+      {/* Thanh công cụ tìm kiếm và lọc trạng thái */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {[
+            { id: 'ALL', label: 'Tất cả', count: counts.all },
+            { id: 'ChoDuyet', label: 'Chờ thẩm định', count: counts.pending, badgeColor: 'bg-amber-100 text-amber-800' },
+            { id: 'DaDuyet', label: 'Đã công nhận', count: counts.approved, badgeColor: 'bg-emerald-100 text-emerald-800' },
+            { id: 'TuChoi', label: 'Từ chối', count: counts.rejected, badgeColor: 'bg-rose-100 text-rose-800' },
+          ].map((tab) => {
+            const active = statusFilter === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStatusFilter(tab.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  active
+                    ? 'bg-blue-700 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.count > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${active ? 'bg-white/20 text-white' : tab.badgeColor || 'bg-slate-200 text-slate-700'}`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+              search
+            </span>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Tìm MSSV, tên SV, công ty..."
+              className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 w-56 text-slate-900 shadow-2xs"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={!!busy || loading}
+            onClick={load}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer disabled:opacity-50 shrink-0"
+            title="Tải lại danh sách hồ sơ tự tìm"
+          >
+            <span className={`material-symbols-outlined text-sm ${loading ? 'animate-spin text-blue-600' : ''}`}>
+              refresh
+            </span>
+            <span>Làm mới</span>
+          </button>
+        </div>
       </div>
 
       {/* Danh sách thẻ hồ sơ */}
@@ -140,7 +211,7 @@ export default function ThucTapTuTimFacultyPanel({ maDot, canEdit = true }) {
       ) : !items.length ? (
         <div className="py-16 text-center text-slate-400 border border-dashed border-slate-200 rounded-2xl">
           <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">inbox</span>
-          <p className="text-xs font-medium">Chưa có hồ sơ tự tìm nào trong bộ lọc đợt này.</p>
+          <p className="text-xs font-medium">Không tìm thấy hồ sơ tự tìm nào phù hợp với bộ lọc hiện tại.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -202,8 +273,18 @@ export default function ThucTapTuTimFacultyPanel({ maDot, canEdit = true }) {
                     </div>
                   )}
                   {item.maPhanBo && (
-                    <div className="col-span-full text-emerald-700 font-medium">
-                      Mã phân bổ đã tạo: <strong className="font-mono">{item.maPhanBo}</strong>
+                    <div className="col-span-full flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-emerald-50/80 border border-emerald-200/90 rounded-xl text-emerald-900 mt-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-emerald-600 text-[18px]">verified</span>
+                        <span className="font-bold text-xs">Đã công nhận nơi thực tập & lập phân bổ chính thức trong đợt</span>
+                      </div>
+                      <Link
+                        to={`/khoa/phan-cong?search=${encodeURIComponent(item.maSV)}`}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow-2xs shrink-0 self-start sm:self-auto"
+                      >
+                        <span>Phân công GVHD</span>
+                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -215,27 +296,10 @@ export default function ThucTapTuTimFacultyPanel({ maDot, canEdit = true }) {
                     kind="SelfPlacement"
                     resourceId={item.maHoSo}
                     title="Giấy tiếp nhận bên ngoài"
-                    readOnly={!canEdit}
+                    readOnly={true}
                     defer
                   />
                 </div>
-
-                {/* Thông báo phân quyền tài khoản khi đã duyệt */}
-                {item.trangThai === 'DaDuyet' && (
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] space-y-1">
-                    <p>
-                      Mã DN đã công nhận: <strong className="font-mono">{item.maCongTy}</strong>.{' '}
-                      {taiKhoanDNHoatDong > 0
-                        ? 'DN đã có tài khoản hoạt động để truy cập cổng DN.'
-                        : soDaiDien > 0
-                        ? 'Đã có đại diện; cần phối hợp QTV cấp hoặc mở khóa tài khoản DN.'
-                        : 'Chưa có đại diện; chuyển mã DN và đầu mối liên hệ cho QTV xác minh, tạo đại diện và cấp tài khoản.'}
-                    </p>
-                    <p className="text-emerald-700">
-                      Khoa phân công GVHD theo đợt. DN cập nhật điểm phần DN; GVHD chỉ xem phần DN.
-                    </p>
-                  </div>
-                )}
 
                 {/* Form thao tác khi đang Chờ duyệt */}
                 {item.trangThai === 'ChoDuyet' && (

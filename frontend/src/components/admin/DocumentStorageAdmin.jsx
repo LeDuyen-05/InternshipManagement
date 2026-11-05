@@ -42,7 +42,9 @@ export default function DocumentStorageAdmin() {
         const a = document.createElement('a')
         a.href = url
         a.download = 'r2-object-manifest.json'
+        document.body.appendChild(a)
         a.click()
+        a.remove()
         setTimeout(() => URL.revokeObjectURL(url), 1000)
       }
     } catch (e) {

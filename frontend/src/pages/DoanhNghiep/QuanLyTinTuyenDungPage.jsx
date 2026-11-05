@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { useState, useEffect, useMemo } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
@@ -135,11 +136,11 @@ export default function QuanLyTinTuyenDungPage() {
   const handleSavePosition = async (e) => {
     e.preventDefault()
     if (!posForm.tenViTri.trim()) {
-      alert('Vui lòng nhập tên vị trí tuyển dụng.')
+      toast.warning('Vui lòng nhập tên vị trí tuyển dụng.')
       return
     }
     if (posForm.soLuongNhan <= 0) {
-      alert('Chỉ tiêu tiếp nhận của vị trí phải lớn hơn 0.')
+      toast.warning('Chỉ tiêu tiếp nhận của vị trí phải lớn hơn 0.')
       return
     }
 
@@ -170,7 +171,7 @@ export default function QuanLyTinTuyenDungPage() {
       await fetchJobPosting()
     } catch (err) {
       console.error('Lỗi lưu vị trí:', err)
-      alert(err.response?.data?.message || err.message || 'Không thể lưu vị trí tuyển dụng.')
+      toast.error(err.response?.data?.message || err.message || 'Không thể lưu vị trí tuyển dụng.')
     } finally {
       setPosSubmitting(false)
       setTimeout(() => setToast(null), 4000)
@@ -180,7 +181,7 @@ export default function QuanLyTinTuyenDungPage() {
   // Bật/Tắt nhận hồ sơ cho vị trí
   const handleTogglePosition = async (pos) => {
     if (pos.isDefault) {
-      alert('Vui lòng tạo vị trí chính thức trong đợt để quản lý bật/tắt nhận đơn.')
+      toast.warning('Vui lòng tạo vị trí chính thức trong đợt để quản lý bật/tắt nhận đơn.')
       return
     }
     try {
@@ -191,7 +192,7 @@ export default function QuanLyTinTuyenDungPage() {
         message: pos.hoatDong ? 'Đã tạm dừng nhận hồ sơ cho vị trí này.' : 'Đã mở lại nhận hồ sơ cho vị trí này.',
       })
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể thay đổi trạng thái vị trí.')
+      toast.error(err.response?.data?.message || err.message || 'Không thể thay đổi trạng thái vị trí.')
     } finally {
       setTimeout(() => setToast(null), 4000)
     }
@@ -200,7 +201,7 @@ export default function QuanLyTinTuyenDungPage() {
   // Xóa vị trí
   const handleDeletePosition = async (pos) => {
     if (pos.isDefault) {
-      alert('Không thể xóa vị trí mặc định ban đầu.')
+      toast.error('Không thể xóa vị trí mặc định ban đầu.')
       return
     }
     if (!window.confirm(`Bạn có chắc chắn muốn xóa vị trí "${pos.tenViTri}"?`)) {
@@ -211,7 +212,7 @@ export default function QuanLyTinTuyenDungPage() {
       await fetchJobPosting()
       setToast({ type: 'success', message: res?.message || 'Đã xóa vị trí tuyển dụng thành công.' })
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể xóa vị trí tuyển dụng.')
+      toast.error(err.response?.data?.message || err.message || 'Không thể xóa vị trí tuyển dụng.')
     } finally {
       setTimeout(() => setToast(null), 4000)
     }
@@ -231,7 +232,7 @@ export default function QuanLyTinTuyenDungPage() {
       setToast({ type: 'success', message: 'Cập nhật thông tin chung thành công!' })
       setShowGeneralModal(false)
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể lưu thông tin chung.')
+      toast.error(err.response?.data?.message || err.message || 'Không thể lưu thông tin chung.')
     } finally {
       setGeneralSubmitting(false)
       setTimeout(() => setToast(null), 4000)

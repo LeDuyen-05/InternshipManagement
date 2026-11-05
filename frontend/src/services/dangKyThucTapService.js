@@ -26,13 +26,19 @@ export const dangKyThucTapService = {
     return res.data
   },
 
+  // Ngữ cảnh điều kiện lượt đăng ký & các lần hỗ trợ
+  getLanDangKy: async (maDot) => {
+    const res = await apiClient.get('/DangKyThucTap/lan-dang-ky', { params: { maDot } })
+    return res.data
+  },
+
   // Lấy danh sách nguyện vọng của sinh viên
   getDangKyBySinhVien: async (maSV) => {
     const res = await apiClient.get(`/DangKyThucTap/sinhvien/${maSV}`)
     return res.data
   },
 
-  // Nộp đơn đăng ký nguyện vọng
+  // Nộp đơn đăng ký nguyện vọng (hỗ trợ maLanHoTro)
   dangKyThucTap: async (payload) => {
     const res = await apiClient.post('/DangKyThucTap', payload)
     return res.data

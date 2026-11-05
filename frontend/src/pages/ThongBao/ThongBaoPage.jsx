@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { useState, useEffect } from 'react'
@@ -147,7 +148,7 @@ export default function ThongBaoPage() {
   const handleCreateNoticeSubmit = async (e) => {
     e.preventDefault()
     if (!newNotice.tieuDe.trim() || !newNotice.noiDung.trim()) {
-      alert('Vui lòng nhập đầy đủ tiêu đề và nội dung thông báo!')
+      toast.warning('Vui lòng nhập đầy đủ tiêu đề và nội dung thông báo!')
       return
     }
     try {
@@ -173,7 +174,7 @@ export default function ThongBaoPage() {
       setTimeout(() => setToastMessage(''), 4000)
       loadServerNotifs()
     } catch (err) {
-      alert(err.response?.data?.message || err.message || 'Không thể đăng thông báo.')
+      toast.error(err.response?.data?.message || err.message || 'Không thể đăng thông báo.')
     } finally {
       setSending(false)
     }

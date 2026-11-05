@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { useState, useEffect, useCallback } from 'react'
@@ -153,7 +154,7 @@ export default function GioiThieuCongTyPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!tenCongTy.trim()) {
-      alert('Vui lòng nhập tên công ty')
+      toast.warning('Vui lòng nhập tên công ty')
       return
     }
 
@@ -193,7 +194,7 @@ export default function GioiThieuCongTyPage() {
       await gioiThieuService.delete(id)
       loadData()
     } catch (err) {
-      alert('Lỗi khi xóa: ' + (err.response?.data?.message || err.message))
+      toast.error('Lỗi khi xóa: ' + (err.response?.data?.message || err.message))
     }
   }
 
@@ -223,7 +224,7 @@ export default function GioiThieuCongTyPage() {
     }
   }
 
-  const gvDisplayName = user?.hoTen ? `ThS. ${user.hoTen} (${currentMaGV})` : currentMaGV
+  const gvDisplayName = user?.hoTen ? `${user.hoTen} (${currentMaGV})` : currentMaGV
 
   return (
     <div className="space-y-6">

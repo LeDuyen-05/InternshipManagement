@@ -156,7 +156,7 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
   }
 
   const displayName = authUser?.hoTen || authUser?.tenDangNhap || 'Đại diện Doanh nghiệp'
-  const displayRole = authUser?.tenVaiTro || (authUser?.maVaiTro === 'VT02' ? 'Khoa' : authUser?.maVaiTro === 'VT01' ? 'Quản trị viên' : 'Đại diện Doanh nghiệp')
+  const displayRole = authUser?.maVaiTro === 'VT02' ? 'Cán bộ Khoa' : authUser?.maVaiTro === 'VT01' ? 'Quản trị viên' : 'Đại diện doanh nghiệp'
   const userCode = authUser?.maDaiDien || authUser?.tenDangNhap || 'DN'
 
   return (

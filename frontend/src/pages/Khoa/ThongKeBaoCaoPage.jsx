@@ -4,24 +4,31 @@ import { useEffect, useMemo, useState } from 'react'
 import Layout from '../../components/Layout'
 import apiClient from '../../services/api'
 import { tachHoTen, xuatBangHuitExcel } from '../../utils/exportHuitExcel'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
 
 const labels = { ChuaNop: 'Chưa nộp', DaNop: 'Chờ duyệt', DaDuyet: 'Đã duyệt', YeuCauSua: 'Yêu cầu sửa' }
 export default function ThongKeBaoCaoPage() {
-  const [reports, setReports] = useState([])
-  const [rounds, setRounds] = useState([])
-  const [round, setRound] = useState('')
+  const { selectedDot, danhSachNamHoc, changeDot } = useDotThucTap()
+  const rounds = useMemo(() => danhSachNamHoc.flatMap(year => year.dots || []), [danhSachNamHoc])
+  const [allRoundsFor, setAllRoundsFor] = useState(null)
+  const selectedRound = selectedDot?.maDot
+  const round = allRoundsFor !== null && allRoundsFor.maDot === selectedRound ? '' : selectedRound
+  const [loadedReports, setReports] = useState([])
   const [error, setError] = useState('')
   const [loadedRound, setLoadedRound] = useState(null)
-  useEffect(() => { apiClient.get('/khoa/dot-thuc-tap').then(r => setRounds(r.data || [])).catch(() => {}) }, [])
+  useEffect(() => { setAllRoundsFor(null) }, [selectedRound])
   useEffect(() => {
     let active = true
-    setReports([]); setLoadedRound(null)
+    setReports([]); setLoadedRound(null); setError('')
+    if (round == null) return () => { active = false }
     apiClient.get('/khoa/theo-doi', { params: round ? { maDot: round } : {} }).then(r => {
       if (!active) return
       setReports(r.data.reports || []); setLoadedRound(round); setError('')
     }).catch(e => { if (active) setError(e.response?.data?.message || 'Không tải được số liệu báo cáo.') })
     return () => { active = false }
   }, [round])
+  // Hide the previous scope immediately, including before the loading effect runs.
+  const reports = useMemo(() => loadedRound === round ? loadedReports : [], [loadedRound, round, loadedReports])
   const currentReports = useMemo(() => reports.filter(x => !x.maPhanBoLuuTru), [reports])
   const archivedCount = reports.length - currentReports.length
   const stats = useMemo(() => Object.keys(labels).map(key => ({ key, label: labels[key], count: currentReports.filter(x => x.trangThaiDuyet === key).length })), [currentReports])
@@ -31,7 +38,7 @@ export default function ThongKeBaoCaoPage() {
 
   const exportExcel = async () => {
     if (!reports.length || loadedRound !== round) return
-    const activeRoundObj = rounds.find(r => r.maSo === round)
+    const activeRoundObj = rounds.find(r => r.maDot === round)
     const maDotSafe = round || 'TatCa'
     const ngayXuat = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const fileName = 'BaoCao_TienDo_ThucTap_' + maDotSafe + '_' + ngayXuat + '.xlsx'
@@ -76,7 +83,7 @@ export default function ThongKeBaoCaoPage() {
       title: 'BÁO CÁO TIẾN ĐỘ THỰC TẬP SINH VIÊN TOÀN KHOA',
       subTitle: activeRoundObj
         ? ('Đợt thực tập: ' + activeRoundObj.tenDot + ' — Năm học: ' + activeRoundObj.namHoc)
-        : 'Theo dõi tiến độ báo cáo tuần toàn khoa',
+        : 'Phạm vi: Tất cả đợt thực tập',
       columns,
       rows: excelRows,
       signatures: [
@@ -87,7 +94,15 @@ export default function ThongKeBaoCaoPage() {
   }
 
   return <Layout><div className="page-head"><div><span className="eyebrow">GIÁO VỤ KHOA</span><h2>Thống kê & báo cáo tiến độ</h2><p>Số liệu được tổng hợp trực tiếp từ các báo cáo sinh viên trong hệ thống.</p></div><button className="primary" onClick={exportExcel} disabled={!reports.length}>Xuất tiến độ nội bộ (.xlsx)</button></div>{error&&<div className="alert error">{error}</div>}
-    <div className="tabbar"><label>Đợt thực tập <select value={round} onChange={e=>setRound(e.target.value)}><option value="">Tất cả đợt</option>{rounds.map(x=><option key={x.maSo} value={x.maSo}>{x.tenDot} · {x.namHoc}</option>)}</select></label><span className="badge">Tổng báo cáo hiện hành: {currentReports.length}</span>{archivedCount > 0 && <span className="badge">Lịch sử đổi nơi: {archivedCount}</span>}{stats.map(s=><span className="badge" key={s.key}>{s.label}: {s.count}</span>)}</div>
+    <div className="tabbar"><label>Đợt thực tập <select value={round ?? '__none'} onChange={e => {
+      if (e.target.value === '') setAllRoundsFor({ maDot: selectedRound })
+      else {
+        setAllRoundsFor(null)
+        const next = rounds.find(x => x.maDot === e.target.value)
+        if (next) changeDot(next)
+      }
+    }}><option value="__none" disabled>Chọn đợt thực tập</option><option value="">Tất cả đợt</option>{rounds.map(x=><option key={x.maDot} value={x.maDot}>{x.tenDot} · {x.namHoc}</option>)}</select></label><span className="badge">Tổng báo cáo hiện hành: {currentReports.length}</span>{archivedCount > 0 && <span className="badge">Lịch sử đổi nơi: {archivedCount}</span>}{stats.map(s=><span className="badge" key={s.key}>{s.label}: {s.count}</span>)}</div>
+    <p className="hint" role="status">{round == null ? 'Chọn đợt thực tập để xem số liệu.' : error ? 'Không tải được báo cáo trong phạm vi đã chọn.' : loadedRound !== round ? 'Đang tải báo cáo...' : `Phạm vi: ${round === '' ? 'Tất cả đợt thực tập' : selectedDot.tenDot}`}</p>
     <div className="info-card"><h3>Tình hình theo mốc báo cáo</h3><div className="table-wrap"><table><thead><tr><th>Hạn nộp</th><th>Số báo cáo</th><th>Đã duyệt</th><th>Chờ duyệt</th><th>Yêu cầu sửa</th><th>Chưa nộp</th><th>Tỷ lệ hoàn tất</th></tr></thead><tbody>{deadlinePagination.items.map(([date,counts])=>{const total=Object.values(counts).reduce((a,b)=>a+b,0);const complete=total-(counts.ChuaNop||0);return <tr key={date}><td>{date||'—'}</td><td>{total}</td><td>{counts.DaDuyet||0}</td><td>{counts.DaNop||0}</td><td>{counts.YeuCauSua||0}</td><td>{counts.ChuaNop||0}</td><td>{total?Math.round(complete/total*100):0}%</td></tr>})}{!reports.length&&<tr><td colSpan="7">Chưa có dữ liệu báo cáo.</td></tr>}</tbody></table></div><Pagination pagination={deadlinePagination} label="thống kê theo hạn báo cáo"/></div>
     <div className="info-card"><h3>Ma trận trạng thái theo sinh viên</h3><div className="table-wrap"><table><thead><tr><th>Sinh viên</th><th>Mã SV</th><th>Lớp</th><th>Đợt</th><th>Hạn báo cáo</th><th>Trạng thái</th></tr></thead><tbody>{reportPagination.items.map(x=><tr key={x.maTienDo}><td>{x.sinhVien}</td><td>{x.maSinhVien}</td><td>{x.lop}</td><td>{x.dot}</td><td>{String(x.mocThoiGian||'').slice(0,10)}</td><td>{labels[x.trangThaiDuyet]||x.trangThaiDuyet}{x.maPhanBoLuuTru && <div className="hint">Lịch sử trước khi đổi nơi — chỉ xem</div>}</td></tr>)}</tbody></table></div><Pagination pagination={reportPagination} label="ma trận tiến độ sinh viên"/></div>
   </Layout>

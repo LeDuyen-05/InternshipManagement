@@ -172,10 +172,10 @@ export default function GoiYCongTyAIPage() {
           <span>Đợt thực tập: {selectedDot?.tenDot || 'Chưa chọn đợt'}</span>
         </div>
         <p className="text-slate-600 m-0 leading-relaxed">
-          Hệ thống tự động đối chiếu thông tin chuyên môn của sinh viên (kỹ năng, công nghệ, dự án) với các vị trí tuyển dụng được phê duyệt trong đợt để gợi ý danh sách phù hợp nhất.
+          Tham khảo các vị trí đã được Khoa phê duyệt, còn chỉ tiêu và phù hợp với hồ sơ năng lực của bạn.
         </p>
         <p className="text-slate-500 m-0 italic">
-          * {data?.daSuDungModelTrain ? 'Điểm số hiển thị là điểm xếp hạng chuyên môn từ mô hình học máy (Learning to Rank), hỗ trợ định hướng thứ tự ưu tiên.' : 'Tỷ lệ phần trăm thể hiện mức độ tương đồng chuyên môn tham khảo, không đại diện cho quyết định trúng tuyển chính thức của doanh nghiệp.'}
+          Gợi ý mang tính tham khảo. Sinh viên chủ động lựa chọn nơi thực tập và đăng ký theo quy định của đợt.
         </p>
       </div>
       {lyDoKhongDangKy && dieuKien != null && (
@@ -266,13 +266,16 @@ export default function GoiYCongTyAIPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <span>Bảng Xếp Hạng Top {topK} Doanh Nghiệp Phù Hợp Nhất</span>
+                    <span>Doanh nghiệp được gợi ý theo hồ sơ</span>
                     <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
                       Khảo sát {data?.tongSoCongTyKhaoSat || 0} công ty
                     </span>
                   </h2>
+                  <p className="text-xs font-medium text-slate-600 mt-1" role="status">
+                    Gợi ý mức độ phù hợp giữa hồ sơ năng lực và yêu cầu tuyển dụng của doanh nghiệp (dùng tham khảo).
+                  </p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Kết quả đối sánh hồ sơ và yêu cầu tuyển dụng (JD). {data?.daSuDungModelTrain ? 'Điểm số là điểm xếp hạng ưu tiên, không phải xác suất trúng tuyển.' : 'Tỷ lệ hiển thị là mức độ tương đồng chuyên môn, không phải xác suất trúng tuyển.'}
+                    Kết quả đối sánh chuyên môn giữa hồ sơ sinh viên và mô tả công việc (JD). Tỷ lệ hiển thị phản ánh mức độ phù hợp kỹ năng, không phải cam kết tuyển dụng hay xác suất trúng tuyển.
                   </p>
                 </div>
 
@@ -361,7 +364,7 @@ export default function GoiYCongTyAIPage() {
                           <div className="flex items-center gap-1.5 flex-wrap pt-1">
                             <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                               <span className="material-symbols-outlined text-sm text-purple-600">auto_awesome</span>
-                              Từ khóa chung:
+                              Kỹ năng phù hợp:
                             </span>
                             {(() => {
                               const stopWords = [

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { transformSync } from 'esbuild'
+import { roleLabel } from '../src/utils/roleLabels.js'
 
 test('AdminPage mounts and renders successfully without ReferenceError', async () => {
   const source = readFileSync(new URL('../src/pages/Admin/AdminPage.jsx', import.meta.url), 'utf8')
@@ -26,6 +27,7 @@ test('AdminPage mounts and renders successfully without ReferenceError', async (
   ]
 
   const context = {
+    roleLabel,
     React: {
       createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
     },
@@ -35,11 +37,14 @@ test('AdminPage mounts and renders successfully without ReferenceError', async (
       return [slots[i], next => { slots[i] = typeof next === 'function' ? next(slots[i]) : next }]
     },
     useMemo(fn) { return fn() },
+    useCallback(fn) { return fn },
     useRef(initial) { return { current: initial } },
     useEffect(fn) { effects.push(fn) },
+    setTimeout(fn) { fn(); return 1 },
+    clearTimeout() {},
     apiClient: {
       get: async (url) => {
-        if (url === '/admin/accounts') return { data: mockAccounts }
+        if (url === '/admin/accounts/paged') return { data: { items: mockAccounts, totalCount: mockAccounts.length, page: 1, pageSize: 20, summary: { total: mockAccounts.length } } }
         if (url === '/admin/roles') return { data: mockRoles }
         if (url === '/admin/enterprise-onboarding') return { data: mockOnboarding }
         return { data: [] }

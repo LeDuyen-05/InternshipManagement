@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { Link } from 'react-router-dom'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
@@ -21,6 +22,7 @@ import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import { xuatBangDiemTheoMauKhoa } from '../../utils/bangDiemExcel.js'
 import ChotDotPanel from '../../components/khoa/ChotDotPanel'
 import StudentEnterpriseDocuments from '../../components/khoa/StudentEnterpriseDocuments'
+import DanhSachRotPanel from '../../components/khoa/failed-internship/DanhSachRotPanel'
 
 export default function ThongKeCLOPage() {
   const { selectedDot, roundLock } = useDotThucTap()
@@ -66,11 +68,22 @@ export default function ThongKeCLOPage() {
     const scoreMap = new Map()
     chiTiets.forEach((c) => {
       scoreMap.set(c.maTieuChi, c.diemCham)
+      if (c.maCLO) scoreMap.set(c.maCLO, c.diemCham)
     })
     if (selectedStudentScore.diemTheoTieuChi) {
       selectedStudentScore.diemTheoTieuChi.forEach((x) => {
         if (!scoreMap.has(x.maTieuChi)) scoreMap.set(x.maTieuChi, x.diemCham)
+        if (x.maCLO && !scoreMap.has(x.maCLO)) scoreMap.set(x.maCLO, x.diemCham)
       })
+    }
+
+    const resolveScore = (maTieuChi, maCLO) => {
+      if (scoreMap.has(maTieuChi)) return scoreMap.get(maTieuChi)
+      if (maCLO && scoreMap.has(maCLO)) return scoreMap.get(maCLO)
+      for (const [k, v] of scoreMap.entries()) {
+        if (maCLO && (k === maCLO || k.endsWith('_' + maCLO))) return v
+      }
+      return null
     }
 
     if (allCriteria.length > 0) {
@@ -78,9 +91,9 @@ export default function ThongKeCLOPage() {
         maTieuChi: c.maTieuChi,
         tenTieuChi: c.tenTieuChi,
         maCLO: c.maCLO,
-        nhom: c.nhomDanhGia || (c.maTieuChi?.startsWith('CLO4') ? 'DN' : 'GV'),
+        nhom: c.nhomDanhGia || (c.maTieuChi?.startsWith('CLO4') || c.maCLO?.startsWith('CLO4') ? 'DN' : 'GV'),
         diemToiDa: c.diemToiDa,
-        diemCham: scoreMap.has(c.maTieuChi) ? scoreMap.get(c.maTieuChi) : null,
+        diemCham: resolveScore(c.maTieuChi, c.maCLO),
       }))
     }
 
@@ -89,7 +102,7 @@ export default function ThongKeCLOPage() {
         maTieuChi: c.maTieuChi,
         tenTieuChi: c.tenTieuChi,
         maCLO: c.maCLO,
-        nhom: c.nhomDanhGia || (c.maTieuChi?.startsWith('CLO4') ? 'DN' : 'GV'),
+        nhom: c.nhomDanhGia || (c.maTieuChi?.startsWith('CLO4') || c.maCLO?.startsWith('CLO4') ? 'DN' : 'GV'),
         diemToiDa: c.diemToiDa,
         diemCham: c.diemCham,
       }))
@@ -100,9 +113,9 @@ export default function ThongKeCLOPage() {
         maTieuChi: c.maTieuChi,
         tenTieuChi: c.tenCLO,
         maCLO: c.maCLO,
-        nhom: c.maTieuChi?.startsWith('CLO4') ? 'DN' : 'GV',
+        nhom: (c.maTieuChi?.startsWith('CLO4') || c.maCLO?.startsWith('CLO4')) ? 'DN' : 'GV',
         diemToiDa: c.diemToiDa,
-        diemCham: scoreMap.get(c.maTieuChi) ?? null,
+        diemCham: resolveScore(c.maTieuChi, c.maCLO),
       }))
     }
     return []
@@ -156,7 +169,7 @@ export default function ThongKeCLOPage() {
       if (exported === false) return
       showToast('Đã xuất file Microsoft Excel (.xlsx) 3 sheets thành công!')
     } catch (e) {
-      alert('Lỗi khi xuất file Excel: ' + e.message)
+      toast.error('Lỗi khi xuất file Excel: ' + e.message)
     }
   }
 
@@ -171,16 +184,11 @@ export default function ThongKeCLOPage() {
       if (exported === false) return
       showToast('Đã xuất file chấm điểm theo mẫu của Khoa!')
     } catch (e) {
-      alert('Lỗi khi xuất file chấm điểm: ' + (e.response?.data?.message || e.message))
+      toast.error('Lỗi khi xuất file chấm điểm: ' + (e.response?.data?.message || e.message))
     }
   }
 
-  // Tải CSV từ backend
-  const handleExportCsv = () => {
-    const url = thongKeService.getExportCsvUrl(selectedDot?.maDot)
-    window.open(url, '_blank')
-    showToast('Đang tải tệp CSV mã hóa UTF-8...')
-  }
+
 
   // Danh sách sinh viên sau khi lọc
   const filteredStudents = useMemo(() => {
@@ -282,15 +290,7 @@ export default function ThongKeCLOPage() {
             <span className="material-symbols-outlined text-lg">refresh</span>
           </button>
 
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            disabled={loading || !data}
-            className="px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-base text-slate-500">csv</span>
-            <span>Tải CSV</span>
-          </button>
+
 
           <button
             type="button"
@@ -307,7 +307,7 @@ export default function ThongKeCLOPage() {
             onClick={handleExportMauKhoa}
             disabled={loading || !selectedDot?.maDot}
             className="px-3.5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50"
-            title="File chấm điểm theo mẫu của Khoa: 11 tiêu chí CLO, tổng điểm, GVHD, tên công ty"
+            title="File chấm điểm theo mẫu của Khoa: các tiêu chí CLO theo bộ, tổng điểm, GVHD, tên công ty"
           >
             <span className="material-symbols-outlined text-base">grading</span>
             <span>Mẫu chấm Khoa</span>
@@ -361,12 +361,13 @@ export default function ThongKeCLOPage() {
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-bold text-slate-900">{tongQuan.tienDoDaDuyet || 0}</span>
                   <span className="text-xs font-semibold text-slate-400">
-                    / {tongQuan.tongBaoCaoTienDo || 0} báo cáo
+                    / {tongQuan.tongBaoCaoTienDo || 0} báo cáo hiện hành
                   </span>
                 </div>
                 <p className="text-xs text-amber-600 mt-1 font-medium">
                   Đang chờ duyệt: <strong>{tongQuan.tienDoChoDuyet || 0}</strong> tuần
                 </p>
+                <p className="text-xs text-slate-500 mt-1">Lưu trữ do đổi nơi: {tongQuan.baoCaoLuuTru || 0} báo cáo</p>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center">
                 <span className="material-symbols-outlined text-2xl">pending_actions</span>
@@ -577,7 +578,7 @@ export default function ThongKeCLOPage() {
 
                     <div>
                       <div className="flex justify-between text-[11px] text-slate-600 mb-1">
-                        <span>Số SV hướng dẫn:</span>
+                        <span>SV đang hướng dẫn trong đợt:</span>
                         <span className="font-bold">
                           {gv.soLuongHienTai} / {gv.soLuongSVHD} {noCapacity ? '(không nhận thêm)' : `(${gv.tiLeTai}%)`}
                         </span>

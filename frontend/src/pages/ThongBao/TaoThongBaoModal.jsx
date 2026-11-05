@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { useState } from 'react'
 
 export default function TaoThongBaoModal({ isOpen, onClose, onCreated, selectedDot }) {
@@ -44,8 +45,8 @@ export default function TaoThongBaoModal({ isOpen, onClose, onCreated, selectedD
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!tieuDe.trim()) return alert('Vui lòng nhập tiêu đề thông báo.')
-    if (!noiDung.trim()) return alert('Vui lòng nhập nội dung thông báo.')
+    if (!tieuDe.trim()) return toast.warning('Vui lòng nhập tiêu đề thông báo.')
+    if (!noiDung.trim()) return toast.warning('Vui lòng nhập nội dung thông báo.')
 
     const matchedCategory = categoryPresets.find((c) => c.key === danhMuc) || categoryPresets[0]
 
@@ -76,7 +77,7 @@ export default function TaoThongBaoModal({ isOpen, onClose, onCreated, selectedD
       isNew: true,
       doiTuong, // 'ALL', 'GiangVien', 'SinhVien'
       isCustomCreated: true,
-      maDot: selectedDot?.maDot || 'DOT01',
+      maDot: selectedDot?.maDot || null,
     }
 
     onCreated(newNotification)
