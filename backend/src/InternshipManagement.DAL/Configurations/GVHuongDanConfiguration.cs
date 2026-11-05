@@ -8,7 +8,7 @@ public class GVHuongDanConfiguration : IEntityTypeConfiguration<GVHuongDan>
 {
     public void Configure(EntityTypeBuilder<GVHuongDan> builder)
     {
-        builder.ToTable("GVHUONGDAN");
+        builder.ToTable("GVHUONGDAN", table => table.UseSqlOutputClause(false));
         builder.HasKey(x => x.MaSo);
 
         builder.Property(x => x.MaSo).HasColumnName("maSo").HasMaxLength(20);

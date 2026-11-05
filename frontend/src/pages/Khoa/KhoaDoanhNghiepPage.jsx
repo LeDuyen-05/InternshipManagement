@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import DuyetDeXuatPanel from './DuyetDeXuatPanel'
+import { gioiThieuService } from '../../services/gioiThieuService'
 import Layout from '../../components/Layout'
 import apiClient from '../../services/api'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
@@ -7,6 +10,7 @@ import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { deadlineText } from '../../hooks/useGradeDeadline'
 import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
+import { xuatBangHuitExcel, taiFileExcel } from '../../utils/exportHuitExcel'
 
 const local = (value) =>
   value ? new Date(Date.parse(value) + 7 * 3600000).toISOString().slice(0, 16) : ''
@@ -67,7 +71,24 @@ export default function KhoaDoanhNghiepPage() {
   const currentRound = useRef(round)
   currentRound.current = round
 
-  const [activeTab, setActiveTab] = useState('theo-dot') // 'theo-dot' | 'danh-muc'
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState(
+    tabParam === 'de-xuat' ? 'de-xuat' : tabParam === 'danh-muc' ? 'danh-muc' : 'theo-dot'
+  )
+  const [pendingProposalsCount, setPendingProposalsCount] = useState(0)
+
+  useEffect(() => {
+    const p = searchParams.get('tab')
+    if (p === 'de-xuat') setActiveTab('de-xuat')
+    else if (p === 'danh-muc') setActiveTab('danh-muc')
+    else if (!p) setActiveTab('theo-dot')
+  }, [searchParams])
+
+  const handleTabChange = (newTab) => {
+    setActiveTab(newTab)
+    setSearchParams(newTab === 'theo-dot' ? {} : { tab: newTab })
+  }
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -102,10 +123,12 @@ export default function KhoaDoanhNghiepPage() {
   const [history, setHistory] = useState([])
   const [showHistory, setShowHistory] = useState(false)
 
-  // Import CSV
-  const [csvFile, setCsvFile] = useState(null)
-  const [csvMessage, setCsvMessage] = useState('')
-  const [csvErrors, setCsvErrors] = useState([])
+  // Nhập / Xuất Excel & CSV
+  const [uploadFile, setUploadFile] = useState(null)
+  const [importMessage, setImportMessage] = useState('')
+  const [importErrors, setImportErrors] = useState([])
+  const [exportingRound, setExportingRound] = useState(false)
+  const [exportingAll, setExportingAll] = useState(false)
 
   const version = useRef(0)
 
@@ -118,17 +141,27 @@ export default function KhoaDoanhNghiepPage() {
       const promises = [
         apiClient.get('/khoa/cong-ty'),
         apiClient.get('/khoa/giang-vien'),
+        gioiThieuService.getAll().catch(() => null),
       ]
       if (round) {
         promises.push(
           apiClient.get('/khoa/cong-ty-theo-dot', { params: { maDot: round } })
         )
       }
-      const [resAll, resGV, resRound] = await Promise.all(promises)
+      const [resAll, resGV, resGT, resRound] = await Promise.all(promises)
       if (req !== version.current) return
 
       setAllCompanies(resAll.data || [])
       setTeachers(resGV.data || [])
+      if (resGT) {
+        const gtData = resGT.data?.success ? resGT.data.data : resGT.data
+        if (Array.isArray(gtData)) {
+          const pending = gtData.filter(
+            (i) => i.trangThaiKetNoi !== 'DaDuyet' && i.trangThaiKetNoi !== 'TuChoi'
+          ).length
+          setPendingProposalsCount(pending)
+        }
+      }
       if (resRound) {
         setRoundItems(resRound.data || [])
       } else {
@@ -363,55 +396,355 @@ export default function KhoaDoanhNghiepPage() {
     }
   }
 
-  // CSV Export/Import
-  const handleDownloadCsvTemplate = async () => {
+  // Xuất & Tải mẫu Excel
+  const handleDownloadExcelTemplate = async () => {
     try {
-      const res = await apiClient.get('/khoa/danh-muc/cong-ty/mau-csv', { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'mau-doanh-nghiep.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      setError('Không tải được file mẫu CSV.')
+      const { default: ExcelJS } = await import('exceljs')
+      const wb = new ExcelJS.Workbook()
+      wb.creator = 'Khoa CNTT - HUIT'
+      wb.created = new Date()
+
+      const ws = wb.addWorksheet('Mau_DoanhNghiep', {
+        views: [{ showGridLines: true }],
+      })
+
+      // Tiêu ngữ cơ quan ban hành
+      const r1 = ws.addRow(['TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP. HỒ CHÍ MINH'])
+      r1.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1E293B' } }
+      ws.mergeCells(1, 1, 1, 4)
+
+      const r2 = ws.addRow(['KHOA CÔNG NGHỆ THÔNG TIN'])
+      r2.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1D4ED8' } }
+      ws.mergeCells(2, 1, 2, 4)
+
+      ws.addRow([]) // Dòng 3 trống
+
+      // Tiêu đề biểu mẫu
+      const r4 = ws.addRow(['BIỂU MẪU NHẬP DANH SÁCH DOANH NGHIỆP ĐỐI TÁC'])
+      r4.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F172A' } }
+      r4.alignment = { horizontal: 'center', vertical: 'middle' }
+      r4.height = 28
+      ws.mergeCells(4, 1, 4, 6)
+
+      const r5 = ws.addRow([
+        'Lưu ý: Các cột có dấu (*) là bắt buộc. Cột "Chỉ tiêu tiếp nhận" điền số nguyên >= 0. Cột "Mã doanh nghiệp" không trùng lặp.',
+      ])
+      r5.font = { name: 'Times New Roman', size: 9, italic: true, color: { argb: 'FFDC2626' } }
+      r5.alignment = { horizontal: 'center', vertical: 'middle' }
+      r5.height = 20
+      ws.mergeCells(5, 1, 5, 6)
+
+      ws.addRow([]) // Dòng 6 trống
+
+      // Header bảng (Dòng 7)
+      const headers = [
+        'Mã doanh nghiệp (*)',
+        'Tên doanh nghiệp (*)',
+        'Vị trí tuyển dụng',
+        'Thời gian thực tập',
+        'Chỉ tiêu tiếp nhận',
+        'Yêu cầu tuyển dụng',
+      ]
+      const headerRow = ws.addRow(headers)
+      headerRow.height = 28
+      headerRow.eachCell((cell) => {
+        cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF312E81' }, // Indigo đậm sang trọng
+        }
+        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF475569' } },
+          left: { style: 'thin', color: { argb: 'FF475569' } },
+          bottom: { style: 'medium', color: { argb: 'FF1E1B4B' } },
+          right: { style: 'thin', color: { argb: 'FF475569' } },
+        }
+      })
+
+      // Dữ liệu mẫu (Dòng 8, 9, 10)
+      const sampleRows = [
+        [
+          'CT_FPT',
+          'Công ty TNHH Phần mềm FPT (FPT Software)',
+          'Lập trình viên Java / ReactJS',
+          '12 tuần',
+          15,
+          'Java, Spring Boot, ReactJS, Git, GPA >= 2.5',
+        ],
+        [
+          'CT_MOMO',
+          'Công ty CP Dịch vụ Di động Trực tuyến (MoMo)',
+          'Kỹ sư Backend & Hệ thống thanh toán',
+          '3 tháng',
+          10,
+          'Golang, Microservices, Redis, GPA >= 2.8',
+        ],
+        [
+          'CT_VNPAY',
+          'Công ty CP Giải pháp Thanh toán Việt Nam (VNPAY)',
+          'Kỹ sư Kiểm thử tự động (Automation Test QA)',
+          '3 tháng',
+          8,
+          'Selenium, Postman, Jest, Cypress, GPA >= 2.7',
+        ],
+      ]
+
+      sampleRows.forEach((rowValues) => {
+        const row = ws.addRow(rowValues)
+        row.height = 24
+        row.eachCell((cell, idx) => {
+          cell.font = { name: 'Times New Roman', size: 10, color: { argb: 'FF0F172A' } }
+          cell.alignment = {
+            horizontal: idx === 1 || idx === 4 || idx === 5 ? 'center' : 'left',
+            vertical: 'middle',
+            wrapText: true,
+          }
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+            right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          }
+        })
+      })
+
+      // Đặt độ rộng các cột
+      const widths = [22, 42, 32, 20, 20, 48]
+      widths.forEach((w, idx) => {
+        ws.getColumn(idx + 1).width = w
+      })
+
+      const buffer = await wb.xlsx.writeBuffer()
+      taiFileExcel(buffer, 'mau-nhap-doanh-nghiep.xlsx')
+    } catch (err) {
+      setError('Không thể tạo file mẫu Excel: ' + (err.message || 'Lỗi không xác định'))
     }
   }
 
-  const handleExportCsv = async () => {
+  // Xuất Excel danh bạ doanh nghiệp toàn hệ thống (Tab 2)
+  const handleExportExcel = async () => {
     try {
-      const res = await apiClient.get('/khoa/danh-muc/cong-ty/export-csv', { responseType: 'blob' })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'danh-sach-doanh-nghiep.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      setError('Không xuất được danh sách CSV.')
+      const dataToExport = filteredAllCompanies.length > 0 ? filteredAllCompanies : allCompanies
+      if (dataToExport.length === 0) {
+        setError('Danh sách doanh nghiệp rỗng, không có dữ liệu để xuất.')
+        return
+      }
+      setExportingAll(true)
+
+      const statusMap = {
+        DaDuyet: 'Đã duyệt',
+        ChoDuyet: 'Chờ duyệt',
+        DongBang: 'Tạm dừng',
+        TuChoi: 'Từ chối',
+      }
+
+      const rows = dataToExport.map((x, idx) => ({
+        stt: idx + 1,
+        maCongTy: x.maCongTy,
+        tenCongTy: x.tenCongTy,
+        viTriTuyen: x.viTriTuyen || '—',
+        thoiGian: x.thoiGian || '—',
+        soLuongNhan: x.soLuongNhan != null ? x.soLuongNhan : '—',
+        yeuCau: x.yeuCau || '—',
+        trangThai: statusMap[x.trangThai] || x.trangThai || '—',
+      }))
+
+      await xuatBangHuitExcel({
+        fileName: `DanhSach_DoanhNghiep_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        sheetName: 'DanhSach_DN',
+        title: 'DANH SÁCH DOANH NGHIỆP ĐỐI TÁC LIÊN KẾT',
+        subTitle: 'Cổng thông tin quản lý thực tập — Khoa Công nghệ Thông tin',
+        columns: [
+          { header: 'STT', key: 'stt', width: 8, align: 'center' },
+          { header: 'Mã DN', key: 'maCongTy', width: 16, align: 'center' },
+          { header: 'Tên doanh nghiệp', key: 'tenCongTy', width: 40 },
+          { header: 'Vị trí tuyển dụng', key: 'viTriTuyen', width: 32 },
+          { header: 'Thời gian', key: 'thoiGian', width: 16, align: 'center' },
+          { header: 'Chỉ tiêu', key: 'soLuongNhan', width: 14, align: 'center' },
+          { header: 'Yêu cầu tuyển dụng', key: 'yeuCau', width: 42 },
+          { header: 'Trạng thái', key: 'trangThai', width: 16, align: 'center' },
+        ],
+        rows,
+        reportType: 'internal',
+      })
+      setMessage('Xuất file Excel danh sách doanh nghiệp thành công!')
+    } catch (err) {
+      setError('Lỗi khi xuất file Excel: ' + (err.message || 'Thao tác không thành công.'))
+    } finally {
+      setExportingAll(false)
     }
   }
 
-  const handleUploadCsv = async (e) => {
+  // Xuất Excel kế hoạch doanh nghiệp trong đợt (Tab 1)
+  const handleExportRoundExcel = async () => {
+    try {
+      const dataToExport = filteredRoundItems.length > 0 ? filteredRoundItems : roundItems
+      if (dataToExport.length === 0) {
+        setError('Đợt này chưa có doanh nghiệp nào tiếp nhận để xuất.')
+        return
+      }
+      setExportingRound(true)
+
+      const rows = dataToExport.map((x, idx) => ({
+        stt: idx + 1,
+        maCongTy: x.maCongTy,
+        tenCongTy: x.tenCongTy,
+        viTriTuyen: x.viTriTuyen || (x.viTris?.map((v) => v.tenViTri).join(', ') || '—'),
+        soLuongNhan: x.soLuongNhan ?? 0,
+        daTiepNhan: x.daTiepNhan ?? 0,
+        conLai: Math.max(0, (x.soLuongNhan ?? 0) - (x.daTiepNhan ?? 0)),
+        hanDangKy: x.hanDangKy ? new Date(x.hanDangKy).toLocaleDateString('vi-VN') : '—',
+        trangThai: x.khoaNhanDon ? 'Đã khóa nhận mới' : x.conChiTieu === false ? 'Đủ chỉ tiêu' : 'Đang nhận đơn',
+      }))
+
+      await xuatBangHuitExcel({
+        fileName: `KeHoach_DoanhNghiep_${round}_${new Date().toISOString().slice(0, 10)}.xlsx`,
+        sheetName: 'KeHoach_Dot',
+        title: `KẾ HOẠCH DOANH NGHIỆP TIẾP NHẬN THỰC TẬP — ${selectedDot?.tenDot || round}`,
+        subTitle: `Khoa Công nghệ Thông tin — Năm học ${selectedDot?.namHoc || ''}`,
+        columns: [
+          { header: 'STT', key: 'stt', width: 8, align: 'center' },
+          { header: 'Mã DN', key: 'maCongTy', width: 16, align: 'center' },
+          { header: 'Tên doanh nghiệp', key: 'tenCongTy', width: 40 },
+          { header: 'Vị trí tuyển dụng', key: 'viTriTuyen', width: 32 },
+          { header: 'Chỉ tiêu', key: 'soLuongNhan', width: 14, align: 'center' },
+          { header: 'Đã nhận', key: 'daTiepNhan', width: 14, align: 'center' },
+          { header: 'Còn lại', key: 'conLai', width: 14, align: 'center' },
+          { header: 'Hạn đăng ký', key: 'hanDangKy', width: 16, align: 'center' },
+          { header: 'Tình trạng nhận', key: 'trangThai', width: 20, align: 'center' },
+        ],
+        rows,
+        reportType: 'internal',
+      })
+      setMessage('Xuất file Excel kế hoạch doanh nghiệp theo đợt thành công!')
+    } catch (err) {
+      setError('Lỗi khi xuất file Excel: ' + (err.message || 'Thao tác không thành công.'))
+    } finally {
+      setExportingRound(false)
+    }
+  }
+
+  // Tải lên & Nhập danh sách doanh nghiệp từ file Excel hoặc CSV
+  const handleUploadFile = async (e) => {
     e.preventDefault()
-    if (!csvFile) return
+    if (!uploadFile) return
     setBusy(true)
-    setCsvMessage('')
-    setCsvErrors([])
-    const body = new FormData()
-    body.append('file', csvFile)
+    setImportMessage('')
+    setImportErrors([])
+
     try {
+      let csvBlob = null
+
+      if (uploadFile.name.endsWith('.xlsx') || uploadFile.name.endsWith('.xls')) {
+        // Đọc dữ liệu từ file Excel bằng ExcelJS
+        const { default: ExcelJS } = await import('exceljs')
+        const wb = new ExcelJS.Workbook()
+        const buffer = await uploadFile.arrayBuffer()
+        await wb.xlsx.load(buffer)
+        const ws = wb.worksheets[0]
+        if (!ws) throw new Error('File Excel không có sheet nào.')
+
+        const rows = []
+        ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+          const values = Array.isArray(row.values) ? row.values.slice(1) : []
+          rows.push({
+            rowNumber,
+            values: values.map((v) => (v != null && typeof v === 'object' && v.text ? v.text : v ?? '')),
+          })
+        })
+
+        // Tìm dòng header
+        let headerIdx = -1
+        for (let i = 0; i < Math.min(rows.length, 15); i++) {
+          const text = rows[i].values.map((v) => String(v).toLowerCase()).join(' ')
+          if (
+            text.includes('mã') ||
+            text.includes('macongty') ||
+            text.includes('doanh nghiệp') ||
+            text.includes('công ty')
+          ) {
+            headerIdx = i
+            break
+          }
+        }
+
+        if (headerIdx === -1) {
+          throw new Error('Không tìm thấy dòng tiêu đề cột hợp lệ trong file Excel. Vui lòng tải file mẫu để kiểm tra cấu trúc.')
+        }
+
+        const headerCols = rows[headerIdx].values.map((v) => String(v).toLowerCase().trim())
+        // Xác định vị trí từng cột
+        let colMa = -1, colTen = -1, colViTri = -1, colThoiGian = -1, colSoLuong = -1, colYeuCau = -1
+
+        headerCols.forEach((col, idx) => {
+          if (col.includes('mã') || col.includes('macongty')) colMa = idx
+          else if (col.includes('tên') || col.includes('tencongty') || col.includes('doanh nghiệp') || col.includes('công ty')) colTen = idx
+          else if (col.includes('vị trí') || col.includes('vitri')) colViTri = idx
+          else if (col.includes('thời gian') || col.includes('thoigian')) colThoiGian = idx
+          else if (col.includes('chỉ tiêu') || col.includes('số lượng') || col.includes('soluong')) colSoLuong = idx
+          else if (col.includes('yêu cầu') || col.includes('yeucau')) colYeuCau = idx
+        })
+
+        // Fallback theo thứ tự cột mẫu nếu không map được
+        if (colMa === -1) colMa = 0
+        if (colTen === -1) colTen = 1
+        if (colViTri === -1) colViTri = 2
+        if (colThoiGian === -1) colThoiGian = 3
+        if (colSoLuong === -1) colSoLuong = 4
+        if (colYeuCau === -1) colYeuCau = 5
+
+        const dataRows = rows.slice(headerIdx + 1)
+        const csvLines = ['maCongTy,tenCongTy,viTriTuyen,thoiGian,soLuongNhan,yeuCau']
+
+        for (const r of dataRows) {
+          const vals = r.values
+          const ma = String(vals[colMa] || '').trim()
+          const ten = String(vals[colTen] || '').trim()
+          if (!ma && !ten) continue // Bỏ qua dòng trống
+
+          const viTri = String(vals[colViTri] || '').trim()
+          const thoiGian = String(vals[colThoiGian] || '').trim()
+          const soLuong = String(vals[colSoLuong] || '').trim()
+          const yeuCau = String(vals[colYeuCau] || '').trim()
+
+          const escapeCsv = (str) => {
+            const s = String(str ?? '')
+            return s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')
+              ? `"${s.replace(/"/g, '""')}"`
+              : s
+          }
+
+          csvLines.push(
+            [escapeCsv(ma), escapeCsv(ten), escapeCsv(viTri), escapeCsv(thoiGian), escapeCsv(soLuong), escapeCsv(yeuCau)].join(',')
+          )
+        }
+
+        if (csvLines.length <= 1) {
+          throw new Error('File Excel không có dòng dữ liệu doanh nghiệp nào để nhập.')
+        }
+
+        const csvContent = csvLines.join('\r\n')
+        csvBlob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv; charset=utf-8' })
+      } else {
+        csvBlob = uploadFile
+      }
+
+      const body = new FormData()
+      body.append('file', csvBlob, 'import-doanh-nghiep.csv')
+
       const { data } = await apiClient.post('/khoa/danh-muc/cong-ty/import', body, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setCsvMessage(`Đã nhập thành công ${data.soLuongNhap} doanh nghiệp vào hệ thống.`)
-      setCsvFile(null)
+      setImportMessage(`Đã nạp thành công ${data.soLuongNhap} doanh nghiệp vào hệ thống.`)
+      setUploadFile(null)
       e.target.reset()
       await loadData()
     } catch (err) {
       const d = err.response?.data
-      setCsvMessage(d?.message || 'File CSV có lỗi, chưa nhập dữ liệu.')
-      setCsvErrors(d?.loi || [])
+      setImportMessage(d?.message || err.message || 'File có lỗi, chưa nhập được dữ liệu.')
+      setImportErrors(d?.loi ? d.loi.map(x => typeof x === 'object' ? `Dòng ${x.dong}: ${x.loi}` : x) : [])
     } finally {
       setBusy(false)
     }
@@ -462,7 +795,7 @@ export default function KhoaDoanhNghiepPage() {
                 <span className="material-symbols-outlined text-sm">add_business</span>
                 <span>Đưa DN vào đợt</span>
               </button>
-            ) : (
+            ) : activeTab === 'danh-muc' ? (
               <button
                 onClick={handleOpenAddCompany}
                 className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
@@ -470,7 +803,7 @@ export default function KhoaDoanhNghiepPage() {
                 <span className="material-symbols-outlined text-sm">add</span>
                 <span>Thêm doanh nghiệp mới</span>
               </button>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -647,6 +980,16 @@ export default function KhoaDoanhNghiepPage() {
                       className="pl-8 pr-3 py-1.5 text-xs rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 w-56 text-slate-900 shadow-2xs"
                     />
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleExportRoundExcel}
+                    disabled={exportingRound || !roundItems.length}
+                    className="px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer border border-emerald-200 disabled:opacity-50"
+                    title="Xuất danh sách kế hoạch doanh nghiệp tiếp nhận trong đợt ra file Excel"
+                  >
+                    <span className="material-symbols-outlined text-sm">table_chart</span>
+                    <span>{exportingRound ? 'Đang xuất…' : 'Xuất Excel'}</span>
+                  </button>
                   <button
                     onClick={handleToggleHistory}
                     className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
@@ -1045,65 +1388,69 @@ export default function KhoaDoanhNghiepPage() {
               </div>
             </div>
 
-            {/* Khối Nhập / Xuất Danh Sách Doanh Nghiệp Bằng CSV */}
+            {/* Khối Nhập / Xuất Danh Sách Doanh Nghiệp Bằng Excel / CSV */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 m-0">
                     <span className="material-symbols-outlined text-indigo-600">file_upload</span>
-                    <span>Nhập danh sách Doanh nghiệp từ file</span>
+                    <span>Nhập danh sách Doanh nghiệp từ file Excel</span>
                   </h3>
                   <p className="text-xs text-slate-500 m-0 mt-0.5">
-                    Hỗ trợ nhập hàng loạt danh sách doanh nghiệp đối tác theo mẫu quy định của Khoa.
+                    Hỗ trợ nhập hàng loạt danh sách doanh nghiệp đối tác theo mẫu Excel chuẩn của Khoa (.xlsx, .csv).
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    onClick={handleExportCsv}
-                    className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    onClick={handleExportExcel}
+                    disabled={exportingAll || (!allCompanies.length && !filteredAllCompanies.length)}
+                    className="px-3.5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    title="Xuất toàn bộ danh sách doanh nghiệp đối tác ra file Excel (.xlsx)"
                   >
-                    <span className="material-symbols-outlined text-sm">download</span>
-                    <span>Xuất CSV</span>
+                    <span className="material-symbols-outlined text-[16px]">table_chart</span>
+                    <span>{exportingAll ? 'Đang xuất…' : 'Xuất Excel (.xlsx)'}</span>
                   </button>
                   <button
                     type="button"
-                    onClick={handleDownloadCsvTemplate}
-                    className="px-3.5 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors cursor-pointer flex items-center gap-1"
+                    onClick={handleDownloadExcelTemplate}
+                    className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Tải tệp Excel mẫu (.xlsx) để điền thông tin doanh nghiệp"
                   >
-                    <span className="material-symbols-outlined text-sm">description</span>
-                    <span>Tải mẫu CSV</span>
+                    <span className="material-symbols-outlined text-[16px]">download</span>
+                    <span>Tải mẫu Excel (.xlsx)</span>
                   </button>
                 </div>
               </div>
 
-              <form onSubmit={handleUploadCsv} className="flex flex-col sm:flex-row items-center gap-3">
+              <form onSubmit={handleUploadFile} className="flex flex-col sm:flex-row items-center gap-3">
                 <input
                   type="file"
-                  accept=".csv"
-                  onChange={(e) => setCsvFile(e.target.files?.[0] || null)}
+                  accept=".xlsx, .xls, .csv"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   className="block w-full sm:w-auto text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
                 />
                 <button
                   type="submit"
-                  disabled={!csvFile || busy}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50 shrink-0"
+                  disabled={!uploadFile || busy}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-50 shrink-0 flex items-center gap-1.5"
                 >
-                  {busy ? 'Đang xử lý…' : 'Tải lên và nhập dữ liệu'}
+                  <span className="material-symbols-outlined text-[16px]">{busy ? 'sync' : 'upload_file'}</span>
+                  <span>{busy ? 'Đang xử lý…' : 'Tải lên và nhập dữ liệu'}</span>
                 </button>
               </form>
 
-              {csvMessage && (
-                <div className="p-3 bg-blue-50 text-blue-800 rounded-xl text-xs border border-blue-200">
-                  {csvMessage}
+              {importMessage && (
+                <div className={`p-3 rounded-xl text-xs border ${importErrors.length > 0 ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-emerald-50 text-emerald-800 border-emerald-200'}`}>
+                  {importMessage}
                 </div>
               )}
 
-              {csvErrors.length > 0 && (
+              {importErrors.length > 0 && (
                 <div className="p-3 bg-rose-50 text-rose-800 rounded-xl text-xs border border-rose-200 space-y-1">
-                  <strong>Danh sách lỗi trong file CSV:</strong>
+                  <strong>Danh sách lỗi trong file:</strong>
                   <ul className="list-disc list-inside space-y-0.5 m-0">
-                    {csvErrors.map((err, idx) => (
+                    {importErrors.map((err, idx) => (
                       <li key={idx}>{err}</li>
                     ))}
                   </ul>
@@ -1111,6 +1458,11 @@ export default function KhoaDoanhNghiepPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* TAB 3: XÉT DUYỆT ĐỀ XUẤT DOANH NGHIỆP TỪ GIẢNG VIÊN */}
+        {activeTab === 'de-xuat' && (
+          <DuyetDeXuatPanel onDataChanged={loadData} />
         )}
 
         {/* BENTO MODAL POPUP: THÊM / CẬP NHẬT KẾ HOẠCH ĐỢT */}

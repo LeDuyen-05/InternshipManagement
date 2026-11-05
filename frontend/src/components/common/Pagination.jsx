@@ -1,6 +1,7 @@
 import { PAGE_SIZES, paginationPages } from '../../utils/pagination'
 
 export default function Pagination({ pagination, label = 'danh sách' }) {
+  if (!pagination || !pagination.totalItems) return null
   const { page, pageSize, totalItems, totalPages, start, end, setPage, setPageSize } = pagination
   if (!totalItems) return null
 

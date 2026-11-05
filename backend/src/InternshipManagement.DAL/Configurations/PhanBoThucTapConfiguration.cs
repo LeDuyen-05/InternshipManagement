@@ -10,6 +10,9 @@ public class PhanBoThucTapConfiguration : IEntityTypeConfiguration<PhanBoThucTap
     {
         builder.ToTable("PHANBOTHUCTAP");
         builder.HasKey(x => x.MaPhanBo);
+        builder.HasIndex(x => new { x.MaDot, x.MaSinhVien }).HasDatabaseName("IX_PB_DOT_SV_READ")
+            .IncludeProperties(x => new { x.MaCongTy, x.TrangThai, x.DaDuocKhoaDuyet, x.NgayPhanBo,
+                x.NgayBatDauThucTap, x.NgayKetThucThucTap, x.TenCongTyXacNhan });
 
         builder.Property(x => x.MaPhanBo).HasColumnName("maPB").HasMaxLength(20);
         builder.Property(x => x.MaSinhVien).HasColumnName("maSV").HasMaxLength(20);

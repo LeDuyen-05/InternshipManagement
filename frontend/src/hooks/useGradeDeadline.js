@@ -31,5 +31,8 @@ export function useGradeDeadline(maDot, group) {
   const block = !maDot ? 'Chọn đợt để xem thời hạn chấm.' : !current ? 'Đang tải thời hạn chấm…'
     : current.error || (group === 'DN' ? current.data.lyDoKhoaDN : current.data.lyDoKhoaGV)
   const lockBlock = lock.blocked ? (lock.error || (lock.loading ? 'Đang kiểm tra khóa đợt…' : 'Đợt đã khóa/chờ chốt lại; cần Khoa mở lại điểm và cấu hình hạn phù hợp.')) : null
-  return { data: current?.data, block: lockBlock || block, canGrade: !lockBlock && !block }
+  const canGrade = !lockBlock && !block
+  return { data: current?.data, block: lockBlock || block, canGrade,
+    correctionUntil: lock.status === 'MoLai' ? lock.data?.hanMoLai : null,
+    canCorrectSubmitted: canGrade && lock.status === 'MoLai' }
 }

@@ -1,7 +1,7 @@
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import DocumentAttachments from '../../components/common/DocumentAttachments'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'

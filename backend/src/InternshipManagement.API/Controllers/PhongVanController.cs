@@ -20,17 +20,21 @@ public class PhongVanController : ControllerBase
 
     [HttpGet("sinhvien/{maSV}")]
     [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien}")]
-    public async Task<IActionResult> GetLichPhongVan(string maSV)
+    public async Task<IActionResult> GetLichPhongVan(string maSV, [FromQuery] string? maDot)
     {
-        if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
+        if (User.IsInRole(Roles.GiangVien) && string.IsNullOrWhiteSpace(maDot))
+            return BadRequest(new { message = "Vui lòng chọn đợt để xem lịch phỏng vấn của sinh viên." });
+        if (!await _access.CanAccessStudentAsync(User, maSV, maDot)) return Forbid();
         var list = await _service.GetLichPhongVanBySinhVienAsync(maSV);
-        return Ok(list);
+        return Ok(string.IsNullOrWhiteSpace(maDot) ? list : list.Where(x => x.MaDot == maDot));
     }
 
     [HttpGet("phan-bo/sinhvien/{maSV}")]
     [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien},{Roles.SinhVien}")]
     public async Task<IActionResult> GetPhanBoThucTap(string maSV, [FromQuery] string? maDot)
     {
+        if (User.IsInRole(Roles.GiangVien) && string.IsNullOrWhiteSpace(maDot))
+            return BadRequest(new { message = "Vui lòng chọn đợt để xem nơi thực tập của sinh viên." });
         if (!await _access.CanAccessStudentAsync(User, maSV, maDot)) return Forbid();
         var result = await _service.GetPhanBoBySinhVienAsync(maSV, maDot);
         if (result == null) return NotFound(new { success = false, message = "Sinh viên chưa có quyết định phân bổ tiếp nhận." });

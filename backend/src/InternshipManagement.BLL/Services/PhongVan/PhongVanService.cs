@@ -52,6 +52,9 @@ public class PhongVanService : IPhongVanService
 
         var gv = pb.SinhVien?.GVHuongDans?.FirstOrDefault(g => g.MaDot == pb.MaDot && g.TrangThai == "DangHuongDan")?.GiangVien;
         var hd = pb.HuongDanDoanhNghieps?.FirstOrDefault();
+        var period = PlacementPeriod.Resolve(pb);
+        var start = period.Start ?? pb.DotThucTap?.ThoiGianBD;
+        var end = period.End ?? pb.DotThucTap?.ThoiGianKT;
 
         return new PhanBoThucTapDto
         {
@@ -60,9 +63,13 @@ public class PhongVanService : IPhongVanService
             MaCongTy = pb.MaCongTy,
             TenCongTy = pb.CongTy?.TenCongTy,
             ViTriTuyen = pb.HoSoTuTim?.ViTri ?? pb.ViTri?.TenViTri ?? pb.CongTy?.ViTriTuyen,
-            ThoiGianThucTap = pb.HoSoTuTim == null ? pb.CongTy?.ThoiGian : $"{pb.HoSoTuTim.NgayBatDau:dd/MM/yyyy} - {pb.HoSoTuTim.NgayKetThuc:dd/MM/yyyy}",
+            ThoiGianThucTap = start.HasValue && end.HasValue
+                ? $"{start:dd/MM/yyyy} - {end:dd/MM/yyyy}"
+                : pb.CongTy?.ThoiGian,
             MaDot = pb.MaDot,
             TenDot = pb.DotThucTap?.TenDot,
+            MaLoaiThucTap = pb.DotThucTap?.MaLoaiThucTap,
+            TenLoaiThucTap = pb.DotThucTap?.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
             NgayPhanBo = pb.NgayPhanBo,
             TrangThai = pb.TrangThai,
             DaDuocKhoaDuyet = pb.DaDuocKhoaDuyet,

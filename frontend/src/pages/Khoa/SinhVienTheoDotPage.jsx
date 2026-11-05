@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import ModalOverlay from '../../components/common/ModalOverlay'
+import RoundStudentImportWizard from '../../components/common/RoundStudentImportWizard'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Layout from '../../components/Layout'
 import Pagination from '../../components/common/Pagination'
-import { usePagination } from '../../hooks/usePagination'
+import { usePagedApi, useDebouncedValue } from '../../hooks/usePagedApi'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import apiClient from '../../services/api'
+import { vietnamDateTimeParts } from '../../utils/interviewTime'
 import DieuChinhNoiThucTapPanel from '../../components/khoa/DieuChinhNoiThucTapPanel'
 import BoTriBanDauPanel from '../../components/khoa/BoTriBanDauPanel'
 import PlacementPeriodEditor from '../../components/khoa/PlacementPeriodEditor'
-import LanHoTroPanel from '../../components/khoa/LanHoTroPanel'
 import DanhSachDuKienPanel from '../../components/common/DanhSachDuKienPanel'
 import RaSoatNoiPanel from '../../components/khoa/RaSoatNoiPanel'
 
@@ -21,76 +23,6 @@ function parseRoundDates(thoiGian) {
     startIso: `${match[3]}-${match[2]}-${match[1]}`,
     endIso: `${match[6]}-${match[5]}-${match[4]}`,
     display: `${match[1]}/${match[2]}/${match[3]} → ${match[4]}/${match[5]}/${match[6]}`,
-  }
-}
-
-function normalizeRosterData(raw, selectedDot) {
-  if (!raw || !Array.isArray(raw.sinhViens) || !Array.isArray(raw.thongKe))
-    return raw
-  const { startIso, endIso, display } = parseRoundDates(selectedDot?.thoiGian)
-  const todayIso = new Date().toISOString().slice(0, 10)
-  let defaultCode = 'DangThucTap'
-  let defaultName = 'Đang thực tập'
-  if (
-    selectedDot?.trangThai === 'ChuaBatDau' ||
-    (startIso && todayIso < startIso)
-  ) {
-    defaultCode = 'ChuaBatDau'
-    defaultName = 'Đã phân bổ, chưa bắt đầu'
-  } else if (
-    selectedDot?.trangThai === 'DaKetThuc' ||
-    (endIso && todayIso > endIso)
-  ) {
-    defaultCode = 'ChoHoanTat'
-    defaultName = 'Hết thời gian, chờ hoàn tất'
-  }
-
-  const sinhViens = raw.sinhViens.map((row) => {
-    if (row.trangThai === 'ChuaXacMinhThoiGian') {
-      const rangeNote = display ? ` (${display})` : ''
-      return {
-        ...row,
-        trangThai: defaultCode,
-        tenTrangThai: defaultName,
-        canHoTro: false,
-        ngayBatDauThucTap: row.ngayBatDauThucTap || startIso,
-        ngayKetThucThucTap: row.ngayKetThucThucTap || endIso,
-        nguonThoiGian:
-          row.nguonThoiGian === 'KhoaXacMinh' ? 'KhoaXacMinh' : 'TheoDot',
-        lyDo:
-          defaultCode === 'ChuaBatDau'
-            ? `Đã phân bổ chính thức, chưa đến ngày bắt đầu thực tập${rangeNote}.`
-            : defaultCode === 'ChoHoanTat'
-            ? `Đã kết thúc thời gian thực tập${rangeNote}, chờ hoàn tất học phần.`
-            : `Đang thực tập theo lịch của đợt${rangeNote}.`,
-      }
-    }
-    return {
-      ...row,
-      ngayBatDauThucTap:
-        row.ngayBatDauThucTap || (row.coPhanBoChinhThuc ? startIso : null),
-      ngayKetThucThucTap:
-        row.ngayKetThucThucTap || (row.coPhanBoChinhThuc ? endIso : null),
-    }
-  })
-
-  const countsByCode = {}
-  for (const r of sinhViens) {
-    countsByCode[r.trangThai] = (countsByCode[r.trangThai] || 0) + 1
-  }
-
-  const thongKe = raw.thongKe
-    .filter((g) => g.ma !== 'ChuaXacMinhThoiGian')
-    .map((g) => ({
-      ...g,
-      soLuong: countsByCode[g.ma] ?? g.soLuong ?? 0,
-    }))
-
-  return {
-    ...raw,
-    canHoTro: sinhViens.filter((r) => r.canHoTro).length,
-    sinhViens,
-    thongKe,
   }
 }
 
@@ -111,10 +43,10 @@ function getStudentContextLink(row) {
       label: 'Duyệt nơi tự tìm',
     }
   }
-  if (['ChoKhoaChot', 'ChoXacNhan'].includes(row?.trangThai)) {
+  if (['ChoKhoaChot', 'ChoSVXacNhan'].includes(row?.trangThai)) {
     return {
       to: `/khoa/dang-ky?loai=chot-phan-bo&maSV=${code}`,
-      label: 'Chốt phân bổ',
+      label: row.trangThai === 'ChoSVXacNhan' ? 'Theo dõi xác nhận' : 'Chốt phân bổ',
     }
   }
   if (row?.trangThai === 'DangUngTuyen') {
@@ -144,6 +76,7 @@ function parseStudentCodeList(raw) {
         .split(/[\s,;|\t\r\n]+/)
         .map((item) => item.trim().replace(/^["']|["']$/g, ''))
         .filter((item) => item && !/^(masv|mssv|ma_sv|student_id)$/i.test(item))
+        .map(item => item.toUpperCase())
     ),
   ]
 }
@@ -160,13 +93,10 @@ export default function SinhVienTheoDotPage() {
     canEdit &&
     selectedDot?.trangThai === 'ChuaBatDau' &&
     (!roundDates.startIso ||
-      new Date().toISOString().slice(0, 10) < roundDates.startIso)
+      vietnamDateTimeParts().date < roundDates.startIso)
 
   const [activeTab, setActiveTab] = useState('sv-thoi-gian')
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState('')
-  const [error, setError] = useState('')
   const [message, setMessage] = useState('')
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('')
@@ -178,10 +108,8 @@ export default function SinhVienTheoDotPage() {
   // Trạng thái thêm sinh viên quy mô lớn (Theo lớp / Danh mục Khoa / File CSV / Dán mã)
   const [showAdd, setShowAdd] = useState(false)
   const [studentCodes, setStudentCodes] = useState('')
+  const [showImportModal, setShowImportModal] = useState(false)
   const [catalogOpen, setCatalogOpen] = useState(false)
-  const [catalogStudents, setCatalogStudents] = useState([])
-  const [catalogLoading, setCatalogLoading] = useState(false)
-  const [catalogError, setCatalogError] = useState('')
   const [catalogClass, setCatalogClass] = useState('')
   const [catalogMajor, setCatalogMajor] = useState('')
   const [catalogCohort, setCatalogCohort] = useState('')
@@ -193,48 +121,24 @@ export default function SinhVienTheoDotPage() {
   const [periodStudent, setPeriodStudent] = useState(null)
   const [showPolicyModal, setShowPolicyModal] = useState(false)
   const [publicationVersion, setPublicationVersion] = useState(0)
+  const debouncedSearch = useDebouncedValue(search.trim())
+  const { summaryData: data, loading, error, setError, load, pagination } = usePagedApi('/khoa/sinh-vien-theo-dot/paged', {
+    maDot: round, search: debouncedSearch || undefined, lop: classFilter || undefined,
+    trangThai: group || undefined, nguon: sourceFilter || undefined, canHoTro: onlySupport,
+  }, { enabled: Boolean(round), itemsKey: 'sinhViens' })
+  const debouncedCatalogSearch = useDebouncedValue(catalogSearch.trim())
+  const { data: catalogData, summaryData: catalogSummary, loading: catalogLoading, error: catalogError, load: refreshCatalog, pagination: catalogPagination } = usePagedApi('/khoa/sinh-vien-theo-dot/catalog', {
+    maDot: round, search: debouncedCatalogSearch || undefined, lop: catalogClass || undefined,
+    khoaHoc: catalogCohort || undefined, chuyenNganh: catalogMajor || undefined, anDaTrongDot: hideExistingInCatalog,
+  }, { enabled: Boolean(round && catalogOpen && showAdd) })
+  const catalogStudents = useMemo(() => catalogData?.items || [], [catalogData])
+
   const version = useRef(0)
   const currentRound = useRef(round)
   currentRound.current = round
 
-  const load = useCallback(async () => {
-    if (!round || currentRound.current !== round) return
-    const request = ++version.current
-    setLoading(true)
-    setError('')
-    try {
-      const response = await apiClient.get('/khoa/sinh-vien-theo-dot', {
-        params: { maDot: round },
-      })
-      if (currentRound.current !== round || request !== version.current) return
-      if (
-        !Array.isArray(response.data?.sinhViens) ||
-        !Array.isArray(response.data?.thongKe)
-      )
-        throw new Error(
-          'API danh sách SV theo đợt chưa đúng phiên bản. Hãy khởi động lại backend.'
-        )
-      setData(normalizeRosterData(response.data, selectedDot))
-    } catch (e) {
-      if (currentRound.current === round && request === version.current) {
-        setData(null)
-        setError(
-          e.response?.data?.message ||
-            e.message ||
-            'Không tải được danh sách SV theo đợt.'
-        )
-      }
-    } finally {
-      if (currentRound.current === round && request === version.current)
-        setLoading(false)
-    }
-  }, [round])
-
   useEffect(() => {
-    setData(null)
-    setLoading(false)
     setBusy('')
-    setError('')
     setMessage('')
     setSearch('')
     setGroup('')
@@ -247,34 +151,13 @@ export default function SinhVienTheoDotPage() {
     setCatalogOpen(false)
     setSelectedStudent(null)
     setInitialStudent(null)
-    load()
     const requestVersion = version
     return () => {
       requestVersion.current++
     }
-  }, [load])
+  }, [round])
 
-  const loadCatalog = useCallback(async () => {
-    setCatalogOpen(true)
-    if (catalogStudents.length > 0 || catalogLoading) return
-    setCatalogLoading(true)
-    setCatalogError('')
-    try {
-      const res = await apiClient.get('/khoa/sinh-vien')
-      setCatalogStudents(Array.isArray(res.data) ? res.data : [])
-    } catch (e) {
-      setCatalogError(
-        e.response?.data?.message || 'Không tải được danh mục sinh viên của Khoa.'
-      )
-    } finally {
-      setCatalogLoading(false)
-    }
-  }, [catalogStudents.length, catalogLoading])
-
-  const existingCodesSet = useMemo(
-    () => new Set((data?.sinhViens || []).map((row) => String(row.maSV || '').trim())),
-    [data?.sinhViens]
-  )
+  const loadCatalog = () => setCatalogOpen(true)
 
   const parsedCodes = useMemo(
     () => parseStudentCodeList(studentCodes),
@@ -283,12 +166,30 @@ export default function SinhVienTheoDotPage() {
 
   const selectedCodesSet = useMemo(() => new Set(parsedCodes), [parsedCodes])
 
-  const newCodesCount = useMemo(
-    () => parsedCodes.filter((code) => !existingCodesSet.has(code)).length,
-    [parsedCodes, existingCodesSet]
-  )
-
-  const duplicateInRoundCount = parsedCodes.length - newCodesCount
+  const presentKey = JSON.stringify([round, parsedCodes])
+  const presentCurrent = useRef(presentKey); presentCurrent.current = presentKey
+  const [present, setPresent] = useState({ key: '', ids: [] })
+  useEffect(() => {
+    if (!round || !parsedCodes.length || parsedCodes.length > 500) return
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      try {
+        const response = await apiClient.post('/khoa/sinh-vien-theo-dot/present', parsedCodes, { params: { maDot: round }, signal: controller.signal })
+        if (presentCurrent.current === presentKey) setPresent({ key: presentKey, ids: response.data })
+      } catch {
+        if (!controller.signal.aborted && presentCurrent.current === presentKey)
+          setPresent({ key: presentKey, ids: null, error: 'Chưa đối chiếu được MSSV đã có trong đợt. Khi lưu, danh sách vẫn được kiểm tra lại.' })
+      }
+    }, 300)
+    return () => { clearTimeout(timer); controller.abort() }
+  }, [round, presentKey, parsedCodes])
+  const existingCodesSet = useMemo(() => new Set([
+    ...(present.key === presentKey && Array.isArray(present.ids) ? present.ids : []),
+    ...catalogStudents.filter(x => x.daTrongDot).map(x => x.maSV),
+  ].map(code => code.toUpperCase())), [present, presentKey, catalogStudents])
+  const membershipReady = !parsedCodes.length || present.key === presentKey && Array.isArray(present.ids)
+  const newCodesCount = membershipReady ? parsedCodes.filter(code => !existingCodesSet.has(code)).length : null
+  const duplicateInRoundCount = membershipReady ? parsedCodes.length - newCodesCount : 0
 
   const toggleCatalogStudent = (maSV) => {
     const code = String(maSV || '').trim()
@@ -339,6 +240,7 @@ export default function SinhVienTheoDotPage() {
     if (!canEdit || loading || busy) return
     const codes = parseStudentCodeList(studentCodes)
     if (!codes.length) return
+    if (codes.length > 500) { setError('Mỗi lần thêm tối đa 500 MSSV. Vui lòng chia danh sách thành nhiều lần.'); return }
     const request = version.current
     setBusy('add')
     setError('')
@@ -354,6 +256,8 @@ export default function SinhVienTheoDotPage() {
         `Đã thêm ${response.data.soLuongThem} SV vào danh sách Khoa của đợt. MSSV đã có không bị thêm trùng.`
       )
       await load()
+      await refreshCatalog()
+      setPresent({ key: '', ids: [] })
     } catch (e) {
       if (currentRound.current === round && request === version.current)
         setError(e.response?.data?.message || 'Không thêm được SV vào đợt.')
@@ -383,6 +287,8 @@ export default function SinhVienTheoDotPage() {
       if (currentRound.current !== round || request !== version.current) return
       setMessage(`Đã gỡ ${row.maSV} khỏi danh sách Khoa của đợt.`)
       await load()
+      await refreshCatalog()
+      setPresent({ key: '', ids: [] })
     } catch (e) {
       if (currentRound.current === round && request === version.current)
         setError(
@@ -394,93 +300,12 @@ export default function SinhVienTheoDotPage() {
     }
   }
 
-  // Danh sách lớp có trong đợt hiện tại để lọc nhanh
-  const availableClasses = useMemo(() => {
-    const classes = new Set()
-    for (const row of data?.sinhViens || []) {
-      if (row.lop) classes.add(String(row.lop).trim())
-    }
-    return Array.from(classes).sort((a, b) => a.localeCompare(b, 'vi-VN'))
-  }, [data?.sinhViens])
-
-  // Dữ liệu lọc trong Danh mục Khoa (hỗ trợ chọn theo Lớp / Khóa / Chuyên ngành)
-  const catalogClasses = useMemo(
-    () =>
-      [...new Set(catalogStudents.map((s) => s.lop).filter(Boolean))].sort((a, b) =>
-        String(a).localeCompare(String(b), 'vi-VN')
-      ),
-    [catalogStudents]
-  )
-  const catalogCohorts = useMemo(
-    () =>
-      [...new Set(catalogStudents.map((s) => s.khoaHoc).filter(Boolean))].sort((a, b) =>
-        String(a).localeCompare(String(b), 'vi-VN')
-      ),
-    [catalogStudents]
-  )
-  const catalogMajors = useMemo(
-    () =>
-      [...new Set(catalogStudents.map((s) => s.chuyenNganh).filter(Boolean))].sort((a, b) =>
-        String(a).localeCompare(String(b), 'vi-VN')
-      ),
-    [catalogStudents]
-  )
-
-  const filteredCatalog = useMemo(() => {
-    const q = catalogSearch.trim().toLocaleLowerCase('vi-VN')
-    return catalogStudents.filter((s) => {
-      if (hideExistingInCatalog && existingCodesSet.has(String(s.maSV || '').trim()))
-        return false
-      if (catalogClass && s.lop !== catalogClass) return false
-      if (catalogCohort && String(s.khoaHoc || '') !== catalogCohort) return false
-      if (catalogMajor && s.chuyenNganh !== catalogMajor) return false
-      if (
-        q &&
-        ![s.maSV, s.hoTen, s.lop, s.chuyenNganh].some((val) =>
-          String(val || '').toLocaleLowerCase('vi-VN').includes(q)
-        )
-      )
-        return false
-      return true
-    })
-  }, [
-    catalogStudents,
-    hideExistingInCatalog,
-    existingCodesSet,
-    catalogClass,
-    catalogCohort,
-    catalogMajor,
-    catalogSearch,
-  ])
-
-  const catalogPagination = usePagination(
-    filteredCatalog,
-    JSON.stringify([
-      catalogClass,
-      catalogCohort,
-      catalogMajor,
-      catalogSearch,
-      hideExistingInCatalog,
-    ])
-  )
-
-  const query = search.trim().toLocaleLowerCase('vi-VN')
-  const rows = (data?.sinhViens || []).filter(
-    (row) =>
-      (!onlySupport || row.canHoTro) &&
-      (!group || row.trangThai === group) &&
-      (!classFilter || row.lop === classFilter) &&
-      (!sourceFilter ||
-        (sourceFilter === 'khoa' ? row.daCoDanhSachKhoa : !row.daCoDanhSachKhoa)) &&
-      (!query ||
-        [row.maSV, row.hoTen, row.lop, row.tenCongTy].some((value) =>
-          String(value || '').toLocaleLowerCase('vi-VN').includes(query)
-        ))
-  )
-  const pagination = usePagination(
-    rows,
-    JSON.stringify([round, search, group, classFilter, sourceFilter, onlySupport])
-  )
+  const availableClasses = data?.lops || []
+  const catalogClasses = catalogSummary?.lops || []
+  const catalogCohorts = catalogSummary?.khoaHocs || []
+  const catalogMajors = catalogSummary?.chuyenNganhs || []
+  const filteredCatalog = catalogStudents
+  const rows = pagination.items
 
   const activeStatGroups = useMemo(
     () => (data?.thongKe || []).filter((x) => x.soLuong > 0 || x.ma === group),
@@ -624,10 +449,9 @@ export default function SinhVienTheoDotPage() {
         {/* Thanh chuyển tab chức năng */}
         <div className="bg-white rounded-xl border border-slate-200 p-1.5 flex flex-wrap items-center gap-1.5 w-fit">
           {[
-            ['sv-thoi-gian', 'Danh sách sinh viên'],
-            ['ho-tro', 'Hỗ trợ bố trí'],
-            ['ra-soat', 'Rà soát trước chốt'],
-            ['cong-bo-chot', 'Công bố & Chốt danh sách'],
+            ['sv-thoi-gian', '1. Danh sách sinh viên'],
+            ['ra-soat', '2. Rà soát trước chốt'],
+            ['cong-bo-chot', '3. Công bố & Chốt danh sách'],
           ].map(([key, label]) => {
             const isCurrent = activeTab === key
             return (
@@ -653,8 +477,8 @@ export default function SinhVienTheoDotPage() {
             {/* Hàng tiêu đề bảng & Nút mở công cụ Thêm SV */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <h2 className="text-sm font-bold text-slate-900">
-                Danh sách sinh viên tham gia đợt ({rows.length}
-                {data && rows.length !== data.tongSinhVien
+                Danh sách sinh viên tham gia đợt ({data?.totalCount || 0}
+                {data && data.totalCount !== data.tongSinhVien
                   ? ` / ${data.tongSinhVien}`
                   : ''}{' '}
                 sinh viên)
@@ -668,6 +492,15 @@ export default function SinhVienTheoDotPage() {
                   className="px-3.5 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-lg transition-colors cursor-pointer"
                 >
                   {showAdd ? 'Đóng khung thêm SV' : 'Thêm SV vào đợt'}
+                </button>
+                <button
+                  type="button"
+                  disabled={!canEdit || loading || !!busy}
+                  onClick={() => setShowImportModal(true)}
+                  className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">upload_file</span>
+                  <span>Import Excel / CSV</span>
                 </button>
               </div>
             </div>
@@ -715,7 +548,7 @@ export default function SinhVienTheoDotPage() {
                   <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-bold text-slate-800">
-                        Danh mục sinh viên toàn Khoa ({catalogStudents.length} hồ sơ)
+                        Danh mục sinh viên toàn Khoa ({catalogData?.totalCount || 0} hồ sơ)
                       </span>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -724,7 +557,7 @@ export default function SinhVienTheoDotPage() {
                           onClick={() => selectFilteredCatalog(filteredCatalog, true)}
                           className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-40 rounded-md cursor-pointer"
                         >
-                          Chọn tất cả kết quả lọc ({filteredCatalog.length} SV)
+                          Chọn trang này ({filteredCatalog.length} SV)
                         </button>
                         <button
                           type="button"
@@ -732,7 +565,7 @@ export default function SinhVienTheoDotPage() {
                           onClick={() => selectFilteredCatalog(filteredCatalog, false)}
                           className="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-md cursor-pointer"
                         >
-                          Bỏ chọn kết quả lọc
+                          Bỏ chọn trang này
                         </button>
                       </div>
                     </div>
@@ -825,7 +658,7 @@ export default function SinhVienTheoDotPage() {
                             <tbody className="divide-y divide-slate-100">
                               {catalogPagination.items.map((item) => {
                                 const code = String(item.maSV || '').trim()
-                                const inRound = existingCodesSet.has(code)
+                                const inRound = item.daTrongDot
                                 const isPicked = selectedCodesSet.has(code)
                                 return (
                                   <tr
@@ -909,7 +742,7 @@ export default function SinhVienTheoDotPage() {
                         </span>
                         <span className="text-emerald-700">
                           Thêm mới:{' '}
-                          <strong className="font-mono">{newCodesCount}</strong>
+                          <strong className="font-mono">{newCodesCount ?? (present.error ? 'Chưa đối chiếu' : 'Đang đối chiếu…')}</strong>
                         </span>
                         {duplicateInRoundCount > 0 && (
                           <span className="text-amber-700">
@@ -940,6 +773,9 @@ export default function SinhVienTheoDotPage() {
                       placeholder="Dán trực tiếp cột MSSV từ Excel (mỗi dòng 1 mã) hoặc ngăn cách bằng dấu phẩy, chấm phẩy..."
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 outline-hidden focus:border-blue-600 font-mono"
                     />
+                    {present.key === presentKey && present.error && (
+                      <p role="status" className="mt-1 text-xs text-amber-700">{present.error}</p>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-end gap-2">
@@ -1059,7 +895,7 @@ export default function SinhVienTheoDotPage() {
               >
                 <option value="">Tất cả nguồn</option>
                 <option value="khoa">Danh sách Khoa ({data?.tuDanhSachKhoa ?? 0})</option>
-                <option value="nghiep-vu">
+                <option value="nghiepvu">
                   Phát sinh hồ sơ ({data?.tuNghiepVu ?? 0})
                 </option>
               </select>
@@ -1257,20 +1093,7 @@ export default function SinhVienTheoDotPage() {
           </div>
         )}
 
-        {/* Nội dung Tab 2: Hỗ trợ bố trí */}
-        {activeTab === 'ho-tro' && round && (
-          <LanHoTroPanel
-            key={`${round}/${publicationVersion}`}
-            maDot={round}
-            onNavigateTab={setActiveTab}
-            onChanged={async () => {
-              setPublicationVersion((v) => v + 1)
-              await load()
-            }}
-          />
-        )}
-
-        {/* Nội dung Tab 3: Rà soát nơi thực tập */}
+        {/* Nội dung Tab 2: Rà soát nơi thực tập */}
         {activeTab === 'ra-soat' && round && (
           <RaSoatNoiPanel
             key={`ra-soat/${round}/${publicationVersion}`}
@@ -1334,6 +1157,35 @@ export default function SinhVienTheoDotPage() {
               )
             }}
           />
+        )}
+
+        {showImportModal && (
+          <ModalOverlay isOpen={true} onClose={() => setShowImportModal(false)}>
+            <div className="bg-white rounded-3xl max-w-4xl w-full p-6 shadow-2xl font-sans max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-indigo-600 text-xl">upload_file</span>
+                  <h3 className="text-base font-bold text-slate-900 m-0">
+                    Import danh sách sinh viên theo đợt
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(false)}
+                  className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600"
+                >
+                  <span className="material-symbols-outlined text-lg">close</span>
+                </button>
+              </div>
+              <RoundStudentImportWizard
+                initialMaDot={round}
+                onSuccess={() => {
+                  setShowImportModal(false)
+                  load()
+                }}
+              />
+            </div>
+          </ModalOverlay>
         )}
       </div>
     </Layout>

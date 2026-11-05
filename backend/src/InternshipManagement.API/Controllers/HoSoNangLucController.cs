@@ -8,6 +8,7 @@ namespace InternshipManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class HoSoNangLucController : ControllerBase
 {
     private readonly IHoSoNangLucService _service;

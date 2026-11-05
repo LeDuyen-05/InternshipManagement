@@ -71,7 +71,7 @@ public class ThongKeRepository : IThongKeRepository
             .AsNoTracking()
             .Include(g => g.GiangVien)
             .Include(g => g.SinhVien)
-            .Where(g => g.TrangThai == "DangHuongDan")
+            .Where(g => g.TrangThai == "DangHuongDan" || g.TrangThai == "HoanThanh")
             .ToListAsync();
     }
 
@@ -79,7 +79,7 @@ public class ThongKeRepository : IThongKeRepository
     {
         return await _context.GiangViens
             .AsNoTracking()
-            .Include(gv => gv.GVHuongDans.Where(h => h.TrangThai == "DangHuongDan"))
+            .Include(gv => gv.GVHuongDans.Where(h => h.TrangThai == "DangHuongDan" || h.TrangThai == "HoanThanh"))
             .OrderBy(gv => gv.HoTen)
             .ToListAsync();
     }

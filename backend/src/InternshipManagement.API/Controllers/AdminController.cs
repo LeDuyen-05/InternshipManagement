@@ -28,6 +28,43 @@ public class AdminController(AdminService service, EnterpriseRepresentativeServi
         return Ok();
     }
 
+    [HttpPost("accounts/bulk-create-students")]
+    public async Task<IActionResult> BulkCreateStudentAccounts([FromQuery] string? maDot)
+    {
+        var (count, usernames) = await service.BulkCreateStudentAccountsAsync(maDot);
+        return Ok(new
+        {
+            success = true,
+            createdCount = count,
+            message = count > 0
+                ? $"Đã tự động khởi tạo thành công {count} tài khoản sinh viên (Mật khẩu mặc định: 123456)."
+                : "Tất cả sinh viên đã có tài khoản hệ thống, không có tài khoản cần tạo mới.",
+            createdUsernames = usernames
+        });
+    }
+
+    [HttpPost("accounts/import-students/preview")]
+    public async Task<IActionResult> PreviewStudentAccounts([FromBody] ImportStudentAccountsRequest request)
+        => Ok(await service.PreviewStudentAccountsAsync(request));
+
+    [HttpPost("accounts/import-students")]
+    public async Task<IActionResult> ImportStudentAccounts([FromBody] ImportStudentAccountsRequest request)
+    {
+        var (count, total, errors) = await service.ImportStudentAccountsAsync(request);
+        if (errors.Count > 0) return BadRequest(new { message = "Danh sách có dòng trùng hoặc không hợp lệ. Chưa tạo tài khoản nào.", errors });
+        return Ok(new
+        {
+            success = true,
+            createdCount = count,
+            totalRows = total,
+            skippedCount = total - count,
+            message = count > 0
+                ? $"Đã khởi tạo thành công {count} tài khoản sinh viên mới (Mật khẩu mặc định: 123456)."
+                : "Tất cả sinh viên trong danh sách đã có tài khoản trong hệ thống.",
+            errors
+        });
+    }
+
     [HttpPut("accounts/{id}")]
     public async Task<IActionResult> UpdateAccount(string id, UpdateAccountRequest r)
     {

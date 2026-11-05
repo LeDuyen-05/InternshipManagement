@@ -6,6 +6,7 @@ import { tienDoThucTapService } from '../../services/tienDoThucTapService'
 import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 import { loadLecturerDashboard, lecturerLoad } from '../../utils/lecturerDashboard'
 import {
   ResponsiveContainer,
@@ -114,7 +115,10 @@ export default function DashboardGVPage() {
             Bảng Điều Khiển Tổng Quan
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
-              {selectedDot?.tenDot || maDot}
+              {formatTenDot(selectedDot)}
+            </span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+              {getLoaiThucTapInfo(selectedDot).shortLabel}
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
@@ -125,7 +129,7 @@ export default function DashboardGVPage() {
             <div className="flex items-center gap-2 mt-3">
               <span className="text-xs font-semibold text-slate-500">Đang xem dữ liệu của:</span>
               <span className="p-1 px-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-bold text-blue-700">
-                ThS. {currentLecturer.hoTen} ({currentMaGV})
+                {currentLecturer.hoTen} ({currentMaGV})
               </span>
             </div>
           )}

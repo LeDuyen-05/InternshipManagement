@@ -15,6 +15,7 @@ public class TieuChiConfiguration : IEntityTypeConfiguration<TieuChi>
         builder.Property(x => x.TenTieuChi).HasColumnName("tenTieuChi").HasMaxLength(200);
         builder.Property(x => x.DiemToiDa).HasColumnName("diemToiDa").HasColumnType("decimal(5,2)");
         builder.Property(x => x.MaRubric).HasColumnName("maRubric").HasMaxLength(40);
+        builder.HasOne<BoTieuChi>().WithMany().HasForeignKey(x => x.MaRubric).OnDelete(DeleteBehavior.Restrict);
         builder.Property(x => x.MaCLO).HasColumnName("maCLO").HasMaxLength(20);
         builder.Property(x => x.NhomDanhGia).HasColumnName("nhomDanhGia").HasMaxLength(10);
         builder.Property(x => x.ThuTu).HasColumnName("thuTu");

@@ -9,7 +9,12 @@ namespace InternshipManagement.BLL.Services.SinhVienTheoDot;
 public record LuuLanHoTroRequest(string TenLan, DateTime NgayHoTro, List<string> MaSinhViens, int PhienBan = 0, string? MaLanTruoc = null);
 public record KetQuaHoTroRequest(string KetQua, string GhiChu, int PhienBan);
 public record PhienBanHoTroRequest(int PhienBan);
-public record HoTroMember(string MaSV, string HoTen, string? Lop, string KetQua = "ChuaGhiNhan", string GhiChu = "", string? MaPhanBo = null, string? CongTy = null);
+public record MoDangKyBoSungRequest(int PhienBan, int SoLuot, DateTimeOffset HanDangKy, string LyDo);
+public record HoTroMember(string MaSV, string HoTen, string? Lop, string KetQua = "ChuaGhiNhan", string GhiChu = "", string? MaPhanBo = null, string? CongTy = null,
+    string? PhanHoi = null, string? LyDoPhanHoi = null, string? NguoiPhanHoi = null, DateTimeOffset? ThoiDiemPhanHoi = null, string? NguonPhanHoi = null,
+    List<SupportCompanyReferral>? CongTyGioiThieu = null, DAL.Common.SupplementalRegistrationGrant? DangKyBoSung = null);
+public record SupportCompanyReferral(string MaGioiThieu, string MaCongTy, string TenCongTy, string? MaViTri, string? TenViTri,
+    DateTimeOffset NgayGioiThieu, string NguoiGioiThieu, string GhiChu);
 public record HoTroAudit(string Loai, string Nguoi, DateTimeOffset Luc, string Truoc, string Sau);
 
 public class LanHoTroService(AppDbContext db, SinhVienTheoDotService roster, TimeProvider? clock = null)
@@ -65,6 +70,8 @@ public class LanHoTroService(AppDbContext db, SinhVienTheoDotService roster, Tim
             UngViens = rows.Where(x => x.TrangThai is "ChuaDangKy" or "ChuaCoNoiTiepNhan").ToList(),
             CacLan = sessions.Select(x => new { x.MaLan, x.TenLan, x.NgayHoTro, x.TrangThai, x.MaLanTruoc, x.PhienBan,
                 SinhViens = Members(x).Select(s => new { s.MaSV, s.HoTen, s.Lop, s.KetQua, s.GhiChu, s.MaPhanBo, s.CongTy,
+                    s.PhanHoi, s.LyDoPhanHoi, s.NguoiPhanHoi, s.ThoiDiemPhanHoi, s.NguonPhanHoi,
+                    s.CongTyGioiThieu, s.DangKyBoSung,
                     HienTai = rows.FirstOrDefault(r => r.MaSV == s.MaSV)?.TenTrangThai,
                     CoTheBoTri = rows.Any(r => r.MaSV == s.MaSV && r.TrangThai is "ChuaDangKy" or "ChuaCoNoiTiepNhan") }),
                 NhatKy = JsonSerializer.Deserialize<List<HoTroAudit>>(x.NhatKyJson) }) };
@@ -106,6 +113,41 @@ public class LanHoTroService(AppDbContext db, SinhVienTheoDotService roster, Tim
         await Round(maDot, true); var item = await Item(maDot, id, version);
         if (item.TrangThai != "Nhap") throw new InvalidOperationException("Chỉ xóa lần nháp chưa ghi kết quả.");
         var before = Snapshot(item); item.TrangThai = "DaXoa"; Journal(item, "XoaNhap", actor, before);
+        await db.SaveChangesAsync(); if (tx != null) await tx.CommitAsync();
+    }
+    public async Task OpenRegistrationAsync(string maDot, string id, string maSV, MoDangKyBoSungRequest request, string actor)
+    {
+        Actor(actor);
+        if (request.SoLuot is < 1 or > 3 || string.IsNullOrWhiteSpace(request.LyDo) || request.LyDo.Trim().Length > 1000)
+            throw new ArgumentException("Chọn từ 1 đến 3 lượt bổ sung và ghi lý do tối đa 1.000 ký tự.");
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        var round = await Round(maDot, true);
+        if (request.HanDangKy <= time.GetUtcNow() || request.HanDangKy > new DateTimeOffset(round.ThoiGianBD.Date, TimeSpan.FromHours(7)))
+            throw new ArgumentException("Hạn bổ sung phải sau thời điểm hiện tại và không vượt thời điểm bắt đầu thực tập của đợt.");
+        var item = await Item(maDot, id, request.PhienBan);
+        if (item.NgayHoTro.Date > Today) throw new InvalidOperationException("Chưa đến ngày hỗ trợ.");
+        var members = Members(item); var index = members.FindIndex(m => m.MaSV == maSV);
+        if (index < 0 || members[index].KetQua != "CanHoTro")
+            throw new InvalidOperationException("Chỉ mở lượt cho SV thuộc lần hỗ trợ đã được Khoa ghi nhận kết quả “Cần hỗ trợ”.");
+        if (members[index].DangKyBoSung != null) throw new InvalidOperationException("Lần hỗ trợ này đã mở lượt cho SV. Không ghi đè quyết định hoặc đặt lại số lượt đã dùng.");
+        if (!await db.SinhVienThamGiaDots.AnyAsync(x => x.MaDot == maDot && x.MaSV == maSV && x.DangThamGia)
+            || await db.PhanBoThucTaps.AnyAsync(x => x.MaDot == maDot && x.MaSinhVien == maSV && x.TrangThai != "Huy")
+            || await db.KhongHoanTatDots.AnyAsync(x => x.MaDot == maDot && x.MaSV == maSV && x.HieuLuc)
+            || await db.DeXuatThucTapTuTims.AnyAsync(x => x.MaDot == maDot && x.MaSV == maSV && x.TrangThai == "ChoDuyet"))
+            throw new InvalidOperationException("SV không còn tham gia, đã có nơi/kết quả hoặc có hồ sơ tự tìm chờ xác minh.");
+        var apps = await db.DangKyThucTaps.AsNoTracking().Where(x => x.MaDot == maDot && x.MaSV == maSV).ToListAsync();
+        if (apps.Count < 3 || apps.Any(x => x.TrangThai is "ChoDuyet" or "DaDuyet"))
+            throw new InvalidOperationException("Chỉ mở bổ sung khi SV đã hết 3 lượt thông thường và không còn hồ sơ đang xử lý.");
+        var sessions = await db.LanHoTroThucTaps.AsNoTracking().Where(x => x.MaDot == maDot && x.TrangThai != "DaXoa").ToListAsync();
+        if (DAL.Common.SupportConsent.Latest(sessions, maSV)?.PhanHoi == "TuChoiHoTro")
+            throw new InvalidOperationException("SV đã từ chối hỗ trợ; cần ghi nhận nhận hỗ trợ lại trước khi mở lượt.");
+        if (sessions.Any(s => DAL.Common.SupplementalRegistration.Remaining(s, maSV, apps, time.GetUtcNow()) > 0))
+            throw new InvalidOperationException("SV vẫn còn lượt bổ sung có hiệu lực ở lần hỗ trợ khác.");
+        var before = Snapshot(item);
+        members[index] = members[index] with { DangKyBoSung = new(request.SoLuot, request.HanDangKy, request.LyDo.Trim(), actor,
+            time.GetUtcNow(), apps.Count(x => x.MaLanHoTro == id)) };
+        item.DanhSachJson = JsonSerializer.Serialize(members); item.TrangThai = "DaThucHien";
+        Journal(item, "MoDangKyBoSung", actor, before);
         await db.SaveChangesAsync(); if (tx != null) await tx.CommitAsync();
     }
     public async Task ResultAsync(string maDot, string id, string maSV, KetQuaHoTroRequest request, string actor)

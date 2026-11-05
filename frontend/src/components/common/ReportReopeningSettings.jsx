@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import apiClient from '../../services/api'
 import { deadlineText } from '../../hooks/useGradeDeadline'
 import { usePagination } from '../../hooks/usePagination'
@@ -27,6 +27,9 @@ export default function ReportReopeningSettings({ rounds }) {
   const [busy, setBusy] = useState(false)
 
   const maDot = round || rounds.find((x) => x.trangThai === 'DangDienRa')?.maSo || rounds[0]?.maSo || ''
+  const currentRound = useRef(maDot)
+  currentRound.current = maDot
+  const operation = useRef(0)
   const lock = useRoundLock(maDot)
 
   const filtered = reports.filter((x) =>
@@ -35,6 +38,8 @@ export default function ReportReopeningSettings({ rounds }) {
   const pagination = usePagination(filtered, `${maDot}|${search}`)
 
   useEffect(() => {
+    operation.current++
+    setBusy(false)
     setReports([])
     setSelected(null)
     setMessage('')
@@ -71,6 +76,7 @@ export default function ReportReopeningSettings({ rounds }) {
     }
 
     setBusy(true)
+    const request = ++operation.current
     setMessage('')
     setErrorMsg('')
     try {
@@ -83,14 +89,16 @@ export default function ReportReopeningSettings({ rounds }) {
           hanNopBoSungCu: selected.hanNopBoSung || null,
         }
       )
+      if (currentRound.current !== maDot || request !== operation.current) return
       setMessage(r.data.message || 'Đã mở hạn nộp bổ sung thành công.')
       setSelected(null)
       setReason('')
       setConfirmed(false)
       setDeadline('')
       const list = await apiClient.get(`/thoi-han/${encodeURIComponent(maDot)}/bao-cao`)
-      setReports(list.data || [])
+      if (currentRound.current === maDot && request === operation.current) setReports(list.data || [])
     } catch (error) {
+      if (currentRound.current !== maDot || request !== operation.current) return
       setErrorMsg(
         error.response?.data?.message ||
           (error.response?.data?.errors
@@ -98,7 +106,7 @@ export default function ReportReopeningSettings({ rounds }) {
             : 'Không mở được hạn bổ sung. Vui lòng thử lại.')
       )
     } finally {
-      setBusy(false)
+      if (request === operation.current) setBusy(false)
     }
   }
 
@@ -113,7 +121,7 @@ export default function ReportReopeningSettings({ rounds }) {
         </span>
         <div className="leading-relaxed">
           <strong className="font-bold block mb-0.5">Quy định nộp bổ sung báo cáo tiến độ:</strong>
-          Hạn nộp báo cáo tính theo giờ Việt Nam (UTC+7). Khi quá hạn, hệ thống tự động khóa nộp. Sinh viên phải trực tiếp đến Văn phòng Khoa trình bày lý do; sau khi được cán bộ Khoa chấp thuận mới mở hạn bổ sung cho đúng sinh viên và đúng mốc báo cáo đó. Hết thời hạn bổ sung, hệ thống sẽ tự động khóa lại. Tuyệt đối không mở nộp đồng loạt cho cả đợt.
+          Cổng nộp báo cáo tiến độ tuần tự động khóa khi hết hạn quy định theo kế hoạch. Sinh viên có lý do chính đáng được Văn phòng Khoa chấp thuận sẽ được mở gia hạn bổ sung theo từng mốc cá biệt; hệ thống tự động khóa lại khi hết thời hạn gia hạn.
         </div>
       </div>
 
@@ -332,7 +340,7 @@ export default function ReportReopeningSettings({ rounds }) {
                 className="rounded text-indigo-600 w-4 h-4"
               />
               <span className="font-medium">
-                Khoa xác nhận đã tiếp nhận sinh viên lên trình bày trực tiếp và đồng ý mở hạn nộp bù.
+                Xác nhận đã tiếp nhận đơn trình bày của sinh viên và đồng ý gia hạn nộp bổ sung.
               </span>
             </label>
 
@@ -343,7 +351,7 @@ export default function ReportReopeningSettings({ rounds }) {
                 className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer disabled:opacity-40 flex items-center gap-1.5"
               >
                 <span className="material-symbols-outlined text-sm">check</span>
-                <span>{busy ? 'Đang lưu…' : 'Chấp thuận & Mở nộp bổ sung'}</span>
+                <span>{busy ? 'Đang lưu…' : 'Lưu gia hạn nộp bổ sung'}</span>
               </button>
 
               <button

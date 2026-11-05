@@ -1,7 +1,7 @@
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import InterviewCorrectionPanel from '../../components/common/InterviewCorrectionPanel'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
@@ -9,7 +9,20 @@ import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { formatInterviewDate, formatInterviewTime, hasInterviewStarted, interviewFormTimestamp, isFutureInterview, vietnamDateTimeParts } from '../../utils/interviewTime'
 
 export default function LichPhongVanDNPage() {
+  const { activeCompany, maDot } = useEnterprise()
+  return <InterviewRoundPage key={`${activeCompany?.maCongTy || ''}|${maDot || ''}`} />
+}
+
+function InterviewRoundPage() {
   const { activeCompany, maDot, updateChiTieu } = useEnterprise()
+  const mounted = useRef(true)
+  const requestVersion = useRef(0)
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('')
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false; requestVersion.current++ }
+  }, [])
   const [interviews, setInterviews] = useState([])
   const [candidates, setCandidates] = useState([])
   const [loading, setLoading] = useState(true)
@@ -41,33 +54,34 @@ export default function LichPhongVanDNPage() {
   }, [])
 
   const fetchData = async () => {
-      if (!activeCompany?.maCongTy) return
+      if (!mounted.current || !activeCompany?.maCongTy || !maDot) return
+      const request = ++requestVersion.current
       try {
         setLoading(true)
-        let [pvRes, uvRes, tqRes] = await Promise.all([
+        const [pvRes, uvRes, tqRes] = await Promise.all([
           doanhNghiepService.getPhongVan(activeCompany.maCongTy, maDot),
           doanhNghiepService.getUngVien(activeCompany.maCongTy, maDot),
           doanhNghiepService.getTongQuan(activeCompany.maCongTy, maDot),
         ])
+        if (!mounted.current || request !== requestVersion.current) return
         setInterviews(pvRes || [])
         // Chỉ hồ sơ còn hiệu lực, SV chưa được nơi nào tiếp nhận và chưa có lịch chờ kết quả mới được xếp lịch
         const eligible = (uvRes || []).filter((c) => c.trangThai !== 'TuChoi' && !c.daDuocTiepNhan && !c.coLichPhongVanCho)
         setCandidates(eligible)
         setChiTieu(tqRes?.chiTieu || null)
         updateChiTieu(tqRes?.chiTieu)
-        uvRes = eligible
 
-        if (uvRes?.length > 0 && !formSchedule.maSinhVien) {
-          setFormSchedule((prev) => ({
-            ...prev,
-            maSinhVien: uvRes[0].maSV,
-            maDaiDien: activeCompany?.daiDiens?.[0]?.maSo || '',
-          }))
-        }
+        setFormSchedule(prev => ({ ...prev,
+          maSinhVien: eligible.some(c => c.maSV === prev.maSinhVien) ? prev.maSinhVien : eligible[0]?.maSV || '',
+          maDaiDien: prev.maDaiDien || activeCompany?.daiDiens?.[0]?.maSo || '',
+        }))
       } catch (err) {
-        console.error('Lỗi tải dữ liệu phỏng vấn:', err)
+        if (mounted.current && request === requestVersion.current) {
+          setInterviews([]); setCandidates([]); setChiTieu(null)
+          setToast({ type: 'error', message: err.response?.data?.message || 'Không tải được lịch phỏng vấn. Vui lòng thử lại.' })
+        }
       } finally {
-        setLoading(false)
+        if (mounted.current && request === requestVersion.current) setLoading(false)
       }
   }
 
@@ -87,14 +101,17 @@ export default function LichPhongVanDNPage() {
       setSubmitting(true)
       const dateTimeStr = interviewFormTimestamp(formSchedule.ngayPV, formSchedule.gioPV)
       if (!isFutureInterview(dateTimeStr)) throw new Error('Ngày giờ phỏng vấn phải ở tương lai (giờ Việt Nam, UTC+7).')
+      const candidate = candidates.find(c => c.maSV === formSchedule.maSinhVien)
+      if (!candidate?.maDK) throw new Error('Hồ sơ không còn trong danh sách chờ xếp lịch. Vui lòng tải lại dữ liệu.')
 
       await doanhNghiepService.taoLichPhongVan({
-        maDK: candidates.find(c => c.maSV === formSchedule.maSinhVien)?.maDK,
+        maDK: candidate.maDK,
         maSinhVien: formSchedule.maSinhVien,
         maDaiDien: formSchedule.maDaiDien,
         hinhThuc: formSchedule.hinhThuc,
         ngayPV: dateTimeStr,
       })
+      if (!mounted.current) return
       // Tải lại từ server: danh sách lịch + ứng viên còn xếp lịch được
       setFormSchedule((prev) => ({ ...prev, maSinhVien: '' }))
       await fetchData()
@@ -121,6 +138,7 @@ export default function LichPhongVanDNPage() {
         hinhThuc: doiLich.hinhThuc,
         ngayPV: dateTimeStr,
       })
+      if (!mounted.current) return
       setToast({ type: 'success', message: res?.message || 'Đã cập nhật lịch phỏng vấn.' })
       setDoiLich(null)
       await fetchData()
@@ -144,6 +162,7 @@ export default function LichPhongVanDNPage() {
         ketQua: resultChoice,
         lyDo: resultReason.trim(),
       })
+      if (!mounted.current) return
       setToast({ type: 'success', message: res?.message || 'Đã ghi nhận kết quả phỏng vấn.' })
       setSelectedInterview(null)
       await fetchData()
@@ -156,7 +175,13 @@ export default function LichPhongVanDNPage() {
     }
   }
 
-  const pagination = usePagination(interviews, activeCompany?.maCongTy)
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase('vi')
+    return interviews.filter(item => (!term || `${item.maSV || item.maSinhVien || ''} ${item.hoTenSV || ''}`.toLocaleLowerCase('vi').includes(term))
+      && (!status || (status === 'LichSu' ? item.daThayThe
+        : !item.daThayThe && (item.ketQua || 'ChuaCoKetQua') === status)))
+  }, [interviews, search, status])
+  const pagination = usePagination(filtered, `${activeCompany?.maCongTy}|${maDot}|${search}|${status}`)
   const currentInterviews = interviews.filter(x => !x.daThayThe)
   const stats = {
     total: interviews.length,
@@ -173,7 +198,7 @@ export default function LichPhongVanDNPage() {
         <div className={`p-4 rounded-xl text-xs font-semibold border flex items-center gap-2 ${daDongTuyen ? 'bg-rose-50 text-rose-800 border-rose-200' : 'bg-blue-50 text-blue-800 border-blue-200'}`}>
           <span className="material-symbols-outlined text-[18px]">{daDongTuyen ? 'lock' : 'groups'}</span>
           {daDongTuyen
-            ? `Đã đủ chỉ tiêu tiếp nhận (${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}) — đợt tuyển đã tự động đóng, không thể xếp thêm lịch phỏng vấn.`
+            ? `Đủ chỉ tiêu — đóng nhận mới (${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}). Các hồ sơ đang xử lý được giữ nguyên.`
             : `Chỉ tiêu tiếp nhận ${chiTieu.tenDot || ''}: đã nhận ${chiTieu.daTiepNhan}/${chiTieu.soLuongNhan}, còn ${chiTieu.conLai} chỗ.`}
         </div>
       )}
@@ -204,7 +229,7 @@ export default function LichPhongVanDNPage() {
       {/* Header Page */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Lịch Phỏng Vấn Tuyển Dụng</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Lịch phỏng vấn</h1>
           <p className="text-xs text-slate-500 mt-1">
             Lịch dùng giờ Việt Nam (UTC+7). DN chủ động thông báo lịch và thay đổi qua email/điện thoại bên ngoài hệ thống.
           </p>
@@ -212,8 +237,8 @@ export default function LichPhongVanDNPage() {
         <button
           type="button"
           onClick={() => setShowScheduleModal(true)}
-          disabled={daDongTuyen || loading || submitting}
-          title={daDongTuyen ? 'Đã đủ chỉ tiêu – đợt tuyển đã đóng' : undefined}
+          disabled={daDongTuyen || !candidates.length || loading || submitting}
+          title={daDongTuyen ? 'Đủ chỉ tiêu — đóng nhận mới' : !candidates.length ? 'Chưa có hồ sơ cần xếp lịch' : undefined}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow-sm transition-all"
         >
           <span className="material-symbols-outlined text-[18px]">add_circle</span>
@@ -230,9 +255,9 @@ export default function LichPhongVanDNPage() {
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đã trúng tuyển (Đạt)</div>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Đạt phỏng vấn</div>
           <div className="text-2xl font-black text-emerald-700 mt-2">{stats.dat} <span className="text-xs font-normal text-slate-500">ứng viên</span></div>
-          <div className="text-[11px] text-emerald-600 font-medium mt-1">Xác nhận tiếp nhận vào công ty</div>
+          <div className="text-[11px] text-emerald-600 font-medium mt-1">Theo kết quả phỏng vấn đã ghi nhận</div>
         </div>
 
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
@@ -254,7 +279,16 @@ export default function LichPhongVanDNPage() {
           <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
             Danh sách lịch phỏng vấn tuyển dụng
           </h2>
-          <span className="text-xs text-slate-500">Hiển thị {interviews.length} buổi phỏng vấn</span>
+          <span className="text-xs text-slate-500">{filtered.length} / {interviews.length} buổi phỏng vấn</span>
+        </div>
+
+        <div className="flex flex-wrap gap-3 p-4 border-b border-slate-100">
+          <input aria-label="Tìm lịch phỏng vấn theo MSSV hoặc họ tên" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Tìm MSSV, họ tên sinh viên…" className="border border-slate-200 rounded-lg px-3 py-2 text-sm flex-1 min-w-48" />
+          <select aria-label="Lọc trạng thái phỏng vấn" value={status} onChange={e => setStatus(e.target.value)} className="border border-slate-200 rounded-lg px-3 py-2 text-sm">
+            <option value="">Tất cả trạng thái</option><option value="ChuaCoKetQua">Chờ kết quả</option><option value="Dat">Đạt</option>
+            <option value="KhongDat">Không đạt</option><option value="Vang">Vắng/bỏ phỏng vấn</option><option value="LichSu">Buổi cũ đã thay thế</option>
+          </select>
         </div>
 
         <div className="overflow-x-auto">
@@ -270,7 +304,7 @@ export default function LichPhongVanDNPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {interviews.length > 0 ? (
+              {filtered.length > 0 ? (
                 pagination.items.map((item) => (
                   <tr key={item.maPV} className="hover:bg-indigo-50/30 transition-colors">
                     {/* Candidate */}

@@ -10,6 +10,7 @@ import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import { BAO_CAO, PHAN_BO } from '../../utils/trangThai'
 import { Link } from 'react-router-dom'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 import { submissionBlock } from '../../utils/reportDeadline'
 
 // Khung báo cáo tuần theo kế hoạch: công việc – kết quả – khó khăn – minh chứng
@@ -99,7 +100,7 @@ export default function NopTienDoSVPage() {
     : placement.trangThai === 'ChuaNhanViec'
       ? `Bạn cần xác nhận nhận quyết định tiếp nhận tại ${placement.tenCongTy} trước khi nộp báo cáo tiến độ.`
       : placement.trangThai !== 'DangThucTap' || placement.daDuocKhoaDuyet === false
-        ? 'Bạn chỉ được nộp tiến độ khi đang thực tập và nơi thực tập đã được Khoa chốt.'
+        ? 'Bạn chỉ có thể nộp báo cáo tiến độ khi đợt thực tập đang diễn ra và đơn vị thực tập đã được Văn phòng Khoa phê duyệt chính thức.'
         : null
 
   // Mở modal nộp / sửa báo cáo
@@ -208,16 +209,19 @@ export default function NopTienDoSVPage() {
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1 flex-wrap">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            THEO DÕI TIẾN ĐỘ • {selectedDot?.tenDot || 'ĐỢT THỰC TẬP'}
+            <span>THEO DÕI TIẾN ĐỘ • {formatTenDot(selectedDot)}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+              {getLoaiThucTapInfo(selectedDot).label}
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Theo dõi Tiến độ & Nộp Báo cáo Tuần
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Cập nhật kết quả làm việc định kỳ hàng tuần, nhận đánh giá phản hồi từ Giảng viên hướng dẫn.
-            {' '}Hạn tính hết ngày Việt Nam. Quá hạn bị khóa; lên Khoa trình bày lý do để được xem xét mở nộp bổ sung.
+            {' '}Thời hạn nộp tính đến hết ngày theo giờ Việt Nam. Các mốc quá hạn sẽ tạm khóa; sinh viên cần liên hệ Văn phòng Khoa để được hướng dẫn mở hạn nộp bổ sung.
           </p>
         </div>
       </div>
@@ -234,8 +238,14 @@ export default function NopTienDoSVPage() {
         </div>
       )}
       {placement && placement.trangThai !== 'ChuaNhanViec' && (
-        <div className="text-xs text-slate-500 -mt-3">
-          Đơn vị thực tập: <strong className="text-slate-700">{placement.tenCongTy}</strong> • {PHAN_BO[placement.trangThai] || placement.trangThai}
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 -mt-3">
+          <span>Đơn vị thực tập: <strong className="text-slate-700">{placement.tenCongTy}</strong></span>
+          <span>•</span>
+          <span>{PHAN_BO[placement.trangThai] || placement.trangThai}</span>
+          <span>•</span>
+          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${getLoaiThucTapInfo(placement?.maLoaiThucTap ? { maLoaiThucTap: placement.maLoaiThucTap, tenDot: placement.tenDot } : selectedDot).badgeClass}`}>
+            {getLoaiThucTapInfo(placement?.maLoaiThucTap ? { maLoaiThucTap: placement.maLoaiThucTap, tenDot: placement.tenDot } : selectedDot).label}
+          </span>
         </div>
       )}
 

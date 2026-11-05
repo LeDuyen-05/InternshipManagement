@@ -17,7 +17,7 @@ export default function RoundLockNotice({ lock }) {
       </div>
     )
   }
-  if (lock.status === 'ChuaChot') return null
+  if (!lock.status || lock.status === 'ChuaChot') return null
   const label = lock.status === 'MoLai' ? 'Đang mở lại để sửa điểm/báo cáo; dữ liệu điều chỉnh phải được Khoa chốt lại.'
     : lock.status === 'ChoChotLai' ? 'Đã hết hạn mở lại, đang chờ Khoa chốt lại. Dữ liệu hiện chỉ xem.'
       : 'Đợt đã chốt điểm và khóa. Chỉ xem, tải minh chứng và xuất báo cáo theo quyền.'

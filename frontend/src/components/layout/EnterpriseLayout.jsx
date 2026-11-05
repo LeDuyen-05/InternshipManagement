@@ -15,7 +15,7 @@ export function useEnterprise() {
 
 export default function EnterpriseLayout() {
   const { user } = useAuth()
-  const { selectedDot, loading: roundLoading } = useDotThucTap()
+  const { selectedDot, loading: roundLoading, error: roundError, refreshRounds } = useDotThucTap()
   const maDot = selectedDot?.maDot
   const [activeCompany, setActiveCompany] = useState(null)
   const [companyId, setCompanyId] = useState(() => localStorage.getItem('active_company_id'))
@@ -77,6 +77,8 @@ export default function EnterpriseLayout() {
           <main className="flex-1 pt-20 px-4 pb-4 sm:px-6 sm:pb-6 min-w-0">
             <Suspense fallback={<div role="status" aria-live="polite" className="p-6 text-slate-600">Đang tải trang…</div>}>
               {loading || !ready ? <p role="status">Đang tải doanh nghiệp theo đợt…</p>
+                : roundError ? <p role="alert" className="text-rose-700">{roundError} <button type="button" onClick={refreshRounds} className="underline">Tải lại</button></p>
+                : !maDot ? <p role="status">Chưa có đợt thực tập. Vui lòng liên hệ Khoa.</p>
                 : error ? <p role="alert" className="text-rose-700">{error}</p>
                 : <Outlet key={contextKey} />}
             </Suspense>

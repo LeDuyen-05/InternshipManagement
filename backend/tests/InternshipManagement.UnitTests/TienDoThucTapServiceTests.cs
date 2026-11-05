@@ -20,7 +20,7 @@ public class TienDoThucTapServiceTests
         var existing = new TienDoThucTap
         {
             MaTienDo = "TD001",
-            MaSV = "SV001",
+            MaSV = "SV001", MaDot = "DOT1", MocThoiGian = DateTime.Today.AddDays(1),
             TrangThaiDuyet = "ChuaNop"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
@@ -43,7 +43,7 @@ public class TienDoThucTapServiceTests
         var existing = new TienDoThucTap
         {
             MaTienDo = "TD001",
-            MaSV = "SV001",
+            MaSV = "SV001", MaDot = "DOT1",
             TrangThaiDuyet = "DaDuyet"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
@@ -67,7 +67,7 @@ public class TienDoThucTapServiceTests
         {
             MaTienDo = "TD001",
             MaSV = "SV001",
-            MaDot = "DOT1",
+            MaDot = "DOT1", MocThoiGian = DateTime.Today.AddDays(1),
             TrangThaiDuyet = "ChuaNop"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
@@ -113,7 +113,7 @@ public class TienDoThucTapServiceTests
         var existing = new TienDoThucTap
         {
             MaTienDo = "TD001",
-            MaSV = "SV001",
+            MaSV = "SV001", MaDot = "DOT1", MocThoiGian = DateTime.Today.AddDays(1),
             TrangThaiDuyet = "ChuaNop"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
@@ -135,11 +135,11 @@ public class TienDoThucTapServiceTests
         var existing = new TienDoThucTap
         {
             MaTienDo = "TD001",
-            MaSV = "SV001",
+            MaSV = "SV001", MaDot = "DOT1",
             TrangThaiDuyet = "DaNop"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
-        _repoMock.Setup(r => r.IsSupervisorAsync("GV002", "SV001")).ReturnsAsync(false);
+        _repoMock.Setup(r => r.IsSupervisorAsync("GV002", "SV001", "DOT1")).ReturnsAsync(false);
 
         var request = new DuyetTienDoRequest
         {
@@ -158,11 +158,11 @@ public class TienDoThucTapServiceTests
         var existing = new TienDoThucTap
         {
             MaTienDo = "TD001",
-            MaSV = "SV001",
+            MaSV = "SV001", MaDot = "DOT1",
             TrangThaiDuyet = "DaNop"
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
-        _repoMock.Setup(r => r.IsSupervisorAsync("GV001", "SV001")).ReturnsAsync(true);
+        _repoMock.Setup(r => r.IsSupervisorAsync("GV001", "SV001", "DOT1")).ReturnsAsync(true);
         _repoMock.Setup(r => r.CapNhatTrangThaiDuyetAsync("TD001", "DaDuyet", "Đạt yêu cầu"))
             .ReturnsAsync(true);
 

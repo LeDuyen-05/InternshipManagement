@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import apiClient from '../../services/api'
 import { deadlineText } from '../../hooks/useGradeDeadline'
 import { usePagination } from '../../hooks/usePagination'
@@ -50,11 +50,17 @@ export default function GradingDeadlineSettings({ rounds }) {
   const [busy, setBusy] = useState(false)
 
   const maDot = round || rounds.find((x) => x.trangThai === 'DangDienRa')?.maSo || rounds[0]?.maSo || ''
+  const currentRound = useRef(maDot)
+  currentRound.current = maDot
+  const operation = useRef(0)
   const lock = useRoundLock(maDot)
   const pagination = usePagination(history, round)
 
   useEffect(() => {
+    operation.current++
+    setBusy(false)
     setRecord(null)
+    setForm({})
     setHistory([])
     setMessage('')
     setErrorMsg('')
@@ -80,6 +86,7 @@ export default function GradingDeadlineSettings({ rounds }) {
       })
     return () => {
       active = false
+      operation.current++
     }
   }, [maDot])
 
@@ -89,6 +96,7 @@ export default function GradingDeadlineSettings({ rounds }) {
     if (!record || record.maDot !== maDot || busy) return
 
     setBusy(true)
+    const request = ++operation.current
     setMessage('')
     setErrorMsg('')
     try {
@@ -103,18 +111,20 @@ export default function GradingDeadlineSettings({ rounds }) {
         lyDo: reason,
         phienBanThoiHan: record.phienBanThoiHan,
       })
+      if (currentRound.current !== maDot || request !== operation.current) return
       setRecord({ ...response.data, maDot })
       setReason('')
       setMessage('Đã lưu cấu hình thời hạn chấm điểm và ghi nhật ký thành công.')
       const h = await apiClient.get(`/thoi-han/${encodeURIComponent(maDot)}/lich-su`)
-      setHistory(h.data || [])
+      if (currentRound.current === maDot && request === operation.current) setHistory(h.data || [])
     } catch (error) {
+      if (currentRound.current !== maDot || request !== operation.current) return
       setErrorMsg(
         error.response?.data?.message ||
           'Không lưu được thời hạn. Làm mới trang nếu dữ liệu đã bị thay đổi.'
       )
     } finally {
-      setBusy(false)
+      if (request === operation.current) setBusy(false)
     }
   }
 
@@ -129,7 +139,7 @@ export default function GradingDeadlineSettings({ rounds }) {
         </span>
         <div className="leading-relaxed">
           <strong className="font-bold block mb-0.5">Quy định thời hạn chấm điểm Chuẩn đầu ra (CLO):</strong>
-          Doanh nghiệp tự động mở cổng chấm lúc 00:00 ngày kế tiếp ngày kết thúc thực tập. Giảng viên hướng dẫn có cửa sổ chấm điểm riêng, được kéo dài sau khi kết thúc thực tập để rà soát báo cáo và rubric. Khi hết hạn chấm, muốn mở lại phải được Văn phòng Khoa phê duyệt gia hạn kèm căn cứ/lý do rõ ràng.
+          Doanh nghiệp tự động mở cổng chấm điểm sau khi kết thúc thời gian thực tập của sinh viên. Giảng viên hướng dẫn thực hiện đánh giá theo kế hoạch đào tạo của đợt. Mọi điều chỉnh hoặc gia hạn thời hạn chấm điểm cần ghi rõ lý do và căn cứ học vụ.
         </div>
       </div>
 
@@ -189,7 +199,7 @@ export default function GradingDeadlineSettings({ rounds }) {
             <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-slate-500 text-base">domain</span>
-                <span className="text-xs font-semibold text-slate-700">Cổng Doanh nghiệp mở chấm tự động lúc:</span>
+                <span className="text-xs font-semibold text-slate-700">Thời điểm bắt đầu mở cổng chấm cho Đơn vị thực tập:</span>
               </div>
               <strong className="text-xs text-indigo-700 font-bold bg-white px-3 py-1 rounded-lg border border-slate-200 shadow-2xs">
                 {record.moChamDN ? deadlineText(record.moChamDN) : 'Chưa thiết lập'}
@@ -200,7 +210,7 @@ export default function GradingDeadlineSettings({ rounds }) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Mở chấm GVHD <span className="text-rose-500">*</span>
+                  Thời gian mở cổng chấm GVHD <span className="text-rose-500">*</span>
                 </label>
                 <input
                   required
@@ -217,7 +227,7 @@ export default function GradingDeadlineSettings({ rounds }) {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Hạn chót GVHD chấm điểm <span className="text-rose-500">*</span>
+                  Hạn chót GVHD hoàn thành đánh giá <span className="text-rose-500">*</span>
                 </label>
                 <input
                   required
@@ -234,7 +244,7 @@ export default function GradingDeadlineSettings({ rounds }) {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Hạn chót Doanh nghiệp chấm <span className="text-rose-500">*</span>
+                  Hạn chót Doanh nghiệp hoàn thành đánh giá <span className="text-rose-500">*</span>
                 </label>
                 <input
                   required
@@ -252,7 +262,7 @@ export default function GradingDeadlineSettings({ rounds }) {
 
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">
-                Lý do cấu hình / Căn cứ gia hạn thời hạn chấm CLO <span className="text-rose-500">*</span>
+                Căn cứ / Lý do điều chỉnh thời hạn đánh giá CLO <span className="text-rose-500">*</span>
               </label>
               <textarea
                 required

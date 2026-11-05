@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { useState, useEffect, useRef } from 'react'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
@@ -96,7 +97,7 @@ export default function HoSoNangLucPage() {
       setSaveSuccessMsg('Hồ sơ năng lực đã được cập nhật thành công!')
       setTimeout(() => setSaveSuccessMsg(''), 4000)
     } catch (err) {
-      alert('Lỗi cập nhật hồ sơ: ' + (err.response?.data?.message || err.message))
+      toast.error('Lỗi cập nhật hồ sơ: ' + (err.response?.data?.message || err.message))
     } finally {
       setSaving(false)
     }
@@ -526,13 +527,13 @@ export default function HoSoNangLucPage() {
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  * Tệp CV chính thức (PDF) được tải lên và lưu trữ trực tiếp trên hệ thống qua Cloudflare R2 ở mục &quot;Tệp CV tải lên hệ thống&quot;.
+                  * Tệp CV chính thức (PDF) được tải lên và lưu trữ an toàn trên hệ thống tại mục &quot;Tệp CV đính kèm&quot;.
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Tóm tắt mục tiêu nghề nghiệp &amp; năng lực (Dùng cho AI Matching)
+                  Tóm tắt mục tiêu nghề nghiệp &amp; năng lực (Dùng đối chiếu gợi ý doanh nghiệp phù hợp)
                 </label>
                 <textarea
                   rows="3"

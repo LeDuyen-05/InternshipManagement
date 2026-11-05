@@ -3,6 +3,8 @@ using InternshipManagement.BLL.Services.DangKyThucTap;
 using InternshipManagement.BLL.Services.HoSoNangLuc;
 using InternshipManagement.BLL.Services.PhongVan;
 using InternshipManagement.DAL.Entities;
+using InternshipManagement.DAL;
+using Microsoft.EntityFrameworkCore;
 using InternshipManagement.DAL.Repositories;
 using Moq;
 using Xunit;
@@ -57,7 +59,7 @@ public class SinhVienNghiepVuTests
             new() { MaSinhVien = "SV001", MaCongTy = "CT002", MaDot = "DOT02", TrangThai = "ChuaNhanViec" }
         });
         dkRepo.Setup(r => r.GetKetQuaPhongVanAsync("SV001"))
-            .ReturnsAsync(new List<(string, string?, DateTime)> { ("CT001", "ChuaCoKetQua", DateTime.Today) });
+            .ReturnsAsync(new List<(string, string?, DateTime, string?)> { ("CT001", "ChuaCoKetQua", DateTime.Today, "DK1") });
         var service = new DangKyThucTapService(dkRepo.Object, new Mock<ICongTyRepository>().Object, new Mock<ISinhVienRepository>().Object);
 
         var list = await service.GetDanhSachDangKyBySinhVienAsync("SV001");
@@ -140,7 +142,7 @@ public class SinhVienNghiepVuTests
         var dkRepo = new Mock<IDangKyThucTapRepository>();
         dkRepo.Setup(r => r.GetByIdAsync("DK1")).ReturnsAsync(new DangKyThucTap { MaDK = "DK1", MaSV = "SV001", MaCongTy = "CT004", TrangThai = "ChoDuyet" });
         dkRepo.Setup(r => r.GetKetQuaPhongVanAsync("SV001"))
-            .ReturnsAsync(new List<(string, string?, DateTime)> { ("CT004", "ChuaCoKetQua", DateTime.Today) });
+            .ReturnsAsync(new List<(string, string?, DateTime, string?)> { ("CT004", "ChuaCoKetQua", DateTime.Today, "DK1") });
         var service = new DangKyThucTapService(dkRepo.Object, new Mock<ICongTyRepository>().Object, new Mock<ISinhVienRepository>().Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.HuyDangKyAsync("DK1", "SV001", isStaff: false));
@@ -150,11 +152,11 @@ public class SinhVienNghiepVuTests
     [Fact]
     public async Task XacNhanTiepNhan_ChuyenSangDangThucTap_VaChiChoChinhSinhVien()
     {
-        var pb = new PhanBoThucTap { MaPhanBo = "PB1", MaSinhVien = "SV001", TrangThai = "ChuaNhanViec", DotThucTap = new DotThucTap { TrangThai = "DangDienRa" } };
-        var pbRepo = new Mock<IPhanBoThucTapRepository>();
-        pbRepo.Setup(r => r.GetForUpdateAsync("PB1")).ReturnsAsync(pb);
-        pbRepo.Setup(r => r.GetBySinhVienAsync("SV001")).ReturnsAsync(pb);
-        var service = new PhongVanService(new Mock<IPhongVanRepository>().Object, pbRepo.Object);
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        var pb = new PhanBoThucTap { MaPhanBo = "PB1", MaSinhVien = "SV001", MaCongTy = "CT", MaDot = "DOT", DaDuocKhoaDuyet = true,
+            TrangThai = "ChuaNhanViec", DotThucTap = new DotThucTap { MaSo = "DOT", TenDot = "Đợt", NamHoc = "2026", TrangThai = "DangDienRa" } };
+        db.PhanBoThucTaps.Add(pb); await db.SaveChangesAsync();
+        var service = new PhongVanService(new Mock<IPhongVanRepository>().Object, new PhanBoThucTapRepository(db));
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.XacNhanTiepNhanAsync("PB1", "SV999"));
         await service.XacNhanTiepNhanAsync("PB1", "SV001");

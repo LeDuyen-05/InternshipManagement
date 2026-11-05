@@ -66,6 +66,7 @@ public class ThucTapTuTimService(AppDbContext db)
             throw new ArgumentException("Thời gian thực tập không hợp lệ.");
         await using var transaction = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        await db.LockRoundsAsync([item.MaDot]);
         await CheckRoundAsync(item.MaDot);
         if (!await db.SinhViens.AnyAsync(x => x.MaSV == maSV)) throw new KeyNotFoundException("Tài khoản chưa liên kết sinh viên hợp lệ.");
         await CheckPlacementAsync(maSV, item.MaDot);
@@ -85,10 +86,17 @@ public class ThucTapTuTimService(AppDbContext db)
         var reason = request.LyDo?.Trim();
         if (reason?.Length > 1000 || (request.TrangThai == "TuChoi" && string.IsNullOrWhiteSpace(reason)))
             throw new ArgumentException("Cần lý do từ chối, tối đa 1000 ký tự.");
+        var key = await db.DeXuatThucTapTuTims.AsNoTracking().Where(x => x.MaHoSo == maHoSo)
+            .Select(x => new { x.MaDot }).SingleOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Không tìm thấy hồ sơ tự tìm.");
         await using var transaction = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        // Lock before reading mutable dossier/capacity state, matching the close/write lock order.
+        await db.LockRoundsAsync([key.MaDot]);
         var item = await db.DeXuatThucTapTuTims.SingleOrDefaultAsync(x => x.MaHoSo == maHoSo)
             ?? throw new KeyNotFoundException("Không tìm thấy hồ sơ tự tìm.");
+        await db.Entry(item).ReloadAsync();
+        if (item.MaDot != key.MaDot) throw new DbUpdateConcurrencyException();
         if (item.TrangThai == request.TrangThai) return item;
         if (item.TrangThai != "ChoDuyet") throw new InvalidOperationException("Hồ sơ đã xử lý, không được duyệt/từ chối lại theo hướng khác.");
         await CheckRoundAsync(item.MaDot);

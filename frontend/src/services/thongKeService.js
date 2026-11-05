@@ -83,13 +83,14 @@ export const thongKeService = {
       { stt: 2, chiSo: 'Tổng số sinh viên', giaTri: tq.tongSinhVien || 0 },
       { stt: 3, chiSo: 'Đã phân công GVHD', giaTri: (tq.daPhanCongGVHD || 0) + ' (' + (tq.tiLePhanCong || 0) + '%)' },
       { stt: 4, chiSo: 'Chưa phân công GVHD', giaTri: tq.chuaPhanCongGVHD || 0 },
-      { stt: 5, chiSo: 'Tiến độ: Đã duyệt / Tổng báo cáo', giaTri: (tq.tienDoDaDuyet || 0) + ' / ' + (tq.tongBaoCaoTienDo || 0) },
+      { stt: 5, chiSo: 'Tiến độ: Đã duyệt / Tổng báo cáo hiện hành', giaTri: (tq.tienDoDaDuyet || 0) + ' / ' + (tq.tongBaoCaoTienDo || 0) },
       { stt: 6, chiSo: 'Tiến độ: Chờ duyệt', giaTri: tq.tienDoChoDuyet || 0 },
       { stt: 7, chiSo: 'Sinh viên đủ điểm CLO', giaTri: tq.daChamCLO || 0 },
       { stt: 8, chiSo: 'Sinh viên chưa đủ điểm', giaTri: tq.chuaChamCLO || 0 },
       { stt: 9, chiSo: 'Điểm trung bình CLO (thang 10)', giaTri: tq.diemTrungBinhCLO || 0 },
       { stt: 10, chiSo: 'Số sinh viên Đạt (đủ điểm, làm tròn >= 4.0)', giaTri: (tq.soLuongDat || 0) + ' (' + (tq.tiLeDatCLO || 0) + '%)' },
       { stt: 11, chiSo: 'Số sinh viên Không đạt (đủ điểm, làm tròn < 4.0)', giaTri: tq.soLuongKhongDat || 0 },
+      { stt: 12, chiSo: 'Báo cáo lưu trữ do đổi nơi (không tính KPI hiện hành)', giaTri: tq.baoCaoLuuTru || 0 },
     ]
 
     // Sheet 3: Tải giảng viên hướng dẫn
@@ -98,7 +99,7 @@ export const thongKeService = {
       { header: 'Mã giảng viên', key: 'maGV', width: 15, align: 'center' },
       { header: 'Họ và tên giảng viên', key: 'hoTen', width: 26, align: 'left' },
       { header: 'Hướng chuyên môn', key: 'chuyenMon', width: 26, align: 'left' },
-      { header: 'Đang hướng dẫn', key: 'soLuongHienTai', width: 16, align: 'center' },
+      { header: 'SV đang hướng dẫn trong đợt', key: 'soLuongHienTai', width: 24, align: 'center' },
       { header: 'Chỉ tiêu tối đa', key: 'soLuongSVHD', width: 16, align: 'center' },
       { header: 'Tỷ lệ tải (%)', key: 'tiLe', width: 14, align: 'center' },
       { header: 'Tình trạng', key: 'tinhTrang', width: 18, align: 'center' },

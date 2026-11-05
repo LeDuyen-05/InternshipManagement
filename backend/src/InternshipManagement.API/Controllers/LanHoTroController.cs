@@ -18,4 +18,6 @@ public class LanHoTroController(LanHoTroService service) : ControllerBase
     { await service.DeleteAsync(maDot, id, phienBan, Actor); return NoContent(); }
     [HttpPut("{id}/sinh-vien/{maSV}")] public async Task<IActionResult> Result(string id, string maSV, [FromQuery] string maDot, KetQuaHoTroRequest request)
     { await service.ResultAsync(maDot, id, maSV, request, Actor); return NoContent(); }
+    [HttpPost("{id}/sinh-vien/{maSV}/mo-dang-ky")] public async Task<IActionResult> OpenRegistration(string id, string maSV, [FromQuery] string maDot, MoDangKyBoSungRequest request)
+    { await service.OpenRegistrationAsync(maDot, id, maSV, request, Actor); return NoContent(); }
 }

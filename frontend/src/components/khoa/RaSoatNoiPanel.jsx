@@ -400,14 +400,13 @@ export default function RaSoatNoiPanel({ maDot, onChanged, onNavigateTab }) {
                               {actionLink.label}
                             </Link>
                           )}
-                          {s.nhom === 'ChuaCoNoi' && onNavigateTab && (
-                            <button
-                              type="button"
-                              onClick={() => onNavigateTab('ho-tro')}
-                              className="px-2.5 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium cursor-pointer"
+                          {s.nhom === 'ChuaCoNoi' && (
+                            <Link
+                              to="/khoa/ung-tuyen-ho-tro"
+                              className="px-2.5 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-medium"
                             >
                               Đưa vào đợt hỗ trợ
-                            </button>
+                            </Link>
                           )}
                           {(s.coTheXacNhan || s.coTheThuHoi) && (
                             <button

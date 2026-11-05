@@ -10,7 +10,10 @@ import ThucTapTuTimPanel from '../../components/sinh-vien/ThucTapTuTimPanel'
 import { dangKyThucTapService } from '../../services/dangKyThucTapService'
 import { hoSoNangLucService } from '../../services/hoSoNangLucService'
 import { phongVanService } from '../../services/phongVanService'
+import { studentSupportService } from '../../services/studentSupportService'
+import SupportResponseCard from '../../components/sinh-vien/SupportResponseCard'
 import { CONG_TY, TONE, gpaToiThieu, trangThaiNguyenVong } from '../../utils/trangThai'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 
 export default function DangKyThucTapPage() {
   const { maSV: currentMaSV } = useIdentity()
@@ -53,6 +56,9 @@ export default function DangKyThucTapPage() {
   const [placement, setPlacement] = useState(null)
   const [gpa, setGpa] = useState(null)
   const [dieuKien, setDieuKien] = useState(null)
+  const [supportData, setSupportData] = useState(null)
+  const [lanDangKyInfo, setLanDangKyInfo] = useState(null)
+  const [selectedLanHoTro, setSelectedLanHoTro] = useState('')
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [toast, setToast] = useState(null)
@@ -83,22 +89,26 @@ export default function DangKyThucTapPage() {
     const request = ++requestVersion.current
     setLoading(true)
     try {
-      const [compRes, appRes, propRes, pbRes, hsRes, dkRes] = await Promise.all([
+      const [compRes, appRes, propRes, pbRes, hsRes, dkRes, supportRes, lanRes] = await Promise.all([
         dangKyThucTapService.getDanhSachCongTy(currentMaDot),
         dangKyThucTapService.getDangKyBySinhVien(currentMaSV),
         dangKyThucTapService.getDeXuatCuaToi().catch(() => []),
         phongVanService.getPhanBoThucTap(currentMaSV, currentMaDot).catch(() => null),
         hoSoNangLucService.getHoSoBySinhVien(currentMaSV).catch(() => null),
         currentMaDot ? dangKyThucTapService.getDieuKien(currentMaDot).catch(() => null) : Promise.resolve(null),
+        currentMaDot ? studentSupportService.getDanhSachHoTro(currentMaDot).catch(() => null) : Promise.resolve(null),
+        currentMaDot ? dangKyThucTapService.getLanDangKy(currentMaDot).catch(() => null) : Promise.resolve(null),
       ])
       if (request !== requestVersion.current || activeContext.current !== contextKey) return
       setDieuKien(dkRes)
       setCompanies(compRes || [])
-      // Giới hạn 3 nguyện vọng và thứ tự ưu tiên tính trong từng đợt
+      // Lượt đã rút/không đạt vẫn tính trong giới hạn ba lượt của đúng đợt.
       setMyApplications((appRes || []).filter((a) => !currentMaDot || a.maDot === currentMaDot))
       setMyProposals(propRes || [])
       setPlacement(pbRes && (!currentMaDot || pbRes.maDot === currentMaDot) ? pbRes : null)
       setGpa(hsRes?.gpa ?? null)
+      setSupportData(supportRes)
+      setLanDangKyInfo(lanRes)
     } catch (err) {
       if (request !== requestVersion.current || activeContext.current !== contextKey) return
       console.error('Lỗi khi tải dữ liệu thực tập:', err)
@@ -123,7 +133,7 @@ export default function DangKyThucTapPage() {
   const dotDangMo = selectedDot?.trangThai === 'DangDienRa'
   // Quy tắc "đã trúng tuyển / đã hoàn thành học phần" do backend quyết định (một nguồn duy nhất)
   const khongDuDieuKien = Boolean(dieuKien && !dieuKien.duocDangKy)
-  const daCoNoiTiepNhan = Boolean(placement) || Boolean(khongDuDieuKien)
+  const daCoNoiTiepNhan = Boolean(placement)
   const lyDoKhoa = !dotDangMo
     ? `Đợt "${selectedDot?.tenDot || ''}" ${selectedDot?.labelTrangThai?.toLowerCase() || 'không mở đăng ký'} — không thể đăng ký nguyện vọng.`
     : khongDuDieuKien
@@ -132,12 +142,15 @@ export default function DangKyThucTapPage() {
         ? `Bạn đã trúng tuyển tại ${placement.tenCongTy} trong đợt này nên không thể đăng ký thêm nguyện vọng.`
         : null
 
-  // Backend không cho đăng ký thêm khi đã có một nguyện vọng đạt vòng hồ sơ (đang chờ phỏng vấn/kết quả)
-  const nvDangXet = myApplications.find((a) => a.trangThai === 'DaDuyet' && !a.daTiepNhan)
+  // Mỗi đợt chỉ được có một hồ sơ đang xử lý, kể cả lúc chờ duyệt.
+  const nvDangXet = myApplications.find((a) => ['ChoDuyet', 'DaDuyet'].includes(a.trangThai) && !a.daTiepNhan)
+  const cacLanBoSung = (lanDangKyInfo?.cacLanHoTro || []).filter(l => l.dangKyBoSung && l.soLuotConLai > 0)
+  const coLuotBoSung = Boolean(lanDangKyInfo?.duocDangKy && cacLanBoSung.length > 0)
+  const hetLuotDangKy = myApplications.length >= 3 && !coLuotBoSung
   const lyDoDangKy =
     lyDoKhoa ||
     (nvDangXet
-      ? `Hồ sơ của bạn tại ${nvDangXet.tenCongTy} đã đạt vòng xét và đang chờ phỏng vấn/kết quả nên chưa thể đăng ký thêm nguyện vọng.`
+      ? `Bạn đang có hồ sơ ứng tuyển tại ${nvDangXet.tenCongTy}. Chỉ đăng ký công ty khác khi hồ sơ này đã bị từ chối, không đạt hoặc được rút hợp lệ.`
       : null)
 
   // Mở modal đăng ký cho 1 công ty
@@ -163,13 +176,13 @@ export default function DangKyThucTapPage() {
     }
   }
 
-  const handleOpenApply = async (company) => {
+  const handleOpenApply = async (company, maLan = null) => {
     if (roundLock.structureBlocked)
       return showToast('Đợt đã chốt/khóa hoặc chưa xác minh trạng thái; không đăng ký mới.', 'error')
     if (loading) return
     const offered = companies.find(
-      (x) => x.maCongTy === company.maCongTy && x.maViTri === company.maViTri && x.maDot === currentMaDot
-    )
+      (x) => x.maCongTy === company.maCongTy && (!company.maViTri || x.maViTri === company.maViTri) && x.maDot === currentMaDot
+    ) || company
     if (!offered) {
       showToast(
         'DN chưa được mở nhận đăng ký hoặc đã hết hạn/đủ chỉ tiêu trong đợt đang chọn. Liên hệ Khoa nếu cần hỗ trợ.',
@@ -187,30 +200,45 @@ export default function DangKyThucTapPage() {
       showToast(lyDoMoi, 'error')
       return
     }
-    if (myApplications.length >= 3) {
+
+    const targetLan = (maLan !== null ? maLan : selectedLanHoTro) || (coLuotBoSung ? cacLanBoSung[0].maLan : '')
+    setSelectedLanHoTro(targetLan || '')
+    if (hetLuotDangKy) {
       showToast(
-        'Bạn đã dùng đủ 3 lượt đăng ký trong đợt, kể cả lượt rút/rớt. Liên hệ Khoa để được hỗ trợ bố trí.',
+        'Bạn đã sử dụng hết 3 lượt đăng ký trong đợt (kể cả các lượt không trúng tuyển hoặc đã rút đơn). Vui lòng liên hệ Văn phòng Khoa để được hỗ trợ bố trí.',
         'warning'
       )
       return
     }
     setSelectedCompany(offered)
-    // Tự động tìm thứ tự ưu tiên còn trống nhỏ nhất trong khoảng [1, 2, 3]
-    const usedPriorities = myApplications.map((a) => a.thuTuUuTien)
-    const nextPriority = [1, 2, 3].find((p) => !usedPriorities.includes(p)) || 1
-    setApplyPriority(nextPriority)
+    setApplyPriority(myApplications.length + 1)
     setApplyModalOpen(true)
+  }
+
+  const handleApplyFromSupport = (congTy, maLan) => {
+    handleOpenApply(
+      {
+        maCongTy: congTy.maCongTy,
+        tenCongTy: congTy.tenCongTy,
+        maViTri: congTy.maViTri || null,
+        viTriTuyen: congTy.tenViTri || 'Thực tập sinh',
+        maDot: currentMaDot,
+        soLuongNhan: 1,
+      },
+      maLan
+    )
   }
 
   // Submit đăng ký nguyện vọng
   const handleSubmitApply = async (e) => {
     e.preventDefault()
     if (roundLock.structureBlocked) return
-    if (!selectedCompany || selectedCompany.maDot !== currentMaDot || loading) return
+    if (!selectedCompany || selectedCompany.maDot !== currentMaDot || loading || isSubmittingApply) return
+    if (lyDoDangKy) return showToast(lyDoDangKy, 'error')
 
     const priorityNum = parseInt(applyPriority, 10)
-    if (isNaN(priorityNum) || priorityNum < 1 || priorityNum > 3) {
-      showToast('Thứ tự ưu tiên nguyện vọng phải từ 1 đến 3!', 'error')
+    if (!Number.isInteger(priorityNum) || priorityNum < 1) {
+      showToast('Lượt đăng ký không hợp lệ. Vui lòng tải lại danh sách.', 'error')
       return
     }
 
@@ -222,6 +250,7 @@ export default function DangKyThucTapPage() {
         maViTri: selectedCompany.maViTri,
         maDot: currentMaDot,
         thuTuUuTien: priorityNum,
+        maLanHoTro: selectedLanHoTro || undefined,
       })
       if (activeContext.current !== contextKey) return
       showToast(`Đã nộp nguyện vọng vào "${selectedCompany.tenCongTy}" thành công!`)
@@ -367,15 +396,21 @@ export default function DangKyThucTapPage() {
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/90 shadow-2xs">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1 flex-wrap">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            HỌC VỤ &amp; ĐĂNG KÝ THỰC TẬP • {selectedDot?.tenDot || 'ĐANG MỞ ĐĂNG KÝ'}
+            <span>HỌC VỤ &amp; ĐĂNG KÝ THỰC TẬP • {formatTenDot(selectedDot)}</span>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+              {getLoaiThucTapInfo(selectedDot).label}
+            </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight m-0">
             Đăng ký Nguyện vọng Thực tập &amp; Khám phá Doanh nghiệp
           </h1>
           <p className="text-xs text-slate-500 mt-1 mb-0 leading-relaxed">
             Chọn doanh nghiệp phù hợp với định hướng nghề nghiệp hoặc khai báo đơn vị tiếp nhận bên ngoài để Khoa công nhận và phân công GVHD.
+          </p>
+          <p className="text-xs text-slate-600 mt-1 mb-0 leading-relaxed">
+            Mỗi thời điểm sinh viên đăng ký một đơn vị thực tập. Tối đa 3 lượt thông thường trong đợt; Văn phòng Khoa có thể xem xét mở lượt bổ sung khi cần thiết. Doanh nghiệp đăng ký phải còn thời hạn và chỉ tiêu tiếp nhận.
           </p>
         </div>
 
@@ -391,7 +426,7 @@ export default function DangKyThucTapPage() {
               }
               setProposalModalOpen(true)
             }}
-            disabled={daCoNoiTiepNhan}
+            disabled={Boolean(lyDoDangKy)}
             title={
               lyDoDangKy ||
               (daCoNoiTiepNhan
@@ -450,7 +485,7 @@ export default function DangKyThucTapPage() {
           <div className="mt-3">
             <div className="text-3xl font-extrabold text-indigo-900">{myApplications.length}</div>
             <div className="text-xs text-indigo-600 font-semibold mt-1">
-              {khongDuDieuKien ? 'Đã khóa theo quy định học vụ' : 'Tối đa 3 nguyện vọng ưu tiên'}
+              {nvDangXet ? 'Đang xử lý một hồ sơ' : coLuotBoSung ? 'Được Khoa mở đăng ký bổ sung' : '3 lượt đăng ký thông thường'}
             </div>
           </div>
         </div>
@@ -487,7 +522,7 @@ export default function DangKyThucTapPage() {
             <div className="text-sm font-bold text-blue-950">{selectedDot?.thoiGian || '—'}</div>
             <div className="text-xs text-blue-800 mt-1 font-medium">
               {selectedDot?.labelTrangThai || 'Chưa chọn đợt'}
-              {dotDangMo ? (khongDuDieuKien ? ' • Không tham gia' : ' • Đang nhận nguyện vọng') : ''}
+              {dotDangMo ? ' • Đang nhận hồ sơ' : ''}
             </div>
           </div>
         </div>
@@ -495,15 +530,29 @@ export default function DangKyThucTapPage() {
 
       {/* Cảnh báo khi dùng hết 3 lượt */}
       {!placement &&
-        myApplications.length >= 3 &&
+        hetLuotDangKy &&
         myApplications.every((a) => a.trangThai === 'TuChoi') && (
           <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center gap-2">
             <span className="material-symbols-outlined text-amber-600 text-[18px]">info</span>
             <span>
-              Bạn đã dùng đủ 3 lượt trong đợt và chưa có nơi tiếp nhận. Liên hệ Khoa CNTT để được hỗ trợ bố trí nơi thực tập; lịch sử các lượt được giữ nguyên.
+              Bạn đã sử dụng hết 3 lượt đăng ký trong đợt và chưa có đơn vị tiếp nhận. Vui lòng liên hệ Văn phòng Khoa để được hỗ trợ bố trí nơi thực tập (lịch sử các lượt đăng ký trước đó vẫn được lưu giữ).
             </span>
           </div>
         )}
+      {coLuotBoSung && <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 text-xs space-y-2">
+        <strong>Khoa đã mở đăng ký bổ sung</strong>
+        {cacLanBoSung.map(l => <p key={l.maLan}>{l.tenLan}: còn {l.soLuotConLai} lượt; hạn {new Date(l.dangKyBoSung.hanDangKy).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}. Lý do: {l.dangKyBoSung.lyDo}</p>)}
+      </div>}
+
+      {/* Thẻ hỗ trợ từ Khoa */}
+      {supportData && (
+        <SupportResponseCard
+          supportData={supportData}
+          maDot={currentMaDot}
+          onUpdated={fetchData}
+          onApplyCompany={handleApplyFromSupport}
+        />
+      )}
 
       {/* Tabs & Search Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-slate-200/90 shadow-2xs">
@@ -647,7 +696,7 @@ export default function DangKyThucTapPage() {
               companyPagination.items.map((c) => {
                 const applied = isAlreadyApplied(c.maCongTy)
                 const full = !!c.daDuChiTieu
-                const blocked = full || myApplications.length >= 3 || Boolean(lyDoDangKy)
+                const blocked = full || hetLuotDangKy || Boolean(lyDoDangKy)
                 const gpaYeuCau = gpaToiThieu(c.yeuCau)
                 const chuaDatGpa = gpa != null && gpaYeuCau != null && Number(gpa) < gpaYeuCau
                 return (
@@ -734,8 +783,8 @@ export default function DangKyThucTapPage() {
                             full
                               ? 'Doanh nghiệp đã đủ chỉ tiêu, đợt tuyển đã đóng'
                               : lyDoDangKy ||
-                                (myApplications.length >= 3
-                                  ? 'Đã đạt tối đa 3 nguyện vọng trong đợt này'
+                                (hetLuotDangKy
+                                  ? 'Đã hết lượt thông thường hoặc bổ sung'
                                   : 'Nộp nguyện vọng')
                           }
                         >
@@ -747,8 +796,8 @@ export default function DangKyThucTapPage() {
                               ? 'Đã đóng tuyển'
                               : lyDoDangKy
                                 ? 'Không thể đăng ký'
-                                : myApplications.length >= 3
-                                  ? 'Đủ 3 NV'
+                                : hetLuotDangKy
+                                  ? 'Đã hết lượt'
                                   : 'Nộp nguyện vọng'}
                           </span>
                         </button>
@@ -797,7 +846,7 @@ export default function DangKyThucTapPage() {
               <table className="w-full text-left text-xs text-slate-600">
                 <thead className="bg-slate-50 text-[11px] uppercase font-bold text-slate-500 border-b border-slate-100">
                   <tr>
-                    <th className="px-5 py-3.5">Ưu tiên</th>
+                    <th className="px-5 py-3.5">Lượt đăng ký</th>
                     <th className="px-5 py-3.5">Doanh nghiệp &amp; Vị trí</th>
                     <th className="px-5 py-3.5">Đợt thực tập</th>
                     <th className="px-5 py-3.5">Ngày nộp</th>
@@ -820,7 +869,7 @@ export default function DangKyThucTapPage() {
                       <tr key={app.maDK} className="hover:bg-slate-50/70 transition-colors">
                         <td className="px-5 py-4">
                           <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-800 font-bold text-xs">
-                            NV{app.thuTuUuTien}
+                            {app.thuTuUuTien}
                           </span>
                         </td>
                         <td className="px-5 py-4">
@@ -828,7 +877,15 @@ export default function DangKyThucTapPage() {
                           <div className="text-xs text-slate-500 mt-0.5">{app.viTriTuyen}</div>
                         </td>
                         <td className="px-5 py-4 text-xs font-medium text-slate-600">
-                          {app.tenDot || selectedDot?.tenDot || '—'}
+                          <div>{formatTenDot(app.tenDot || selectedDot)}</div>
+                          {(() => {
+                            const info = getLoaiThucTapInfo(app.maLoaiThucTap ? { maLoaiThucTap: app.maLoaiThucTap, tenDot: app.tenDot } : selectedDot)
+                            return (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-bold border mt-0.5 ${info.badgeClass}`}>
+                                {info.shortLabel}
+                              </span>
+                            )
+                          })()}
                         </td>
                         <td className="px-5 py-4 text-xs text-slate-500">
                           {app.ngayDangKy ? new Date(app.ngayDangKy).toLocaleDateString('vi-VN') : '—'}
@@ -906,7 +963,7 @@ export default function DangKyThucTapPage() {
           maDot={currentMaDot}
           trangThaiDot={selectedDot?.trangThai}
           onApprovedRefresh={fetchData}
-          disabled={daCoNoiTiepNhan || roundLock.structureBlocked}
+          disabled={Boolean(lyDoDangKy) || roundLock.structureBlocked}
           disabledReason={lyDoDangKy}
         />
       )}
@@ -942,27 +999,46 @@ export default function DangKyThucTapPage() {
                 </div>
               </div>
 
+              {lanDangKyInfo?.cacLanHoTro && lanDangKyInfo.cacLanHoTro.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Kế hoạch hỗ trợ áp dụng
+                  </label>
+                  <select
+                    value={selectedLanHoTro}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setSelectedLanHoTro(val)
+                      setApplyPriority(myApplications.length + 1)
+                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white font-medium cursor-pointer"
+                  >
+                    <option
+                      value=""
+                      disabled={!lanDangKyInfo.coTheDangKyLanDau}
+                    >
+                      Lượt đăng ký ban đầu (Đợt chính){!lanDangKyInfo.coTheDangKyLanDau && myApplications.filter((a) => !a.maLanHoTro).length >= 3 ? ' — Hết lượt' : ''}
+                    </option>
+                    {lanDangKyInfo.cacLanHoTro.map((l) => (
+                      <option key={l.maLan} value={l.maLan}>
+                        {l.tenLan} (Còn {l.soLuotConLai} lượt{l.dangKyBoSung ? ' bổ sung' : ''})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Thứ tự ưu tiên nguyện vọng
+                  Lượt đăng ký trong đợt
                 </label>
-                <select
+                <input
+                  readOnly
                   value={applyPriority}
-                  onChange={(e) => setApplyPriority(parseInt(e.target.value, 10))}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 focus:outline-none bg-white font-medium cursor-pointer"
-                >
-                  <option value={1} disabled={myApplications.some((a) => a.thuTuUuTien === 1)}>
-                    Nguyện vọng 1 (Ưu tiên cao nhất) {myApplications.some((a) => a.thuTuUuTien === 1) ? '— Đã dùng' : ''}
-                  </option>
-                  <option value={2} disabled={myApplications.some((a) => a.thuTuUuTien === 2)}>
-                    Nguyện vọng 2 {myApplications.some((a) => a.thuTuUuTien === 2) ? '— Đã dùng' : ''}
-                  </option>
-                  <option value={3} disabled={myApplications.some((a) => a.thuTuUuTien === 3)}>
-                    Nguyện vọng 3 {myApplications.some((a) => a.thuTuUuTien === 3) ? '— Đã dùng' : ''}
-                  </option>
-                </select>
+                />
                 <p className="text-[11px] text-slate-500 mt-1">
-                  Hệ thống sẽ ưu tiên xét tuyển theo thứ tự từ Nguyện vọng 1 trở đi.
+                  Mỗi lần chỉ ứng tuyển một công ty. Lượt bổ sung chỉ áp dụng cho lần hỗ trợ và thời hạn Khoa đã chấp thuận. Không đăng ký lại công ty đã ứng tuyển trong cùng đợt.
                 </p>
               </div>
 
@@ -985,7 +1061,7 @@ export default function DangKyThucTapPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingApply || roundLock.structureBlocked}
+                  disabled={isSubmittingApply || roundLock.structureBlocked || Boolean(lyDoDangKy) || hetLuotDangKy}
                   className="inline-flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isSubmittingApply ? (

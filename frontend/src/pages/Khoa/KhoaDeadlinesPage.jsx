@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import Layout from '../../components/Layout'
+import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import apiClient from '../../services/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
@@ -16,7 +17,11 @@ const formatDateVN = (val) => {
 export default function KhoaDeadlinesPage() {
   const [rounds, setRounds] = useState([])
   const [round, setRound] = useState('')
-  const [deadlines, setDeadlines] = useState([])
+  const [deadlineState, setDeadlineState] = useState(null)
+  const deadlines = deadlineState?.round === round ? deadlineState.items : []
+  const currentRound = useRef(round)
+  currentRound.current = round
+  const requestVersion = useRef(0)
   const [dates, setDates] = useState({})
   const [reasons, setReasons] = useState({})
   const [error, setError] = useState('')
@@ -31,29 +36,45 @@ export default function KhoaDeadlinesPage() {
   const [generating, setGenerating] = useState(false)
   const pagination = usePagination(deadlines, round)
 
+  const calcRoundWeeks = (bd, kt) => {
+    if (!bd || !kt) return 10
+    const diff = Math.round((new Date(kt) - new Date(bd)) / (7 * 24 * 60 * 60 * 1000))
+    return diff > 0 ? diff : 10
+  }
+
   const handleSelectCreateRound = (selectedId) => {
     setCreateRound(selectedId)
     const target = rounds.find((r) => r.maSo === selectedId)
     if (target?.thoiGianBD) {
       setNgayBatDau(target.thoiGianBD.slice(0, 10))
     }
+    if (target?.thoiGianBD && target?.thoiGianKT) {
+      setSoTuan(calcRoundWeeks(target.thoiGianBD, target.thoiGianKT))
+    }
   }
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (currentRound.current !== round) return
+    const version = ++requestVersion.current
     try {
       const result = await apiClient.get('/khoa/han-bao-cao', {
         params: round ? { maDot: round } : {},
       })
-      setDeadlines(result.data)
+      if (currentRound.current !== round || version !== requestVersion.current) return
+      setDeadlineState({ round, items: result.data || [] })
       setError('')
     } catch (e) {
+      if (currentRound.current !== round || version !== requestVersion.current) return
+      setDeadlineState(null)
       setError(e.response?.data?.message || 'Không tải được lịch hạn báo cáo.')
     }
-  }
+  }, [round])
 
   useEffect(() => {
     load()
-  }, [round])
+    const ref = requestVersion
+    return () => { ref.current++ }
+  }, [load])
 
   useEffect(() => {
     apiClient
@@ -68,9 +89,12 @@ export default function KhoaDeadlinesPage() {
           if (active.thoiGianBD) {
             setNgayBatDau(active.thoiGianBD.slice(0, 10))
           }
+          if (active.thoiGianBD && active.thoiGianKT) {
+            setSoTuan(calcRoundWeeks(active.thoiGianBD, active.thoiGianKT))
+          }
         }
       })
-      .catch(() => {})
+      .catch(() => setError('Không tải được danh sách đợt thực tập. Vui lòng làm mới trang.'))
   }, [])
 
   const save = async (item) => {
@@ -91,10 +115,12 @@ export default function KhoaDeadlinesPage() {
           lyDo: reasons[key],
         }
       )
+      if (currentRound.current !== round) return
       setSuccess('Đã cập nhật hạn báo cáo thành công.')
       setTimeout(() => setSuccess(''), 4000)
       await load()
     } catch (e) {
+      if (currentRound.current !== round) return
       setError(e.response?.data?.message || 'Không cập nhật được hạn báo cáo.')
     } finally {
       setSaving('')
@@ -141,7 +167,7 @@ export default function KhoaDeadlinesPage() {
           <div className="space-y-1">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold tracking-wider uppercase bg-indigo-50 text-indigo-700 border border-indigo-100">
               <span className="material-symbols-outlined text-[13px]">schedule</span>
-              GIÁO VỤ KHOA
+              VĂN PHÒNG KHOA
             </span>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
               Hạn nộp báo cáo & Tiến độ thực tập
@@ -237,7 +263,7 @@ export default function KhoaDeadlinesPage() {
                   Tạo mốc báo cáo định kỳ cho đợt
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Khởi tạo hàng loạt các mốc báo cáo tuần cho toàn bộ sinh viên có phân bổ hoặc đăng ký đã duyệt trong đợt.
+                  Khởi tạo các mốc báo cáo tiến độ tuần theo kế hoạch đào tạo của đợt thực tập.
                 </p>
               </div>
 
@@ -284,7 +310,10 @@ export default function KhoaDeadlinesPage() {
                     className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 font-semibold text-slate-900 bg-slate-50 focus:bg-white"
                     required
                   />
-                  <p className="text-[11px] text-slate-500 font-medium mt-1">Chuẩn đợt: 12 tuần</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1">Chuẩn theo đợt: {(() => {
+                    const activeRoundInfo = rounds.find((r) => r.maSo === createRound)
+                    return activeRoundInfo ? `${calcRoundWeeks(activeRoundInfo.thoiGianBD, activeRoundInfo.thoiGianKT)} tuần` : '10 – 12 tuần'
+                  })()}</p>
                 </div>
 
                 <div className="w-52">
@@ -303,7 +332,18 @@ export default function KhoaDeadlinesPage() {
                     {ngayBatDau && Number(soTuan) > 0 && (() => {
                       const d = new Date(ngayBatDau)
                       d.setDate(d.getDate() + Number(soTuan) * 7)
-                      return ` → Kết thúc: ${formatDateVN(d.toISOString())}`
+                      const activeRoundInfo = rounds.find((r) => r.maSo === createRound)
+                      const isPastRoundEnd = activeRoundInfo?.thoiGianKT && d > new Date(activeRoundInfo.thoiGianKT)
+                      return (
+                        <>
+                          <span>{` → Kết thúc: ${formatDateVN(d.toISOString())}`}</span>
+                          {isPastRoundEnd && (
+                            <span className="block text-rose-500 font-bold mt-0.5">
+                              ⚠️ Vượt quá ngày kết thúc đợt (${formatDateVN(activeRoundInfo.thoiGianKT)})
+                            </span>
+                          )}
+                        </>
+                      )
                     })()}
                   </p>
                 </div>
@@ -461,13 +501,6 @@ export default function KhoaDeadlinesPage() {
         {/* TAB 2: Mở nộp bổ sung cho sinh viên */}
         {activeTab === 'mo-bo-sung' && (
           <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 text-xs text-amber-800 flex items-start gap-2.5 leading-relaxed">
-              <span className="material-symbols-outlined text-amber-600 text-lg shrink-0 mt-0.5">info</span>
-              <div>
-                <strong>Quy định nộp bổ sung:</strong> Hạn báo cáo tính hết ngày Việt Nam. Quá hạn hệ thống sẽ tự động khóa nộp; sinh viên phải lên Khoa trình bày lý do, được cán bộ Khoa chấp thuận mới mở hạn bổ sung cho đúng SV/mốc đó. Hết hạn bổ sung hệ thống tự khóa lại.
-              </div>
-            </div>
-
             <ReportReopeningSettings rounds={rounds} />
           </div>
         )}
@@ -475,13 +508,6 @@ export default function KhoaDeadlinesPage() {
         {/* TAB 3: Thời hạn chấm điểm CLO (GV & DN) */}
         {activeTab === 'han-cham-clo' && (
           <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200/80 text-xs text-indigo-800 flex items-start gap-2.5 leading-relaxed">
-              <span className="material-symbols-outlined text-indigo-600 text-lg shrink-0 mt-0.5">verified</span>
-              <div>
-                <strong>Quy định chấm điểm CLO:</strong> Doanh nghiệp mở chấm lúc 00:00 ngày kế tiếp ngày kết thúc thực tập. Giảng viên hướng dẫn có cửa sổ chấm điểm riêng, được kéo dài sau khi kết thúc đợt. Hết hạn chấm phải được Khoa gia hạn và ghi rõ lý do.
-              </div>
-            </div>
-
             <GradingDeadlineSettings rounds={rounds} />
           </div>
         )}

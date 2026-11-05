@@ -2,6 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import apiClient from '../../services/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from './Pagination'
+import DocumentPreview from './DocumentPreview'
+import { documentPreviewType } from '../../utils/documentPreview'
+
+function FileActions({ row, disabled, onPreview, onDownload }) {
+  return (
+    <div className="flex flex-wrap justify-end gap-2 shrink-0">
+      {documentPreviewType(row) && <button type="button" disabled={disabled} onClick={() => onPreview(row)}
+        className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40">Xem trực tiếp</button>}
+      <button type="button" disabled={disabled} onClick={() => onDownload(row)}
+        className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 text-blue-700 bg-white hover:bg-slate-50 disabled:opacity-40">Tải xuống</button>
+    </div>
+  )
+}
+
+function FileName({ row, disabled, onPreview }) {
+  return documentPreviewType(row)
+    ? <button type="button" disabled={disabled} onClick={() => onPreview(row)} title={row.fileName}
+        className="text-xs font-semibold text-blue-800 truncate block text-left hover:underline disabled:opacity-40">{row.fileName}</button>
+    : <span className="text-xs font-semibold text-slate-800 truncate block" title={row.fileName}>{row.fileName}</span>
+}
 
 export default function DocumentAttachments({ kind, resourceId, readOnly = false, defer = false, title }) {
   const [opened, setOpened] = useState(!defer)
@@ -13,6 +33,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
+  const [preview, setPreview] = useState(null)
   const version = useRef(0)
   const operation = useRef(0)
   const requestId = useRef('')
@@ -39,6 +60,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
       if (current.current === key && request === version.current) {
         setRows([])
         setPermission(null)
+        setPreview(null)
         setError(e.response?.data?.message || 'Không tải được tệp hồ sơ.')
       }
     } finally {
@@ -49,6 +71,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
   useEffect(() => {
     operation.current++
     setRows([])
+    setPreview(null)
     setPermission(null)
     setFile(null)
     setInputVersion((v) => v + 1)
@@ -121,7 +144,9 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
       const a = document.createElement('a')
       a.href = url
       a.download = row.fileName
+      document.body.appendChild(a)
       a.click()
+      a.remove()
       setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch {
       if (current.current === key && request === version.current)
@@ -130,6 +155,8 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
       if (current.current === key && op === operation.current) setBusy(false)
     }
   }
+
+  const showPreview = (row) => { setError(''); setPreview({ key, row }) }
 
   if (!opened) {
     return (
@@ -247,9 +274,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
                 <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase tracking-wider shrink-0">
                   CV hiện hành
                 </span>
-                <span className="text-xs font-bold text-slate-800 truncate block">
-                  {rows[0].fileName}
-                </span>
+                <FileName row={rows[0]} disabled={busy || loading} onPreview={showPreview} />
               </div>
               <div className="text-[11px] text-slate-500 space-x-1.5">
                 <span>{(rows[0].size / 1024).toFixed(1)} KB</span>
@@ -262,14 +287,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
               </div>
             </div>
 
-            <button
-              type="button"
-              disabled={busy || loading}
-              onClick={() => download(rows[0])}
-              className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-2xs transition-colors cursor-pointer"
-            >
-              <span>Xem / Tải về</span>
-            </button>
+            <FileActions row={rows[0]} disabled={busy || loading} onPreview={showPreview} onDownload={download} />
           </div>
 
           {/* Lịch sử các bản CV trước (thu gọn, giữ nguyên đối chiếu audit) */}
@@ -279,25 +297,18 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
                 Lịch sử các bản CV trước đó ({rows.length - 1} bản)
               </summary>
               <p className="text-[11px] text-slate-400 mt-1 mb-2.5 italic">
-                Hệ thống bảo lưu vết lịch sử cho các đợt ứng tuyển trước. Doanh nghiệp và Khoa luôn nhận bản CV hiện hành ở trên.
+                Các bản CV trước được lưu để đối chiếu hồ sơ.
               </p>
               <ul className="divide-y divide-slate-100 p-0 m-0 list-none space-y-1">
                 {rows.slice(1).map((row) => (
                   <li key={row.id} className="flex items-center justify-between gap-2 py-1.5">
                     <div className="min-w-0">
-                      <span className="text-xs font-medium text-slate-700 truncate block">{row.fileName}</span>
+                      <FileName row={row} disabled={busy || loading} onPreview={showPreview} />
                       <span className="text-[10px] text-slate-400">
                         {(row.size / 1024).toFixed(1)} KB • {new Date(row.createdAt).toLocaleDateString('vi-VN')}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      disabled={busy || loading}
-                      onClick={() => download(row)}
-                      className="shrink-0 px-2.5 py-0.5 text-[11px] font-semibold rounded-lg text-slate-600 hover:bg-slate-200 bg-white border border-slate-200 cursor-pointer"
-                    >
-                      Tải về
-                    </button>
+                    <FileActions row={row} disabled={busy || loading} onPreview={showPreview} onDownload={download} />
                   </li>
                 ))}
               </ul>
@@ -314,9 +325,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
               <div className="min-w-0 space-y-0.5">
                 <div className="flex items-center gap-1.5">
                   <span className="text-slate-500 font-bold text-xs shrink-0">{row.fileName?.split('.').pop()?.toUpperCase() || 'TỆP'}</span>
-                  <span className="text-xs font-semibold text-slate-800 truncate block">
-                    {row.fileName}
-                  </span>
+                  <FileName row={row} disabled={busy || loading} onPreview={showPreview} />
                 </div>
                 <div className="text-[11px] text-slate-400 space-x-1.5">
                   <span>{(row.size / 1024).toFixed(1)} KB</span>
@@ -329,14 +338,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
                 </div>
               </div>
 
-              <button
-                type="button"
-                disabled={busy || loading}
-                onClick={() => download(row)}
-                className="shrink-0 px-2.5 py-1 text-xs font-semibold rounded-lg bg-white hover:bg-slate-50 text-blue-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-              >
-                Tải về
-              </button>
+              <FileActions row={row} disabled={busy || loading} onPreview={showPreview} onDownload={download} />
             </li>
           ))}
         </ul>
@@ -349,6 +351,8 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
             : kind === 'Template' ? 'Chưa có biểu mẫu được đăng.' : 'Chưa có tệp đính kèm.'}
         </p>
       )}
+
+      {preview?.key === key && <DocumentPreview document={preview.row} onClose={() => setPreview(null)} onDownload={download} downloadBusy={busy || loading} downloadError={error} />}
 
       {(kind !== 'Template' || pagination.totalPages > 1) && <Pagination pagination={pagination} label="tệp" />}
     </section>

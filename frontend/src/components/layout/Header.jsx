@@ -5,11 +5,13 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import apiClient from '../../services/api'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 
 export default function Header({ currentRole }) {
   const navigate = useNavigate()
   const { user: authUser, logout, updateUser } = useAuth()
   const { selectedDot } = useDotThucTap()
+  const isAdmin = currentRole === 'Admin' || currentRole === 'QuanTriVien' || authUser?.maVaiTro === 'VT01'
 
   // State thông báo & menu người dùng
   const [isNotifOpen, setIsNotifOpen] = useState(false)
@@ -86,7 +88,7 @@ export default function Header({ currentRole }) {
         department: 'Khoa Công nghệ Thông tin',
         faculty: 'Khoa Công nghệ Thông tin',
         email: authUser?.email || '—',
-        phone: authUser?.phone || '—',
+        phone: authUser?.soDienThoai || '—',
         office: 'Sinh viên thực tập',
         avatar: (name.charAt(0) || code.charAt(0) || 'SV').toUpperCase(),
         avatarColor: 'bg-emerald-700 text-white',
@@ -102,7 +104,7 @@ export default function Header({ currentRole }) {
         department: 'Văn phòng Khoa CNTT',
         faculty: 'Khoa Công nghệ Thông tin',
         email: authUser?.email || '—',
-        phone: authUser?.phone || '—',
+        phone: authUser?.soDienThoai || '—',
         office: 'Văn phòng Khoa CNTT',
         avatar: (name.charAt(0) || 'K').toUpperCase(),
         avatarColor: 'bg-indigo-700 text-white',
@@ -110,9 +112,7 @@ export default function Header({ currentRole }) {
       }
     }
 
-    const gvDisplayName = authUser?.hoTen
-      ? (authUser.hoTen.startsWith('ThS.') || authUser.hoTen.startsWith('TS.') ? authUser.hoTen : `ThS. ${authUser.hoTen}`)
-      : (code === 'GV001' ? 'ThS. Nguyễn Văn An' : name)
+    const gvDisplayName = name
 
     return {
       code,
@@ -121,7 +121,7 @@ export default function Header({ currentRole }) {
       department: 'Khoa Công nghệ Thông tin',
       faculty: 'Khoa Công nghệ Thông tin',
       email: authUser?.email || '—',
-      phone: authUser?.phone || '—',
+      phone: authUser?.soDienThoai || '—',
       office: 'Văn phòng Bộ môn',
       avatar: (gvDisplayName.charAt(0) || 'GV').toUpperCase(),
       avatarColor: 'bg-blue-700 text-white',
@@ -202,10 +202,18 @@ export default function Header({ currentRole }) {
         )}
 
         {/* Semester Tag */}
+        {!isAdmin && (
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-xs font-medium text-blue-700">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>{selectedDot?.tenDot || 'Chưa chọn đợt thực tập'}{selectedDot?.namHoc ? ` · ${selectedDot.namHoc}` : ''}</span>
+          <span className="font-semibold">{formatTenDot(selectedDot)}</span>
+          {selectedDot?.namHoc && (
+            <span className="text-slate-500 font-normal">· {selectedDot.namHoc}</span>
+          )}
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+            {getLoaiThucTapInfo(selectedDot).shortLabel}
+          </span>
         </div>
+        )}
 
         {/* Nút Chuông Thông Báo */}
         <div ref={notifRef} className="relative">

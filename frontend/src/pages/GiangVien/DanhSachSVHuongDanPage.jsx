@@ -1,3 +1,4 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { useState, useEffect, useRef } from 'react'
@@ -6,6 +7,7 @@ import { tachHoTen, xuatBangHuitExcel } from '../../utils/exportHuitExcel'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
+import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 
 export default function DanhSachSVHuongDanPage() {
   const [searchParams] = useSearchParams()
@@ -18,6 +20,7 @@ export default function DanhSachSVHuongDanPage() {
   const [error, setError] = useState(null)
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [typeFilter, setTypeFilter] = useState('ALL')
   const [selectedSV, setSelectedSV] = useState(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [lecturerInfo, setLecturerInfo] = useState(null)
@@ -67,17 +70,23 @@ export default function DanhSachSVHuongDanPage() {
     loadData()
   }, [currentMaGV, keyword, selectedDot])
 
-  // Lọc dữ liệu hiển thị theo tab trạng thái
+  // Lọc dữ liệu hiển thị theo tab trạng thái và loại thực tập
   const filteredList = list.filter((item) => {
-    if (statusFilter === 'ALL') return true
-    return item.trangThai === statusFilter
+    if (statusFilter !== 'ALL' && item.trangThai !== statusFilter) return false
+    if (typeFilter !== 'ALL') {
+      const info = getLoaiThucTapInfo(item.maLoaiThucTap ? { maLoaiThucTap: item.maLoaiThucTap, tenDot: item.tenDot } : selectedDot)
+      if (info.code !== typeFilter) return false
+    }
+    return true
   })
 
   // Tính toán thống kê KPI
   const totalSV = list.length
-  const pagination = usePagination(filteredList, JSON.stringify([currentMaGV, selectedDot?.maDot, keyword, statusFilter]))
+  const pagination = usePagination(filteredList, JSON.stringify([currentMaGV, selectedDot?.maDot, keyword, statusFilter, typeFilter]))
   const dangHuongDanCount = list.filter((s) => s.trangThai === 'DangHuongDan').length
   const hoanThanhCount = list.filter((s) => s.trangThai === 'HoanThanh').length
+  const ksCount = list.filter((s) => getLoaiThucTapInfo(s.maLoaiThucTap ? { maLoaiThucTap: s.maLoaiThucTap, tenDot: s.tenDot } : selectedDot).code === 'TTKS').length
+  const nnCount = list.filter((s) => getLoaiThucTapInfo(s.maLoaiThucTap ? { maLoaiThucTap: s.maLoaiThucTap, tenDot: s.tenDot } : selectedDot).code === 'TTNN').length
   const avgGpa = totalSV > 0
     ? (list.reduce((acc, cur) => acc + (cur.gpa || 0), 0) / totalSV).toFixed(2)
     : '0.00'
@@ -85,7 +94,7 @@ export default function DanhSachSVHuongDanPage() {
   const handleExportExcel = async () => {
     if (loading || loadedKey !== dataKey || !selectedDot?.maDot) return
     if (!list || list.length === 0) {
-      alert('Không có dữ liệu sinh viên để xuất!')
+      toast.warning('Không có dữ liệu sinh viên để xuất!')
       return
     }
 
@@ -100,6 +109,7 @@ export default function DanhSachSVHuongDanPage() {
       { header: 'Tên', key: 'ten', width: 10, align: 'left' },
       { header: 'Họ và tên', key: 'hoTen', width: 24, align: 'left' },
       { header: 'Lớp', key: 'lop', width: 12, align: 'center' },
+      { header: 'Chương trình', key: 'loaiThucTap', width: 22, align: 'center' },
       { header: 'Doanh nghiệp tiếp nhận', key: 'tenCongTy', width: 36, align: 'left' },
     ]
 
@@ -113,6 +123,7 @@ export default function DanhSachSVHuongDanPage() {
         ten,
         hoTen,
         lop: item.sinhVien?.lop || item.lop || '-',
+        loaiThucTap: getLoaiThucTapInfo(item.maLoaiThucTap ? { maLoaiThucTap: item.maLoaiThucTap, tenDot: item.tenDot } : selectedDot).label,
         tenCongTy: item.congTy?.tenCongTy || item.tenCongTy || 'Chưa có',
       }
     })
@@ -122,7 +133,7 @@ export default function DanhSachSVHuongDanPage() {
       fileName,
       sheetName: 'SinhVienHuongDan',
       title: 'DANH SÁCH SINH VIÊN HƯỚNG DẪN THỰC TẬP TỐT NGHIỆP',
-      subTitle: 'Giảng viên hướng dẫn: ' + (lecturerInfo?.hoTen ? (`ThS. ${lecturerInfo.hoTen} (${currentMaGV})`) : (user?.hoTen || currentMaGV)) + (selectedDot?.tenDot ? (' — ' + selectedDot.tenDot) : ''),
+      subTitle: 'Giảng viên hướng dẫn: ' + (lecturerInfo?.hoTen ? (`${lecturerInfo.hoTen} (${currentMaGV})`) : (user?.hoTen || currentMaGV)) + (selectedDot?.tenDot ? (' — ' + selectedDot.tenDot) : ''),
       columns,
       rows: excelRows,
       signatures: [
@@ -143,7 +154,7 @@ export default function DanhSachSVHuongDanPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-900">Sinh Viên Hướng Dẫn</h1>
               <p className="text-sm text-slate-500">
-                Theo dõi tiến độ, phân công thực tập và đánh giá CLO trong <strong>{selectedDot.tenDot}</strong>
+                Theo dõi tiến độ, phân công thực tập và đánh giá CLO trong <strong>{selectedDot?.tenDot || 'đợt thực tập được chọn'}</strong>
               </p>
             </div>
           </div>
@@ -153,7 +164,7 @@ export default function DanhSachSVHuongDanPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-semibold shadow-xs">
             <span className="material-symbols-outlined text-base text-blue-600">account_circle</span>
-            <span>GVHD: {lecturerInfo?.hoTen ? `ThS. ${lecturerInfo.hoTen}` : currentMaGV} ({currentMaGV})</span>
+            <span>GVHD: {lecturerInfo?.hoTen || currentMaGV} ({currentMaGV})</span>
           </div>
 
           <button
@@ -247,38 +258,75 @@ export default function DanhSachSVHuongDanPage() {
 
       {/* 3. Thanh Tìm kiếm & Bộ lọc trạng thái */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        {/* Tabs Trạng thái */}
-        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-              statusFilter === 'ALL'
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Tất cả ({totalSV})
-          </button>
-          <button
-            onClick={() => setStatusFilter('DangHuongDan')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-              statusFilter === 'DangHuongDan'
-                ? 'bg-white text-emerald-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Đang hướng dẫn ({dangHuongDanCount})
-          </button>
-          <button
-            onClick={() => setStatusFilter('HoanThanh')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-              statusFilter === 'HoanThanh'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            Đã hoàn thành ({hoanThanhCount})
-          </button>
+        {/* Tabs Trạng thái & Phân loại Thực tập */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+            <button
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                statusFilter === 'ALL'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Tất cả ({totalSV})
+            </button>
+            <button
+              onClick={() => setStatusFilter('DangHuongDan')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                statusFilter === 'DangHuongDan'
+                  ? 'bg-white text-emerald-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Đang hướng dẫn ({dangHuongDanCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter('HoanThanh')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                statusFilter === 'HoanThanh'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Đã hoàn thành ({hoanThanhCount})
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 p-1 bg-blue-50/70 border border-blue-200/60 rounded-xl">
+            <button
+              onClick={() => setTypeFilter('ALL')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                typeFilter === 'ALL'
+                  ? 'bg-white text-blue-800 shadow-2xs font-bold'
+                  : 'text-blue-600 hover:text-blue-900'
+              }`}
+            >
+              Tất cả loại
+            </button>
+            <button
+              onClick={() => setTypeFilter('TTKS')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
+                typeFilter === 'TTKS'
+                  ? 'bg-white text-blue-800 shadow-2xs font-bold'
+                  : 'text-blue-600 hover:text-blue-900'
+              }`}
+            >
+              <span>Thực tập kỹ sư</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-blue-100 text-blue-700">{ksCount}</span>
+            </button>
+            <button
+              onClick={() => setTypeFilter('TTNN')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all whitespace-nowrap flex items-center gap-1 ${
+                typeFilter === 'TTNN'
+                  ? 'bg-white text-purple-800 shadow-2xs font-bold'
+                  : 'text-purple-600 hover:text-purple-900'
+              }`}
+            >
+              <span>Thực tập nghề nghiệp</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 text-purple-700">{nnCount}</span>
+            </button>
+          </div>
         </div>
 
         {/* Ô tìm kiếm */}
@@ -328,6 +376,7 @@ export default function DanhSachSVHuongDanPage() {
               <thead>
                 <tr className="bg-slate-50/75 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
                   <th className="py-3.5 px-4">Sinh viên</th>
+                  <th className="py-3.5 px-4">Chương trình</th>
                   <th className="py-3.5 px-4">Lớp / Ngành</th>
                   <th className="py-3.5 px-4">Đơn vị thực tập</th>
                   <th className="py-3.5 px-4">Ngày phân công</th>
@@ -366,6 +415,24 @@ export default function DanhSachSVHuongDanPage() {
                             </div>
                           </div>
                         </div>
+                      </td>
+
+                      {/* Cột Loại thực tập */}
+                      <td className="py-3.5 px-4">
+                        {(() => {
+                          const info = getLoaiThucTapInfo(sv.maLoaiThucTap ? { maLoaiThucTap: sv.maLoaiThucTap, tenDot: sv.tenDot } : selectedDot)
+                          return (
+                            <div>
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border ${info.badgeClass}`}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                {info.label}
+                              </span>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Rubric {info.tieuChiCount} tiêu chí CLO
+                              </div>
+                            </div>
+                          )
+                        })()}
                       </td>
 
                       {/* Cột Lớp / Ngành */}
@@ -500,6 +567,25 @@ export default function DanhSachSVHuongDanPage() {
                 <span className="material-symbols-outlined text-xl">close</span>
               </button>
             </div>
+
+            {/* Thẻ Phân loại Thực tập trong Modal */}
+            {(() => {
+              const info = getLoaiThucTapInfo(selectedSV.maLoaiThucTap ? { maLoaiThucTap: selectedSV.maLoaiThucTap, tenDot: selectedSV.tenDot } : selectedDot)
+              return (
+                <div className={`p-3.5 rounded-2xl border flex items-center justify-between ${info.badgeClass}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-lg">workspace_premium</span>
+                    <div>
+                      <div className="text-[10px] uppercase font-bold tracking-wider opacity-80">Chương trình thực tập</div>
+                      <div className="text-xs font-extrabold">{info.label} ({info.code})</div>
+                    </div>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-white/70 border border-current/20">
+                    Rubric {info.tieuChiCount} tiêu chí CLO
+                  </span>
+                </div>
+              )
+            })()}
 
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">

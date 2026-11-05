@@ -27,7 +27,9 @@ public class DotThucTapController : ControllerBase
             namHoc = r.NamHoc,
             thoiGianBD = r.ThoiGianBD,
             thoiGianKT = r.ThoiGianKT,
-            trangThai = r.TrangThai
+            trangThai = r.TrangThai,
+            maLoaiThucTap = r.MaLoaiThucTap,
+            maRubric = r.MaRubric
         });
         return Ok(dtos);
     }

@@ -1,7 +1,10 @@
+import { toast } from "../../contexts/ToastContext.jsx"
 import { usePagination } from '../../hooks/usePagination'
+import { usePagedApi, useDebouncedValue } from '../../hooks/usePagedApi'
 import Pagination from '../../components/common/Pagination'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import DanhSachDieuChinhGVHDPanel from '../../components/khoa/DanhSachDieuChinhGVHDPanel'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { summarizeAssignmentResult } from '../../utils/phanCongResult'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
@@ -9,18 +12,33 @@ import apiClient from '../../services/api'
 
 export default function PhanCongGVHDPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabFromUrl = searchParams.get('tab')
+  const [activeTab, setActiveTab] = useState(tabFromUrl === 'danh-sach' ? 'danh-sach' : 'ban-phan-cong')
+
+  useEffect(() => {
+    if (tabFromUrl === 'danh-sach' && activeTab !== 'danh-sach') {
+      setActiveTab('danh-sach')
+    } else if (!tabFromUrl && activeTab !== 'ban-phan-cong') {
+      setActiveTab('ban-phan-cong')
+    }
+  }, [tabFromUrl])
+
+  const handleTabChange = (nextTab) => {
+    setActiveTab(nextTab)
+    if (nextTab === 'danh-sach') {
+      setSearchParams({ tab: 'danh-sach' })
+    } else {
+      setSearchParams({})
+    }
+  }
+
   const { selectedDot, loading: roundLoading, roundLock } = useDotThucTap()
   const maDot = selectedDot?.maDot || ''
   const canEditRound = !roundLoading && !roundLock.structureBlocked && ['ChuaBatDau', 'DangDienRa'].includes(selectedDot?.trangThai)
   const roundRef = useRef(maDot)
   roundRef.current = maDot
-  const loadVersion = useRef(null)
-  const [loadedMaDot, setLoadedMaDot] = useState('')
-  const [sinhViens, setSinhViens] = useState([])
-  const [giangViens, setGiangViens] = useState([])
-  const [assignmentSummary, setAssignmentSummary] = useState({ assigned: 0, total: 0 })
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
+  const [actionError, setError] = useState(null)
   const [successMsg, setSuccessMsg] = useState('')
 
   // State chọn sinh viên để phân công
@@ -57,62 +75,40 @@ export default function PhanCongGVHDPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [modalMsg, setModalMsg] = useState(null) // { type: 'success' | 'error', text: '' }
 
-  // Tải dữ liệu ban đầu
+  const debouncedStudentSearch = useDebouncedValue(svKeyword.trim())
+  const { data: studentData, summaryData: studentSummary, error: loadError, loading, load: loadStudents, pagination: studentPagination } = usePagedApi('/khoa/phan-cong/paged', {
+    maDot, trangThai: 'unassigned', search: debouncedStudentSearch || undefined,
+    lop: selectedLopFilter === 'Tất cả' ? undefined : selectedLopFilter,
+    congTy: svCompanyFilter === 'all' ? undefined : svCompanyFilter, gpa: svGpaFilter,
+  }, { enabled: Boolean(maDot) })
+  const sinhViens = studentPagination.items
+  const giangViens = studentSummary?.lecturers || []
+  const assignmentSummary = studentSummary || { total: 0, assigned: 0, unassigned: 0 }
+  const loadedMaDot = studentData?.maDot || ''
+  const error = actionError || loadError
+  const selectedStudentRows = useRef(new Map())
   const loadData = useCallback(async ({ preserveFeedback = false } = {}) => {
-    if (!maDot || roundRef.current !== maDot) return
-    const version = Symbol()
-    loadVersion.current = version
-    try {
-      setLoading(true)
-      if (!preserveFeedback) {
-        setError(null)
-      }
-      const [resSv, resGv, resSummary] = await Promise.all([
-        gvHuongDanService.getSVChuaPhanCong('', maDot),
-        gvHuongDanService.getGiangVienTai(maDot),
-        apiClient.get('/khoa/phan-cong', { params: { maDot } }),
-      ])
-
-      if (roundRef.current !== maDot || version !== loadVersion.current) return
-
-      if (resSv.data?.success) {
-        const availableStudents = resSv.data.data || []
-        setSinhViens(availableStudents)
-        setSelectedSvList((current) => current.filter((maSV) => availableStudents.some((sv) => sv.maSV === maSV)))
-      }
-      if (resGv.data?.success) {
-        setGiangViens(resGv.data.data || [])
-      }
-      setAssignmentSummary({ assigned: resSummary.data.assigned, total: resSummary.data.students.length })
-      setLoadedMaDot(maDot)
-    } catch (err) {
-      if (roundRef.current !== maDot || version !== loadVersion.current) return
-      const message = err.response?.data?.message || err.message || 'Không thể tải dữ liệu phân công'
-      setError((current) => preserveFeedback && current ? `${current} ${message}` : message)
-    } finally {
-      if (roundRef.current === maDot && version === loadVersion.current) setLoading(false)
-    }
-  }, [maDot])
+    if (roundRef.current !== maDot) return
+    if (!preserveFeedback) setError(null)
+    await loadStudents()
+  }, [maDot, loadStudents])
 
   useEffect(() => {
     setSelectedSvList([])
     setSelectedGvList([])
-    setSinhViens([])
-    setGiangViens([])
-    setAssignmentSummary({ assigned: 0, total: 0 })
-    setLoadedMaDot('')
     setShowAutoModal(false)
     setShowBatchSplitModal(false)
     setSelectedGvForView(null)
     setAutoPreviewData(null)
     setBatchSplitPreview(null)
     setSuccessMsg('')
-    loadData()
-    return () => { loadVersion.current = null }
-  }, [loadData])
+    selectedStudentRows.current.clear()
+    setError(null)
+  }, [maDot])
 
   useEffect(() => {
     setSelectedSvList([])
+    selectedStudentRows.current.clear()
   }, [selectedLopFilter, svCompanyFilter, svGpaFilter])
 
   const showAssignmentResult = (response, singleAssignment = false) => {
@@ -126,6 +122,8 @@ export default function PhanCongGVHDPage() {
     setSuccessMsg(result.successMessage)
     setError(result.failureMessage)
     setSelectedSvList(result.failedStudentIds)
+    const remaining = new Set(result.failedStudentIds)
+    for (const id of selectedStudentRows.current.keys()) if (!remaining.has(id)) selectedStudentRows.current.delete(id)
   }
 
   const ensureEditableRound = () => {
@@ -138,17 +136,22 @@ export default function PhanCongGVHDPage() {
 
   // Chọn / bỏ chọn 1 sinh viên
   const handleToggleSelectSv = (maSV) => {
-    setSelectedSvList((prev) =>
-      prev.includes(maSV) ? prev.filter((id) => id !== maSV) : [...prev, maSV]
-    )
+    if (!selectedSvList.includes(maSV) && selectedSvList.length >= 500) { toast.warning('Mỗi lần phân công tối đa 500 sinh viên.'); return }
+    const student = sinhViens.find(x => x.maSV === maSV)
+    if (selectedSvList.includes(maSV)) selectedStudentRows.current.delete(maSV)
+    else if (student) selectedStudentRows.current.set(maSV, student)
+    setSelectedSvList(previous => previous.includes(maSV) ? previous.filter(id => id !== maSV) : [...previous, maSV])
   }
-
-  // Chọn tất cả / Bỏ chọn tất cả sinh viên
   const handleSelectAllSv = () => {
-    if (filteredSinhViens.length > 0 && filteredSinhViens.every((sv) => selectedSvList.includes(sv.maSV))) {
-      setSelectedSvList([])
+    const pageIds = new Set(filteredSinhViens.map(s => s.maSV))
+    if (filteredSinhViens.every(s => selectedSvList.includes(s.maSV))) {
+      pageIds.forEach(id => selectedStudentRows.current.delete(id))
+      setSelectedSvList(previous => previous.filter(id => !pageIds.has(id)))
     } else {
-      setSelectedSvList(filteredSinhViens.map((s) => s.maSV))
+      const selected = [...new Set([...selectedSvList, ...pageIds])]
+      if (selected.length > 500) { toast.warning('Mỗi lần phân công tối đa 500 sinh viên.'); return }
+      filteredSinhViens.forEach(s => selectedStudentRows.current.set(s.maSV, s))
+      setSelectedSvList(selected)
     }
   }
 
@@ -156,13 +159,13 @@ export default function PhanCongGVHDPage() {
   const handleAssignToLecturer = async (gv) => {
     if (!ensureEditableRound()) return
     if (selectedSvList.length === 0) {
-      alert('Vui lòng tích chọn ít nhất 1 sinh viên bên danh sách bên trái!')
+      toast.warning('Vui lòng tích chọn ít nhất 1 sinh viên bên danh sách bên trái!')
       return
     }
 
     const slotsLeft = gv.soLuongSVHD - gv.soLuongHienTai
     if (slotsLeft <= 0) {
-      alert(`Giảng viên ${gv.hoTen} đã đạt hạn ngạch tối đa (${gv.soLuongHienTai}/${gv.soLuongSVHD}).`)
+      toast.warning(`Giảng viên ${gv.hoTen} đã đạt hạn ngạch tối đa (${gv.soLuongHienTai}/${gv.soLuongSVHD}).`)
       return
     }
 
@@ -197,30 +200,15 @@ export default function PhanCongGVHDPage() {
   // Thống kê nhanh toàn Khoa
   const totalAssigned = assignmentSummary.assigned
   const totalWorkload = giangViens.reduce((sum, gv) => sum + (gv.soLuongHienTai || 0), 0)
-  const totalUnassigned = sinhViens.length
+  const totalUnassigned = assignmentSummary.unassigned
   const totalStudents = assignmentSummary.total
   const totalQuota = giangViens.reduce((sum, gv) => sum + (gv.soLuongSVHD || 0), 0)
   const availableSlots = Math.max(0, totalQuota - totalWorkload)
   const percentAssigned = totalStudents > 0 ? Math.round((totalAssigned / totalStudents) * 100) : 0
 
-  // Danh sách lớp để lọc nhanh
-  const uniqueLops = ['Tất cả', ...new Set(sinhViens.map((s) => s.lop).filter(Boolean))]
-  const uniqueCompanies = ['Tất cả đơn vị tiếp nhận', ...new Set(sinhViens.map((s) => s.tenCongTy).filter(Boolean))]
-
-  // Lọc danh sách SV theo từ khóa, lớp, doanh nghiệp và GPA
-  const filteredSinhViens = sinhViens.filter((sv) => {
-    const keyword = svKeyword.trim().toLocaleLowerCase('vi')
-    if (keyword && !`${sv.maSV} ${sv.hoTen} ${sv.lop || ''}`.toLocaleLowerCase('vi').includes(keyword)) return false
-    if (selectedLopFilter !== 'Tất cả' && sv.lop !== selectedLopFilter) return false
-
-    if (svCompanyFilter !== 'all' && sv.tenCongTy !== svCompanyFilter) return false
-
-    const gpaVal = Number(sv.gpa) || 0
-    if (svGpaFilter === 'high' && gpaVal < 3.2) return false
-    if (svGpaFilter === 'low' && gpaVal >= 2.5) return false
-
-    return true
-  })
+  const uniqueLops = ['Tất cả', ...(studentSummary?.lops || [])]
+  const uniqueCompanies = ['Tất cả đơn vị tiếp nhận', ...(studentSummary?.congTys || [])]
+  const filteredSinhViens = sinhViens
 
   // Lọc danh sách GV theo từ khoá và tình trạng slot
   const filteredGiangViens = giangViens.filter((gv) => {
@@ -238,7 +226,6 @@ export default function PhanCongGVHDPage() {
     return true
   })
 
-  const studentPagination = usePagination(filteredSinhViens, JSON.stringify([maDot, svKeyword, selectedLopFilter, svCompanyFilter, svGpaFilter]))
   const lecturerPagination = usePagination(filteredGiangViens, JSON.stringify([maDot, gvKeyword, gvSlotFilter]))
   const modalPagination = usePagination(svListOfSelectedGv, JSON.stringify([maDot, selectedGvForView?.maGV]))
 
@@ -263,11 +250,11 @@ export default function PhanCongGVHDPage() {
   const handleOpenBatchSplitPreview = () => {
     if (!ensureEditableRound()) return
     if (selectedSvList.length === 0) {
-      alert('Vui lòng tích chọn danh sách sinh viên bên trái!')
+      toast.warning('Vui lòng tích chọn danh sách sinh viên bên trái!')
       return
     }
     if (selectedGvList.length < 2) {
-      alert('Vui lòng tích chọn ít nhất 2 giảng viên bên phải để chia đều!')
+      toast.warning('Vui lòng tích chọn ít nhất 2 giảng viên bên phải để chia đều!')
       return
     }
 
@@ -284,11 +271,11 @@ export default function PhanCongGVHDPage() {
 
     const totalAvailableSlots = gvCapacities.reduce((sum, g) => sum + g.slotsLeft, 0)
     if (totalAvailableSlots === 0) {
-      alert('Tất cả các giảng viên được chọn đều đã đầy hạn ngạch (0 slot trống)!')
+      toast.warning('Tất cả các giảng viên được chọn đều đã đầy hạn ngạch (0 slot trống)!')
       return
     }
 
-    const svObjects = sinhViens.filter((s) => selectedSvList.includes(s.maSV))
+    const svObjects = selectedSvList.map(id => selectedStudentRows.current.get(id)).filter(Boolean)
     const pairings = []
     const unassigned = []
 
@@ -350,7 +337,7 @@ export default function PhanCongGVHDPage() {
       setSelectedGvList([])
       await loadData({ preserveFeedback: true })
     } catch (err) {
-      alert('Lỗi khi lưu kết quả chia đều: ' + (err.response?.data?.message || err.message))
+      toast.error('Lỗi khi lưu kết quả chia đều: ' + (err.response?.data?.message || err.message))
     } finally {
       setSavingBatchSplit(false)
     }
@@ -361,15 +348,18 @@ export default function PhanCongGVHDPage() {
     if (!maDot || loading || loadedMaDot !== maDot || exportingExcel) return
     try {
       setExportingExcel(true)
-      const [res, roster] = await Promise.all([
-        gvHuongDanService.getTatCaPhanCong(maDot),
-        apiClient.get('/khoa/phan-cong', { params: { maDot } }),
-      ])
+      const response = await apiClient.get('/khoa/phan-cong/export-rows', { params: {
+        maDot, trangThai: 'assigned', search: svKeyword.trim() || undefined,
+        lop: selectedLopFilter === 'Tất cả' ? undefined : selectedLopFilter,
+        congTy: svCompanyFilter === 'all' ? undefined : svCompanyFilter, gpa: svGpaFilter,
+      } })
       if (roundRef.current !== maDot) return
-      const eligibleIds = new Set(roster.data.students.map(student => student.maSV))
-      const dataPhanCong = (res.data?.data || []).filter(assignment => eligibleIds.has(assignment.maSV))
+      const dataPhanCong = response.data.map(s => ({
+        ...s, maGV: s.maGiangVien, hoTenSV: s.hoTen, hoTenGV: s.giangVien, tenCongTy: s.congTy,
+        tenDot: selectedDot?.tenDot, maLoaiThucTap: selectedDot?.maLoaiThucTap, maRubric: selectedDot?.maRubric,
+      }))
       if (dataPhanCong.length === 0) {
-        alert('Hiện chưa có dữ liệu phân công giảng viên hướng dẫn để xuất file!')
+        toast.warning('Hiện chưa có dữ liệu phân công giảng viên hướng dẫn để xuất file!')
         return
       }
       const subTitle = selectedDot?.tenDot
@@ -380,7 +370,7 @@ export default function PhanCongGVHDPage() {
       if (exported === false) return
       setSuccessMsg(`Đã xuất file Microsoft Excel Quyết định Phân công GVHD (${dataPhanCong.length} SV) thành công!`)
     } catch (err) {
-      alert('Không thể xuất file Excel: ' + (err.response?.data?.message || err.message))
+      toast.error('Không thể xuất file Excel: ' + (err.response?.data?.message || err.message))
     } finally {
       setExportingExcel(false)
     }
@@ -410,7 +400,7 @@ export default function PhanCongGVHDPage() {
         setShowAutoModal(true)
       }
     } catch (err) {
-      alert('Không thể tạo đề xuất phân công: ' + (err.response?.data?.message || err.message))
+      toast.error('Không thể tạo đề xuất phân công: ' + (err.response?.data?.message || err.message))
     } finally {
       setLoadingAutoAssign(false)
     }
@@ -436,7 +426,7 @@ export default function PhanCongGVHDPage() {
       setShowAutoModal(false)
       await loadData({ preserveFeedback: true })
     } catch (err) {
-      alert('Lỗi khi lưu phân công tự động: ' + (err.response?.data?.message || err.message))
+      toast.error('Lỗi khi lưu phân công tự động: ' + (err.response?.data?.message || err.message))
     } finally {
       setConfirmingAuto(false)
     }
@@ -447,11 +437,11 @@ export default function PhanCongGVHDPage() {
     if (!editQuotaGV) return
     const quotaNum = parseInt(newQuota, 10)
     if (isNaN(quotaNum) || quotaNum < 0) {
-      alert('Vui lòng nhập một số hợp lệ!')
+      toast.warning('Vui lòng nhập một số hợp lệ!')
       return
     }
     if (quotaNum < editQuotaGV.soLuongHienTai) {
-      alert(`Chỉ tiêu không được nhỏ hơn số sinh viên hiện đang hướng dẫn (${editQuotaGV.soLuongHienTai})!`)
+      toast.warning(`Chỉ tiêu không được nhỏ hơn số sinh viên hiện đang hướng dẫn (${editQuotaGV.soLuongHienTai})!`)
       return
     }
 
@@ -505,12 +495,12 @@ export default function PhanCongGVHDPage() {
   const handleConfirmReassign = async (maSo) => {
     if (!ensureEditableRound()) return
     if (!targetNewGv) {
-      alert('Vui lòng chọn giảng viên mới từ danh sách!')
+      toast.warning('Vui lòng chọn giảng viên mới từ danh sách!')
       return
     }
     const newLecturer = giangViens.find((g) => g.maGV === targetNewGv)
     if (newLecturer && newLecturer.soLuongHienTai >= newLecturer.soLuongSVHD) {
-      alert(`Giảng viên ${newLecturer.hoTen} đã đủ chỉ tiêu (${newLecturer.soLuongHienTai}/${newLecturer.soLuongSVHD})! Vui lòng chọn giảng viên khác.`)
+      toast.warning(`Giảng viên ${newLecturer.hoTen} đã đủ chỉ tiêu (${newLecturer.soLuongHienTai}/${newLecturer.soLuongSVHD})! Vui lòng chọn giảng viên khác.`)
       return
     }
 
@@ -589,7 +579,7 @@ export default function PhanCongGVHDPage() {
             <span className="material-symbols-outlined text-2xl">assignment_ind</span>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-slate-900">Phân công Giảng viên hướng dẫn</h1>
+            <h1 className="text-xl font-bold text-slate-900">Phân công &amp; Quản lý GVHD</h1>
             <p className="text-sm text-slate-500">
               Điều phối và phân công cán bộ hướng dẫn cho sinh viên đã có đơn vị thực tập tiếp nhận.
             </p>
@@ -613,7 +603,7 @@ export default function PhanCongGVHDPage() {
 
           <button
             onClick={handleOpenAutoAssign}
-            disabled={!canEditRound || loading || loadedMaDot !== maDot || loadingAutoAssign || sinhViens.length === 0}
+            disabled={!canEditRound || loading || loadedMaDot !== maDot || loadingAutoAssign || totalUnassigned === 0}
             className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
             title="Đề xuất phân công theo chuyên môn và cân bằng chỉ tiêu giảng viên"
           >
@@ -636,6 +626,60 @@ export default function PhanCongGVHDPage() {
         </div>
       </div>
 
+      {/* Thanh Tabs chuyển đổi chức năng */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-1.5 flex items-center gap-1.5 w-fit shadow-xs">
+        <button
+          type="button"
+          onClick={() => handleTabChange('ban-phan-cong')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'ban-phan-cong'
+              ? 'bg-blue-700 text-white shadow-2xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">assignment_ind</span>
+          <span>Bàn phân công GVHD</span>
+          {assignmentSummary.unassigned > 0 && (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'ban-phan-cong'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {assignmentSummary.unassigned} SV chờ gán
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabChange('danh-sach')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+            activeTab === 'danh-sach'
+              ? 'bg-blue-700 text-white shadow-2xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+          <span>Danh sách &amp; Điều chỉnh GVHD</span>
+          {assignmentSummary.assigned > 0 && (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'danh-sach'
+                  ? 'bg-white/20 text-white'
+                  : 'bg-slate-100 text-slate-700'
+              }`}
+            >
+              {assignmentSummary.assigned} SV đã gán
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeTab === 'ban-phan-cong' ? (
+        <div className="space-y-6">
+
       {/* Thông báo chênh lệch tải giảng viên nếu có dữ liệu cũ */}
       {totalWorkload > totalAssigned && (
         <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs flex items-center justify-between">
@@ -645,7 +689,7 @@ export default function PhanCongGVHDPage() {
           </div>
           <button
             type="button"
-            onClick={() => navigate('/khoa/phan-bo')}
+            onClick={() => handleTabChange('danh-sach')}
             className="underline font-semibold text-amber-800 hover:text-amber-950 shrink-0 ml-2"
           >
             Rà soát danh sách
@@ -655,7 +699,7 @@ export default function PhanCongGVHDPage() {
 
       {/* Thông báo Thành công / Thất bại */}
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-sm flex items-center justify-between">
+        <div role="status" className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-emerald-600">check_circle</span>
             <span className="font-medium">{successMsg}</span>
@@ -667,7 +711,7 @@ export default function PhanCongGVHDPage() {
       )}
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-2xl text-sm flex items-center justify-between">
+        <div role="alert" className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-2xl text-sm flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-red-600">error</span>
             <span className="font-medium">{error}</span>
@@ -736,7 +780,7 @@ export default function PhanCongGVHDPage() {
                 <div className="flex items-center gap-2">
                   <h2 className="font-bold text-slate-800 text-sm">Sinh Viên Chờ Phân Công</h2>
                   <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
-                    {filteredSinhViens.length}/{sinhViens.length} SV
+                    {studentPagination.totalItems}/{totalUnassigned} SV
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">Chọn sinh viên để phân công cán bộ hướng dẫn</p>
@@ -822,7 +866,7 @@ export default function PhanCongGVHDPage() {
                 onChange={handleSelectAllSv}
                 className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 disabled:opacity-40"
               />
-              Chọn toàn bộ kết quả lọc ({selectedSvList.length}/{filteredSinhViens.length})
+              Chọn trang này ({filteredSinhViens.length} SV) · Đã chọn {selectedSvList.length} SV
             </label>
             {selectedSvList.length > 0 && (
               <span className="text-indigo-600 font-semibold">
@@ -843,23 +887,23 @@ export default function PhanCongGVHDPage() {
               <div className="py-20 text-center text-slate-400">
                 <span className="material-symbols-outlined text-4xl text-emerald-500">task_alt</span>
                 <p className="mt-2 text-sm font-semibold text-slate-700">
-                  {sinhViens.length
+                  {totalUnassigned
                     ? 'Không có sinh viên khớp bộ lọc'
                     : totalStudents > 0 && totalAssigned >= totalStudents
                     ? 'Đã hoàn tất phân công GVHD cho 100% sinh viên'
                     : 'Không có sinh viên chờ phân công'}
                 </p>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {sinhViens.length
+                  {totalUnassigned
                     ? 'Thử bỏ từ khóa hoặc chọn lại bộ lọc.'
                     : totalStudents > 0 && totalAssigned >= totalStudents
                     ? 'Toàn bộ sinh viên có đơn vị tiếp nhận trong đợt đều đã có cán bộ hướng dẫn.'
                     : 'Sinh viên cần có đơn vị tiếp nhận hợp lệ trong đợt trước khi phân công GVHD.'}
                 </p>
-                {sinhViens.length === 0 && totalStudents > 0 && totalAssigned >= totalStudents && (
+                {totalUnassigned === 0 && totalStudents > 0 && totalAssigned >= totalStudents && (
                   <button
                     type="button"
-                    onClick={() => navigate('/khoa/phan-bo')}
+                    onClick={() => handleTabChange('danh-sach')}
                     className="mt-3 px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-sm">visibility</span>
@@ -1079,7 +1123,7 @@ export default function PhanCongGVHDPage() {
                   <div className="mt-3">
                     <div className="flex items-center justify-between text-xs mb-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-500">Đang hướng dẫn:</span>
+                        <span className="text-slate-500">SV đang hướng dẫn trong đợt:</span>
                         <span className="font-bold text-slate-800">
                           {gv.soLuongHienTai} / {gv.soLuongSVHD} SV ({percent}%)
                         </span>
@@ -1157,6 +1201,10 @@ export default function PhanCongGVHDPage() {
             </button>
           </div>
         </div>
+      )}
+        </div>
+      ) : (
+        <DanhSachDieuChinhGVHDPanel onSwitchToWorkbench={() => handleTabChange('ban-phan-cong')} />
       )}
 
       {/* Modal chỉnh sửa chỉ tiêu GV */}
@@ -1648,4 +1696,3 @@ export default function PhanCongGVHDPage() {
     </div>
   )
 }
-
