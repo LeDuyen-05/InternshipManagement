@@ -8,6 +8,9 @@ public class DangKyThucTap
     public string MaDK { get; set; } = default!;
     public string MaSV { get; set; } = default!;
     public string? MaViTri { get; set; }
+    public string? MaLanHoTro { get; set; }
+    public int LanDangKy { get; set; } = 1;
+    public string? KetQuaHoSo { get; set; }
     public string MaCongTy { get; set; } = default!;
     public string MaDot { get; set; } = default!;
     public DateTime NgayDangKy { get; set; }

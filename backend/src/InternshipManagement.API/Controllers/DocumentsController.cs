@@ -46,7 +46,7 @@ public class DocumentsController(DocumentService service, DocumentAccessService 
         try
         {
             await access.RequireAsync(kind, resourceId, Actor, false);
-            try { await access.RequireAsync(kind, resourceId, Actor, true); return Ok(new { canUpload = options.Enabled, maxFileMb = kind == "CV" ? Math.Min(5, options.MaxFileMb) : options.MaxFileMb, reason = options.Enabled ? "" : "Kho R2 chưa được cấu hình." }); }
+            try { await access.RequireAsync(kind, resourceId, Actor, true); return Ok(new { canUpload = options.Enabled, maxFileMb = kind == "CV" ? Math.Min(5, options.MaxFileMb) : options.MaxFileMb, reason = options.Enabled ? "" : "Kho lưu trữ tệp chưa được cấu hình." }); }
             catch (Exception e) when (e is UnauthorizedAccessException or InvalidOperationException) { return Ok(new { canUpload = false, reason = "Bạn chỉ được xem hoặc hồ sơ/đợt đang khóa, quá hạn." }); }
         }
         catch (KeyNotFoundException ex)
@@ -64,8 +64,41 @@ public class DocumentsController(DocumentService service, DocumentAccessService 
     [HttpGet("{id}/download")]
     public async Task<IActionResult> Download(string id, CancellationToken ct)
     {
+        try
+        {
+            var result = await service.DownloadAsync(id, Actor, ct);
+            Response.Headers.CacheControl = "private, no-store"; Response.Headers["X-Content-Type-Options"] = "nosniff";
+            return File(result.Bytes, result.Metadata.ContentType, result.Metadata.FileName);
+        }
+        catch (FileNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpGet("{id}/preview")]
+    public async Task<IActionResult> Preview(string id, CancellationToken ct)
+    {
+        // The same access/integrity checks run before and after reading the private object.
         var result = await service.DownloadAsync(id, Actor, ct);
-        Response.Headers.CacheControl = "private, no-store"; Response.Headers["X-Content-Type-Options"] = "nosniff";
-        return File(result.Bytes, result.Metadata.ContentType, result.Metadata.FileName);
+        if (result.Metadata.ContentType is not ("application/pdf" or "image/png" or "image/jpeg"))
+            return StatusCode(StatusCodes.Status415UnsupportedMediaType, new { message = "Định dạng này chỉ hỗ trợ tải xuống." });
+        var validated = DocumentContent.Validate(result.Metadata.FileName, result.Bytes, result.Metadata.Kind, options.MaxFileMb);
+        if (validated.Mime != result.Metadata.ContentType)
+            throw new InvalidOperationException("Định dạng tệp không khớp hồ sơ lưu.");
+        var disposition = new Microsoft.Net.Http.Headers.ContentDispositionHeaderValue("inline");
+        disposition.SetHttpFileName(result.Metadata.FileName);
+        Response.Headers.ContentDisposition = disposition.ToString();
+        Response.Headers.CacheControl = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        return File(result.Bytes, result.Metadata.ContentType);
     }
 }

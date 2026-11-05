@@ -112,10 +112,13 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         var criteria = await _repo.GetDanhSachTieuChiAsync(maDot);
         var details = ValidateChiTiets(chiTietInputs, criteria).ToList();
         if (details.Count == 0 || details.Any(x => x.TieuChi.NhomDanhGia != ThangDiem.NhomDoanhNghiep))
-            throw new ArgumentException("Doanh nghiệp chỉ được chấm tiêu chí thuộc phần doanh nghiệp.");
+            throw new ArgumentException("Doanh nghiệp chỉ được chấm tiêu chí thuộc phần doanh nghiệp.");
+        if (khoaChinhThuc && details.Count != criteria.Count(x => x.NhomDanhGia == ThangDiem.NhomDoanhNghiep))
+            throw new ArgumentException("Cần nhập đủ các tiêu chí phần doanh nghiệp trước khi nộp và khóa điểm chính thức.");
+
         await EnsureDotChoPhepChamAsync(maDot, true);
         var existing = await _repo.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
-        if (existing?.DaDoiChieuPhieuDN == true && !isStaff)
+        if (existing?.DaDoiChieuPhieuDN == true && !isStaff && !await _repo.IsRoundReopenedAsync(maDot, _clock.GetUtcNow()))
             throw new InvalidOperationException("Điểm đánh giá của doanh nghiệp đã được nộp và khóa chính thức. Vui lòng liên hệ Khoa CNTT nếu cần điều chỉnh.");
 
         var scores = details.Select(x => new ChiTietChamDiem { MaTieuChi = x.TieuChi.MaTieuChi, DiemCham = x.Input.DiemCham }).ToList();
@@ -150,7 +153,10 @@ public class PhieuChamDiemService : IPhieuChamDiemService
                 result.Complete ? ThangDiem.QuyDoi(result.Total!.Value).DiemChu : null, result.Outcome, x.TenGV, x.TenCongTy);
         }).ToList();
 
-        return new BangDiemResponse(maDot, dot?.TenDot, tieuChis.Select(ToDto).ToList(), rows);
+        if (dot == null) throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
+        var typeName = dot.MaLoaiThucTap == null ? null : await _repo.GetTenLoaiThucTapAsync(dot.MaLoaiThucTap);
+        return new BangDiemResponse(maDot, dot.TenDot, tieuChis.Select(ToDto).ToList(), rows,
+            dot.MaLoaiThucTap, typeName, dot.MaRubric);
     }
 
     private async Task EnsureDotChoPhepChamAsync(string maDot, bool enterprise)

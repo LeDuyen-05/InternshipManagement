@@ -8,6 +8,7 @@ public class ThongKeTongQuanDto
     public double TiLePhanCong { get; set; }
 
     public int TongBaoCaoTienDo { get; set; }
+    public int BaoCaoLuuTru { get; set; }
     public int TienDoDaDuyet { get; set; }
     public int TienDoChoDuyet { get; set; }
     public int TienDoChuaNop { get; set; }
@@ -106,4 +107,5 @@ public class DotThucTapItemDto
     public string TrangThai { get; set; } = default!;
     public string LabelTrangThai { get; set; } = default!;
     public string? MaRubric { get; set; }
+    public string? MaLoaiThucTap { get; set; }
 }

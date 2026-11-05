@@ -12,6 +12,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
     {
         var query = DbSet
             .AsNoTracking()
+            .Include(g => g.DotThucTap)
             .Include(g => g.SinhVien)
                 .ThenInclude(s => s.PhanBoThucTaps)
                     .ThenInclude(pb => pb.CongTy)
@@ -36,6 +37,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
     {
         return await DbSet
             .AsNoTracking()
+            .Include(g => g.DotThucTap)
             .Include(g => g.GiangVien)
             .Include(g => g.SinhVien)
                 .ThenInclude(s => s.PhanBoThucTaps)
@@ -53,7 +55,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
             .AsNoTracking()
             .Include(s => s.PhanBoThucTaps)
                 .ThenInclude(pb => pb.CongTy)
-            .Where(s => !s.GVHuongDans.Any(h => h.TrangThai == "DangHuongDan" && (h.MaDot == maDot || h.MaDot == null)))
+            .Where(s => !s.GVHuongDans.Any(h => h.TrangThai == "DangHuongDan" && h.MaDot == maDot))
             .Where(s => s.PhanBoThucTaps.Any(p => p.MaDot == maDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet));
 
         if (!string.IsNullOrWhiteSpace(keyword))
@@ -71,7 +73,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
     {
         return await Context.GiangViens
             .AsNoTracking()
-            .Include(gv => gv.GVHuongDans.Where(h => h.TrangThai == "DangHuongDan" && (maDot == null || h.MaDot == maDot || h.MaDot == null)))
+            .Include(gv => gv.GVHuongDans.Where(h => h.TrangThai == "DangHuongDan" && (maDot == null || h.MaDot == maDot)))
             .OrderBy(gv => gv.HoTen)
             .ToListAsync();
     }
@@ -100,6 +102,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
     {
         return await DbSet
             .AsNoTracking()
+            .Include(g => g.DotThucTap)
             .Include(g => g.GiangVien)
             .Include(g => g.SinhVien)
                 .ThenInclude(s => s.PhanBoThucTaps)
@@ -111,14 +114,14 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
     {
         return await DbSet
             .AsNoTracking()
-            .AnyAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan" && (g.MaDot == maDot || g.MaDot == null));
+            .AnyAsync(g => g.MaSinhVien == maSV && g.TrangThai == "DangHuongDan" && g.MaDot == maDot);
     }
 
     public async Task<int> CountSVHienTaiByGiangVienAsync(string maGV, string? maDot = null)
     {
         return await DbSet
             .AsNoTracking()
-            .CountAsync(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan" && (maDot == null || g.MaDot == maDot || g.MaDot == null));
+            .CountAsync(g => g.MaGiangVien == maGV && g.TrangThai == "DangHuongDan" && (maDot == null || g.MaDot == maDot));
     }
 
     public async Task<GVHuongDan> PhanCongAsync(string maGV, string maSV, string maDot)

@@ -52,12 +52,13 @@ public class RecommendationService(AppDbContext db, TimeProvider? clock = null, 
             .Where(x => !string.IsNullOrWhiteSpace(x.YeuCau)).OrderBy(x => x.MaCongTy, StringComparer.Ordinal).ThenBy(x => x.MaViTri, StringComparer.Ordinal).ToList();
         if (latest.Count == 0) return Empty("Không còn JD hợp lệ nhận đăng ký trong đợt; danh sách vừa được cập nhật.");
         var latestStudent = await db.SinhViens.AsNoTracking().Include(x => x.HoSoNangLuc).SingleAsync(x => x.MaSV == maSV, cancellationToken);
-        bool SameOffer(InternshipManagement.BLL.DTOs.DangKyThucTap.CongTyDto a, InternshipManagement.BLL.DTOs.DangKyThucTap.CongTyDto b) =>
-            a.MaCongTy == b.MaCongTy && a.MaViTri == b.MaViTri && a.ViTriTuyen == b.ViTriTuyen && a.YeuCau == b.YeuCau;
-        if (Text(latestStudent) != profileText || latestStudent.Gpa != student.Gpa || latest.Any(x => !eligible.Any(y => SameOffer(x, y))))
+        static (string, string?, string?, string?) OfferKey(InternshipManagement.BLL.DTOs.DangKyThucTap.CongTyDto offer) =>
+            (offer.MaCongTy, offer.MaViTri, offer.ViTriTuyen, offer.YeuCau);
+        var originalOfferIds = eligible.Select((offer, index) => (Key: OfferKey(offer), Id: index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .ToDictionary(x => x.Key, x => x.Id);
+        if (Text(latestStudent) != profileText || latestStudent.Gpa != student.Gpa || latest.Any(x => !originalOfferIds.ContainsKey(OfferKey(x))))
             attempt = new(null, "InputChanged");
         var scoreByOffer = attempt.Items?.ToDictionary(x => x.Id, StringComparer.Ordinal);
-        var oldOffers = eligible;
         eligible = latest;
         student = latestStudent;
         query = Tokenize(Text(student));
@@ -70,7 +71,7 @@ public class RecommendationService(AppDbContext db, TimeProvider? clock = null, 
         if (!trained) model.Train(documents);
         var ranked = eligible.Select((offer, index) =>
             {
-                var score = trained ? scoreByOffer![oldOffers.FindIndex(x => SameOffer(offer, x)).ToString(System.Globalization.CultureInfo.InvariantCulture)] : null;
+                var score = trained ? scoreByOffer![originalOfferIds[OfferKey(offer)]] : null;
                 var cosine = score?.TfidfCosine ?? Math.Clamp(model.Score(query, documents[index]), 0, 1);
                 return new { Offer = offer, Document = documents[index], Score = score?.RankingScore ?? cosine, Cosine = cosine };
             })

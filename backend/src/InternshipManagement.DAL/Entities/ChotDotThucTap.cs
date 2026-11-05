@@ -13,6 +13,8 @@ public class ChotDotThucTap
 
 public class KhongHoanTatDot
 {
+    public string? MaLyDo { get; set; }
+    public string? MaLanHoTro { get; set; }
     public bool TruocChotDanhSach { get; set; }
     public string MaDot { get; set; } = default!;
     public string MaSV { get; set; } = default!;

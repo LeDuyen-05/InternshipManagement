@@ -8,6 +8,9 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
 {
     public PhieuChamDiemRepository(AppDbContext context) : base(context) { }
 
+    public Task<string?> GetTenLoaiThucTapAsync(string maLoai) => Context.LoaiThucTaps.AsNoTracking()
+        .Where(x => x.MaLoai == maLoai).Select(x => (string?)x.TenLoai).SingleOrDefaultAsync();
+
     public Task<bool> CanEnterpriseGradeAsync(string maSV, string maDot, string maDaiDien) =>
         Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == maSV && p.MaDot == maDot && p.DaDuocKhoaDuyet && (p.TrangThai == "DangThucTap" || p.TrangThai == "HoanThanh")
             && Context.DaiDienDoanhNghieps.Any(d => d.MaSo == maDaiDien && d.MaCongTy == p.MaCongTy));
@@ -36,9 +39,13 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
     public Task<DotThucTap?> GetDotThucTapAsync(string maDot) =>
         Context.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(d => d.MaSo == maDot);
 
+    public Task<bool> IsRoundReopenedAsync(string maDot, DateTimeOffset now) =>
+        Context.ChotDotThucTaps.AsNoTracking().AnyAsync(x => x.MaDot == maDot && x.TrangThai == "MoLai"
+            && x.HanMoLai.HasValue && x.HanMoLai.Value > now);
+
     public async Task<PhieuChamDiem?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot)
     {
-        return await DbSet
+        return await DbSet.AsNoTracking()
             .Include(p => p.SinhVien)
             .Include(p => p.DotThucTap)
             .Include(p => p.GVHuongDan)
@@ -64,6 +71,7 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
     public async Task<PhieuChamDiem> LuuPhieuChamDiemAsync(PhieuChamDiem phieu, IEnumerable<ChiTietChamDiem> chiTiets)
     {
         await using var tx = Context.Database.IsRelational() ? await Context.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        await Context.LockRoundsAsync([phieu.MaDot]);
         if (await Context.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == phieu.MaSV && p.MaDot == phieu.MaDot && p.NgayHuy != null))
         {
             var current = await Context.PhanBoThucTaps.AsNoTracking().SingleOrDefaultAsync(p => p.MaSinhVien == phieu.MaSV
@@ -77,6 +85,11 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             .Include(p => p.ChiTietChamDiems)
             .FirstOrDefaultAsync(p => p.MaSV == phieu.MaSV && p.MaDot == phieu.MaDot);
 
+        // Recheck the official submission under the same round lock used by close/reopen.
+        if (phieu.MaDaiDien != null && existing?.DaDoiChieuPhieuDN == true
+            && !await IsRoundReopenedAsync(phieu.MaDot, Context.RoundClock.GetUtcNow()))
+            throw new InvalidOperationException("Phiếu doanh nghiệp đã nộp chính thức. Khoa cần mở lại đợt và thời hạn chấm để đính chính.");
+
         if (existing == null)
         {
             if (string.IsNullOrWhiteSpace(phieu.MaPhieu))
@@ -87,14 +100,18 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
         }
         else
         {
-            existing.TongDiem = phieu.TongDiem;
             existing.NgayCham = phieu.NgayCham ?? DateTime.Now;
             if (!string.IsNullOrWhiteSpace(phieu.MaGVHuongDan)) existing.MaGVHuongDan = phieu.MaGVHuongDan;
             if (!string.IsNullOrWhiteSpace(phieu.MaDaiDien)) existing.MaDaiDien = phieu.MaDaiDien;
             if (phieu.NhanXetGV != null) existing.NhanXetGV = phieu.NhanXetGV;
             if (phieu.NhanXetDN != null) existing.NhanXetDN = phieu.NhanXetDN;
-            existing.DaDoiChieuPhieuDN = phieu.DaDoiChieuPhieuDN;
-            if (phieu.GhiChuPhieuDN != null) existing.GhiChuPhieuDN = phieu.GhiChuPhieuDN;
+            // A lecturer may have read before the enterprise submitted its official form.
+            // Preserve the latest enterprise state while merging the two grading groups.
+            if (phieu.MaDaiDien != null)
+            {
+                existing.DaDoiChieuPhieuDN |= phieu.DaDoiChieuPhieuDN;
+                if (phieu.GhiChuPhieuDN != null) existing.GhiChuPhieuDN = phieu.GhiChuPhieuDN;
+            }
 
             // Giữ chi tiết rubric cũ làm lịch sử. Các service đọc/tính điểm lọc theo rubric đúng đợt;
             // lưu lại không được xóa lịch sử hoặc làm lần sửa trong cửa sổ mở lại bị chặn vì DELETE.
@@ -112,6 +129,15 @@ public class PhieuChamDiemRepository : GenericRepository<PhieuChamDiem>, IPhieuC
             ct.MaPhieu = existing.MaPhieu;
             await Context.ChiTietChamDiems.AddAsync(ct);
         }
+
+        // Recompute the cached subtotal from the fresh merged details under the round lock.
+        // The caller's subtotal can have been calculated before the other group saved.
+        var rubric = Context.DotThucTaps.Where(x => x.MaSo == phieu.MaDot).Select(x => x.MaRubric);
+        var limits = await Context.TieuChis.AsNoTracking().Where(x => rubric.Contains(x.MaRubric) && x.NhomDanhGia != null)
+            .Select(x => new { x.MaTieuChi, x.DiemToiDa }).ToDictionaryAsync(x => x.MaTieuChi, x => x.DiemToiDa);
+        existing.TongDiem = existing.ChiTietChamDiems
+            .Where(x => limits.TryGetValue(x.MaTieuChi, out var max) && x.DiemCham >= 0 && x.DiemCham <= max)
+            .Sum(x => x.DiemCham);
 
         await Context.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();

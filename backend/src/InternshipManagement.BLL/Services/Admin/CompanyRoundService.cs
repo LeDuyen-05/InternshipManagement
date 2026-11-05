@@ -72,18 +72,22 @@ public class CompanyRoundService(AppDbContext db, TimeProvider clock)
         var plans = await db.CongTyTheoDots.AsNoTracking().Include(x => x.CongTy).Include(x => x.DotThucTap).Include(x => x.ViTris)
             .Where(x => x.MaDot == maDot && x.HoatDong && x.DotThucTap.TrangThai == "DangDienRa"
                 && x.CongTy.TrangThai == "DaDuyet" && !x.CongTy.ChiTiepNhanTuTim && x.MoDangKy <= now && x.HanDangKy >= now).ToListAsync();
-        var placements = await db.PhanBoThucTaps.AsNoTracking().Where(x => x.MaDot == maDot && x.TrangThai != "Huy")
-            .Select(x => new { x.MaCongTy, x.MaViTri }).ToListAsync();
+        var placementCounts = await db.PhanBoThucTaps.AsNoTracking().Where(x => x.MaDot == maDot && x.TrangThai != "Huy")
+            .GroupBy(x => new { x.MaCongTy, x.MaViTri })
+            .Select(g => new { g.Key.MaCongTy, g.Key.MaViTri, Count = g.Count() }).ToListAsync();
+        var companyCounts = placementCounts.GroupBy(x => x.MaCongTy).ToDictionary(g => g.Key, g => g.Sum(x => x.Count));
+        var positionCounts = placementCounts.ToDictionary(x => (x.MaCongTy, x.MaViTri), x => x.Count);
         var result = new List<CongTyDto>();
         foreach (var plan in plans)
         {
-            var totalRemaining = plan.SoLuongNhan - placements.Count(x => x.MaCongTy == plan.MaCongTy);
+            var companyCount = companyCounts.GetValueOrDefault(plan.MaCongTy);
+            var totalRemaining = plan.SoLuongNhan - companyCount;
             if (totalRemaining <= 0) continue;
             var positions = plan.ViTris.Count > 0 ? plan.ViTris : new[] { new ViTriTheoDot { TenViTri = plan.ViTriTuyen, YeuCau = plan.YeuCau, SoLuongNhan = plan.SoLuongNhan } };
             foreach (var position in positions.Where(x => x.HoatDong))
             {
-                var count = position.MaViTri == null ? placements.Count(x => x.MaCongTy == plan.MaCongTy)
-                    : placements.Count(x => x.MaCongTy == plan.MaCongTy && x.MaViTri == position.MaViTri);
+                var count = position.MaViTri == null ? companyCount
+                    : positionCounts.GetValueOrDefault((plan.MaCongTy, position.MaViTri));
                 if (count >= position.SoLuongNhan) continue;
                 result.Add(new CongTyDto { MaCongTy = plan.MaCongTy, MaDot = maDot, MaViTri = position.MaViTri,
                     TenCongTy = plan.CongTy.TenCongTy, ViTriTuyen = position.TenViTri, YeuCau = position.YeuCau,

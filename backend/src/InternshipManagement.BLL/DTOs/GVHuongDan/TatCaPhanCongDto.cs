@@ -5,6 +5,10 @@ public class TatCaPhanCongDto
     public string MaSo { get; set; } = default!;
     public string MaSV { get; set; } = default!;
     public string? MaDot { get; set; }
+    public string? TenDot { get; set; }
+    public string? MaLoaiThucTap { get; set; }
+    public string? TenLoaiThucTap { get; set; }
+    public string? MaRubric { get; set; }
     public string HoTenSV { get; set; } = default!;
     public string? Lop { get; set; }
     public string? ChuyenNganh { get; set; }

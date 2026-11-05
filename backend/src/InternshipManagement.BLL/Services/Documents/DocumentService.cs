@@ -84,8 +84,11 @@ public class DocumentService(AppDbContext db, DocumentAccessService access, IDoc
         var document = await db.StoredDocuments.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.State == "Ready", ct) ?? throw new KeyNotFoundException("Không tìm thấy tệp đã gắn hồ sơ.");
         await access.RequireAsync(document.Kind, document.ResourceId, actor, false);
         Enabled();
-        if (document.StorageId != options.StorageId) throw new InvalidOperationException("Tệp thuộc kho lưu khác cấu hình hiện tại; liên hệ quản trị đối chiếu trước khi tải.");
-        var bytes = await store.GetAsync(document.ObjectKey, document.Size, ct);
+        var legacyLocal = !options.IsLocal && document.StorageId == "LOCAL_STORAGE";
+        if (document.StorageId != options.StorageId && !legacyLocal) throw new InvalidOperationException("Tệp thuộc kho lưu khác cấu hình hiện tại; liên hệ quản trị đối chiếu trước khi tải.");
+        var bytes = legacyLocal
+            ? await store.GetLegacyLocalAsync(document.ObjectKey, document.Size, ct)
+            : await store.GetAsync(document.ObjectKey, document.Size, ct);
         if (bytes.LongLength != document.Size || Convert.ToHexString(SHA256.HashData(bytes)) != document.Sha256) throw new InvalidOperationException("Nội dung tệp không khớp checksum; liên hệ quản trị kiểm tra.");
         await access.RequireAsync(document.Kind, document.ResourceId, actor, false);
         return (Dto(document), bytes);

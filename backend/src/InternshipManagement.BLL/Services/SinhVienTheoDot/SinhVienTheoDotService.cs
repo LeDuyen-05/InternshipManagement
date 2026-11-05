@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InternshipManagement.BLL.Services.SinhVienTheoDot;
 
-public class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock = null)
+public partial class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
     private static readonly (string Code, string Name)[] Groups =
@@ -31,6 +31,9 @@ public class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock = null)
         .Union(db.TienDoThucTaps.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
         .Union(db.PhieuChamDiems.Where(x => x.MaDot == maDot).Select(x => x.MaSV))
         .Union(db.KhongHoanTatDots.Where(x => x.MaDot == maDot).Select(x => x.MaSV));
+
+    internal IQueryable<string> StudentIds(string maDot) => ActivityIds(maDot)
+        .Union(db.SinhVienThamGiaDots.Where(x => x.MaDot == maDot && x.DangThamGia).Select(x => x.MaSV));
 
     private async Task<DotThucTap> RequireRound(string maDot, bool forWrite = false)
     {
@@ -132,6 +135,9 @@ public class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock = null)
         await db.LockRoundsAsync(new[] { request.MaDot });
         var round = await RequireRound(request.MaDot, true);
         LanHoTroService.CheckRound(round, Today);
+        var supportSessions = await db.LanHoTroThucTaps.AsNoTracking().Where(x => x.MaDot == request.MaDot && x.TrangThai != "DaXoa").ToListAsync();
+        if (SupportConsent.Latest(supportSessions, maSV)?.PhanHoi == "TuChoiHoTro")
+            throw new InvalidOperationException("SV đã từ chối hỗ trợ; cần ghi nhận nhận hỗ trợ lại trước khi bố trí.");
         if ((request.MaLanHoTro == null) != (request.PhienBanHoTro == null)) throw new ArgumentException("Thiếu mã/phiên bản lần hỗ trợ.");
         if (round.ThoiGianBD == default || round.ThoiGianKT.Date < round.ThoiGianBD.Date || Today > round.ThoiGianKT.Date)
             throw new InvalidOperationException("Thời gian thực tập của đợt thiếu, không hợp lệ hoặc đã kết thúc; không thể bố trí ban đầu.");
@@ -178,24 +184,24 @@ public class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock = null)
         return id;
     }
 
-    public async Task<DanhSachSinhVienTheoDotDto> GetAsync(string maDot)
+    public async Task<DanhSachSinhVienTheoDotDto> GetAsync(string maDot, IReadOnlyCollection<string>? scope = null)
     {
         var round = await RequireRound(maDot);
-        var manualIds = (await db.SinhVienThamGiaDots.AsNoTracking().Where(x => x.MaDot == maDot && x.DangThamGia)
+        var manualIds = (await db.SinhVienThamGiaDots.AsNoTracking().Where(x => x.MaDot == maDot && x.DangThamGia && (scope == null || scope.Contains(x.MaSV)))
             .Select(x => x.MaSV).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var activityIds = (await ActivityIds(maDot).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var activityIds = (await ActivityIds(maDot).Where(id => scope == null || scope.Contains(id)).ToListAsync()).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var ids = manualIds.Union(activityIds, StringComparer.OrdinalIgnoreCase).ToArray();
         if (ids.Length == 0) return new(maDot, round.TenDot, 0, 0, 0, 0, 0,
             Groups.Select(g => new NhomSinhVienTheoDotDto(g.Code, g.Name, 0)).ToList(), new());
         var students = await db.SinhViens.AsNoTracking().Where(x => ids.Contains(x.MaSV)).OrderBy(x => x.MaSV).ToListAsync();
-        var applications = await db.DangKyThucTaps.AsNoTracking().Where(x => x.MaDot == maDot).ToListAsync();
-        var selfArranged = await db.DeXuatThucTapTuTims.AsNoTracking().Where(x => x.MaDot == maDot).ToListAsync();
+        var applications = await db.DangKyThucTaps.AsNoTracking().Where(x => x.MaDot == maDot && (scope == null || scope.Contains(x.MaSV))).ToListAsync();
+        var selfArranged = await db.DeXuatThucTapTuTims.AsNoTracking().Where(x => x.MaDot == maDot && (scope == null || scope.Contains(x.MaSV))).ToListAsync();
         var placements = await db.PhanBoThucTaps.AsNoTracking().Include(x => x.CongTy).Include(x => x.HoSoTuTim)
-            .Where(x => x.MaDot == maDot).ToListAsync();
+            .Where(x => x.MaDot == maDot && (scope == null || scope.Contains(x.MaSinhVien))).ToListAsync();
         var appsByStudent = applications.ToLookup(x => x.MaSV, StringComparer.OrdinalIgnoreCase);
         var selfByStudent = selfArranged.ToLookup(x => x.MaSV, StringComparer.OrdinalIgnoreCase);
         var pbByStudent = placements.ToLookup(x => x.MaSinhVien, StringComparer.OrdinalIgnoreCase);
-        var nonCompletion = await db.KhongHoanTatDots.AsNoTracking().Where(x => x.MaDot == maDot && x.HieuLuc).ToDictionaryAsync(x => x.MaSV);
+        var nonCompletion = await db.KhongHoanTatDots.AsNoTracking().Where(x => x.MaDot == maDot && x.HieuLuc && (scope == null || scope.Contains(x.MaSV))).ToDictionaryAsync(x => x.MaSV);
         var today = _clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).Date;
         var rows = students.Select(student =>
         {
@@ -271,7 +277,7 @@ public class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock = null)
         if (self.Any(x => x.TrangThai == "DaDuyet")) { row.TrangThai = "CanKiemTra"; row.LyDo = "Hồ sơ nơi tự tìm đã được duyệt nhưng chưa có phân bổ hiệu lực, cần Khoa kiểm tra."; return; }
         if (apps.Any(x => x.TrangThai is "ChoDuyet" or "DaDuyet")) { row.TrangThai = "DangUngTuyen"; row.LyDo = "Có nguyện vọng đang xét/chờ kết quả, chưa có nơi tiếp nhận."; return; }
         if (apps.Count > 0 || self.Count > 0) { row.TrangThai = "ChuaCoNoiTiepNhan"; row.LyDo = "Hồ sơ đã từ chối/kết thúc, chưa có nơi tiếp nhận. "
-            + (apps.Count >= 3 ? "Đã dùng đủ 3 lượt trong đợt; Khoa cần hỗ trợ bố trí ban đầu. " : "Còn lượt thì SV có thể đăng ký trong đợt mở, hoặc Khoa hỗ trợ bố trí. ")
+            + "Khoa có thể hỗ trợ bố trí hoặc tạo lần hỗ trợ để SV đăng ký tuyển dụng tiếp trong cùng đợt. "
             + string.Join("; ", apps.Where(a => a.LyDoKetThuc != null).Select(a => a.LyDoKetThuc)); return; }
         if (row.CoNghiepVu) { row.TrangThai = "CanKiemTra"; row.LyDo = "Có hướng dẫn/tiến độ/điểm trong đợt nhưng chưa có phân bổ hiệu lực, cần kiểm tra dữ liệu."; return; }
         row.TrangThai = "ChuaDangKy"; row.LyDo = "Khoa đã đưa SV vào đợt, chưa có nguyện vọng hoặc hồ sơ nơi thực tập.";

@@ -19,5 +19,8 @@ public record BangDiemResponse(
     string MaDot,
     string? TenDot,
     List<TieuChiDto> TieuChis,
-    List<BangDiemRowDto> Rows
+    List<BangDiemRowDto> Rows,
+    string? MaLoaiThucTap = null,
+    string? TenLoaiThucTap = null,
+    string? MaRubric = null
 );

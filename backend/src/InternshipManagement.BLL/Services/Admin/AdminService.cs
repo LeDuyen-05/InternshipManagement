@@ -90,6 +90,85 @@ public class AdminService
         if (tx != null) await tx.CommitAsync();
     }
 
+    public async Task<(int CreatedCount, List<string> CreatedUsernames)> BulkCreateStudentAccountsAsync(string? maDot = null)
+    {
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+
+        var existingAccountSv = await _db.TaiKhoans.Where(x => x.MaSV != null).Select(x => x.MaSV!).ToListAsync();
+        var existingSvSet = new HashSet<string>(existingAccountSv, StringComparer.OrdinalIgnoreCase);
+
+        IQueryable<string> query;
+        if (!string.IsNullOrWhiteSpace(maDot))
+        {
+            query = _db.SinhVienThamGiaDots
+                .Where(x => x.MaDot == maDot && x.DangThamGia)
+                .Select(x => x.MaSV);
+        }
+        else
+        {
+            query = _db.SinhViens.Select(x => x.MaSV);
+        }
+
+        var allStudents = await query.Distinct().ToListAsync();
+        var studentsNeedingAccounts = allStudents.Where(s => !existingSvSet.Contains(s)).ToList();
+
+        if (studentsNeedingAccounts.Count == 0)
+        {
+            return (0, new List<string>());
+        }
+
+        var existingUsernames = new HashSet<string>(await _db.TaiKhoans.Select(x => x.TenDangNhap).ToListAsync(), StringComparer.OrdinalIgnoreCase);
+        var existingAccountIds = new HashSet<string>(await _db.TaiKhoans.Select(x => x.MaTaiKhoan).ToListAsync(), StringComparer.OrdinalIgnoreCase);
+
+        var defaultPasswordHash = _passwords.Hash("123456");
+        var createdUsernames = new List<string>();
+
+        foreach (var rawMaSV in studentsNeedingAccounts)
+        {
+            var maSV = rawMaSV.Trim();
+            var username = maSV.ToLowerInvariant();
+            var accountId = "TK_" + maSV;
+            if (accountId.Length > 20) accountId = accountId[..20];
+
+            var suffix = 1;
+            while (existingAccountIds.Contains(accountId))
+            {
+                accountId = $"TK_{maSV}_{suffix++}";
+                if (accountId.Length > 20) accountId = accountId[..20];
+            }
+            while (existingUsernames.Contains(username))
+            {
+                username = $"{maSV.ToLowerInvariant()}_{suffix++}";
+            }
+
+            existingAccountIds.Add(accountId);
+            existingUsernames.Add(username);
+            createdUsernames.Add(username);
+
+            _db.TaiKhoans.Add(new TaiKhoan
+            {
+                MaTaiKhoan = accountId,
+                TenDangNhap = username,
+                MatKhau = defaultPasswordHash,
+                TrangThai = "HoatDong",
+                MaVaiTro = "VT04",
+                MaSV = maSV,
+                Email = $"{username}@huit.edu.vn"
+            });
+        }
+
+        await _db.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
+
+        return (studentsNeedingAccounts.Count, createdUsernames);
+    }
+
+    public Task<StudentAccountImportPreview> PreviewStudentAccountsAsync(ImportStudentAccountsRequest request)
+        => new StudentAccountImportService(_db, _passwords, _svValidator).PreviewAsync(request);
+
+    public Task<(int CreatedCount, int TotalRows, List<string> Errors)> ImportStudentAccountsAsync(ImportStudentAccountsRequest request)
+        => new StudentAccountImportService(_db, _passwords, _svValidator).ImportAsync(request);
+
     public async Task<List<AccountDto>> AccountsAsync()
     {
         var accounts = await _db.TaiKhoans
@@ -271,13 +350,24 @@ public class AdminService
 
     public async Task UpdateRoundAsync(string id, UpdateRoundRequest request)
     {
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        await _db.LockRoundsAsync([id]);
         if (request.ThoiGianKT < request.ThoiGianBD) throw new InvalidOperationException("Thời gian kết thúc phải sau thời gian bắt đầu.");
         if (request.TrangThai is not ("ChuaBatDau" or "DangDienRa" or "DaKetThuc")) throw new InvalidOperationException("Trạng thái đợt thực tập không hợp lệ.");
         var round = await _db.DotThucTaps.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
+        var type = request.MaLoaiThucTap ?? round.MaLoaiThucTap;
+        var rubric = request.MaRubric ?? round.MaRubric;
+        if (type != round.MaLoaiThucTap || rubric != round.MaRubric)
+        {
+            if (await HasRoundActivityAsync(id)) throw new InvalidOperationException("Đợt đã có sinh viên hoặc nghiệp vụ; không đổi loại/bộ tiêu chí.");
+            await RubricService.ValidateRoundRubricAsync(_db, type, rubric);
+            round.MaLoaiThucTap = type; round.MaRubric = rubric!;
+        }
         if (round.PhienBanThoiHan > 0 && (round.ThoiGianBD.Date != request.ThoiGianBD.Date || round.ThoiGianKT.Date != request.ThoiGianKT.Date))
             throw new InvalidOperationException("Đợt đã cấu hình thời hạn chấm. Chưa hỗ trợ đổi ngày thực tập vì sẽ làm lệch cửa sổ chấm; liên hệ Khoa xử lý riêng.");
         round.TenDot = request.TenDot; round.NamHoc = request.NamHoc; round.ThoiGianBD = request.ThoiGianBD; round.ThoiGianKT = request.ThoiGianKT; round.TrangThai = request.TrangThai;
         await _db.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
     }
 
     public async Task CreateCriteriaAsync(SaveCriteriaRequest request)
@@ -288,6 +378,10 @@ public class AdminService
         if (double.IsNaN(request.DiemToiDa) || double.IsInfinity(request.DiemToiDa) || request.DiemToiDa > 10 || Math.Round(request.DiemToiDa, 2) != request.DiemToiDa)
             throw new InvalidOperationException("Điểm tối đa phải không vượt quá 10 và có tối đa hai chữ số thập phân.");
         if (request.DiemToiDa <= 0) throw new InvalidOperationException("Điểm tối đa phải lớn hơn 0.");
+        await RubricService.RequireDraftAsync(_db, request.MaRubric);
+        var clo = string.IsNullOrWhiteSpace(request.MaCLO) ? request.MaTieuChi : request.MaCLO.Trim();
+        if (request.ThuTu < 1 || await _db.TieuChis.AnyAsync(x => x.MaRubric == request.MaRubric && x.MaTieuChi != request.MaTieuChi && x.MaCLO == clo))
+            throw new ArgumentException("Thứ tự phải dương và CLO không được trùng trong cùng bộ.");
         var nhom = ValidateNhom(request.NhomDanhGia);
         if ((await _db.TieuChis.Where(x => x.NhomDanhGia != null && x.MaRubric == request.MaRubric).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
         if (await _db.TieuChis.AnyAsync(x => x.MaTieuChi == request.MaTieuChi)) throw new InvalidOperationException("Mã tiêu chí đã tồn tại.");
@@ -303,9 +397,14 @@ public class AdminService
         if (double.IsNaN(request.DiemToiDa) || double.IsInfinity(request.DiemToiDa) || request.DiemToiDa > 10 || Math.Round(request.DiemToiDa, 2) != request.DiemToiDa)
             throw new InvalidOperationException("Điểm tối đa phải không vượt quá 10 và có tối đa hai chữ số thập phân.");
         if (request.DiemToiDa <= 0) throw new InvalidOperationException("Điểm tối đa phải lớn hơn 0.");
+        await RubricService.RequireDraftAsync(_db, request.MaRubric);
+        var clo = string.IsNullOrWhiteSpace(request.MaCLO) ? request.MaTieuChi : request.MaCLO.Trim();
+        if (request.MaTieuChi != id || request.ThuTu < 1 || await _db.TieuChis.AnyAsync(x => x.MaRubric == request.MaRubric && x.MaTieuChi != id && x.MaCLO == clo))
+            throw new ArgumentException("Không đổi mã tiêu chí; thứ tự phải dương và CLO không trùng trong bộ.");
         var nhom = ValidateNhom(request.NhomDanhGia);
         if ((await _db.TieuChis.Where(x => x.MaTieuChi != id && x.NhomDanhGia != null && x.MaRubric == request.MaRubric).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
         var item = await _db.TieuChis.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tiêu chí.");
+        if (item.MaRubric != request.MaRubric) throw new ArgumentException("Không chuyển tiêu chí sang bộ khác.");
         if ((item.DiemToiDa != (decimal)request.DiemToiDa || item.NhomDanhGia != nhom || item.MaRubric != request.MaRubric || item.MaCLO != (string.IsNullOrWhiteSpace(request.MaCLO) ? item.MaTieuChi : request.MaCLO.Trim()))
             && await _db.ChiTietChamDiems.AnyAsync(x => x.MaTieuChi == id))
             throw new InvalidOperationException("Tiêu chí đã có điểm: chỉ được sửa mô tả và thứ tự để bảo toàn lịch sử.");
@@ -316,6 +415,7 @@ public class AdminService
     public async Task DeleteCriteriaAsync(string id)
     {
         var item = await _db.TieuChis.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tiêu chí.");
+        await RubricService.RequireDraftAsync(_db, item.MaRubric);
         if (await _db.ChiTietChamDiems.AnyAsync(x => x.MaTieuChi == id)) throw new InvalidOperationException("Tiêu chí đã được dùng để chấm điểm nên không thể xóa.");
         _db.TieuChis.Remove(item); await _db.SaveChangesAsync();
     }
@@ -460,7 +560,13 @@ public class AdminService
     public async Task ApproveRegistrationAsync(string id, RegistrationApprovalRequest request)
     {
         if (request.TrangThai is not ("DaDuyet" or "TuChoi" or "ChoDuyet")) throw new InvalidOperationException("Trạng thái đăng ký không hợp lệ.");
+        await using var transaction = _db.Database.IsRelational()
+            ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        var roundId = await _db.DangKyThucTaps.Where(x => x.MaDK == id).Select(x => x.MaDot).SingleOrDefaultAsync()
+            ?? throw new KeyNotFoundException("Không tìm thấy nguyện vọng.");
+        await _db.LockRoundsAsync(new[] { roundId });
         var registration = await _db.DangKyThucTaps.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy nguyện vọng.");
+        await _db.Entry(registration).ReloadAsync();
         if (registration.TrangThai == "TuChoi" && request.TrangThai != "TuChoi")
             throw new InvalidOperationException("Nguyện vọng đã kết thúc; không mở lại để thay đổi lịch sử lượt đăng ký.");
         var hasActivePlacement = await _db.PhanBoThucTaps.AnyAsync(p => p.MaSinhVien == registration.MaSV && p.MaDot == registration.MaDot && p.TrangThai != "Huy");
@@ -483,15 +589,14 @@ public class AdminService
             if (hasOtherApproved)
                 throw new InvalidOperationException("Sinh viên đã có một nguyện vọng khác được phê duyệt trong đợt này.");
 
-            if (company != null && company.SoLuongNhan > 0)
+            var capacity = await InternshipManagement.DAL.Common.CompanyRoundCapacity.LimitAsync(_db,
+                registration.MaCongTy, registration.MaDot, company?.SoLuongNhan);
+            if (capacity > 0)
             {
-                var approvedCount = await _db.DangKyThucTaps.CountAsync(r =>
-                    r.MaCongTy == registration.MaCongTy &&
-                    r.MaDot == registration.MaDot &&
-                    r.MaDK != registration.MaDK &&
-                    r.TrangThai == "DaDuyet");
-                if (approvedCount >= company.SoLuongNhan)
-                    throw new InvalidOperationException($"Doanh nghiệp '{company.TenCongTy}' đã đủ chỉ tiêu tiếp nhận ({company.SoLuongNhan} sinh viên) trong đợt này.");
+                var allocated = await _db.PhanBoThucTaps.CountAsync(p => p.MaCongTy == registration.MaCongTy
+                    && p.MaDot == registration.MaDot && p.TrangThai != "Huy");
+                if (allocated >= capacity)
+                    throw new InvalidOperationException($"Doanh nghiệp '{company!.TenCongTy}' đã đủ chỉ tiêu tiếp nhận ({capacity} sinh viên) trong đợt này.");
             }
         }
         registration.TrangThai = request.TrangThai;
@@ -502,6 +607,7 @@ public class AdminService
                 : "Khoa từ chối hồ sơ đăng ký trước phỏng vấn; không tự suy ra rớt PV.";
         }
         await _db.SaveChangesAsync();
+        if (transaction != null) await transaction.CommitAsync();
     }
 
     public async Task<object> AssignmentsAsync(string? maDot)
@@ -517,7 +623,7 @@ public class AdminService
                     from c in companies.DefaultIfEmpty()
                     select new { s.MaSV, s.HoTen, s.Lop, s.ChuyenNganh, maGiangVien = g == null ? null : g.MaGV, giangVien = g == null ? null : g.HoTen, maDot = pb.MaDot, congTy = c == null ? null : c.TenCongTy };
         var rows = await query.OrderBy(x => x.HoTen).ToListAsync();
-        var lecturers = await _db.GiangViens.AsNoTracking().Select(g => new { g.MaGV, g.HoTen, g.ChuyenMon, chiTieu = g.ChiTieuHD, assignedCount = _db.GVHuongDans.Count(a => a.MaGiangVien == g.MaGV && a.TrangThai == "DangHuongDan" && (a.MaDot == maDot || a.MaDot == null)) }).OrderBy(g => g.HoTen).ToListAsync();
+        var lecturers = await _db.GiangViens.AsNoTracking().Select(g => new { g.MaGV, g.HoTen, g.ChuyenMon, chiTieu = g.ChiTieuHD, assignedCount = _db.GVHuongDans.Count(a => a.MaGiangVien == g.MaGV && a.TrangThai == "DangHuongDan" && a.MaDot == maDot) }).OrderBy(g => g.HoTen).ToListAsync();
         return new { students = rows, lecturers, assigned = rows.Count(x => x.maGiangVien != null), unassigned = rows.Count(x => x.maGiangVien == null) };
     }
 
@@ -601,11 +707,17 @@ public class AdminService
         if (string.IsNullOrWhiteSpace(request.MaDot))
             throw new ArgumentException("Mã đợt thực tập không được để trống.");
 
-        var round = await _db.DotThucTaps.FindAsync(request.MaDot)
+        if (request.SoTuan is < 1 or > 104)
+            throw new ArgumentException("Số tuần phải từ 1 đến 104.");
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
+        await _db.LockRoundsAsync([request.MaDot]);
+        var round = await _db.DotThucTaps.AsNoTracking().SingleOrDefaultAsync(x => x.MaSo == request.MaDot)
             ?? throw new KeyNotFoundException($"Không tìm thấy đợt thực tập {request.MaDot}.");
 
         var startDate = request.NgayBatDau ?? round.ThoiGianBD;
-        var weeks = request.SoTuan > 0 ? request.SoTuan : 12;
+        var weeks = request.SoTuan;
+        if (startDate.Date < round.ThoiGianBD.Date || startDate.Date > round.ThoiGianKT.Date)
+            throw new ArgumentException("Ngày bắt đầu tạo mốc phải thuộc thời gian thực tập của đợt.");
 
         var assignedStudents = await _db.PhanBoThucTaps
             .AsNoTracking()
@@ -632,6 +744,7 @@ public class AdminService
             for (int k = 1; k <= weeks; k++)
             {
                 var moc = startDate.Date.AddDays(7 * k);
+                if (moc > round.ThoiGianKT.Date) break;
                 if (existingSet.Contains((svId, moc.Date)))
                     continue;
 
@@ -652,6 +765,7 @@ public class AdminService
         {
             await _db.SaveChangesAsync();
         }
+        if (tx != null) await tx.CommitAsync();
         return createdCount;
     }
 
@@ -728,8 +842,21 @@ public class AdminService
     }
     public async Task CreateRoundAsync(CreateInternshipRoundRequest r)
     {
+        await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         if (r.ThoiGianKT < r.ThoiGianBD) throw new InvalidOperationException("Thời gian kết thúc phải sau thời gian bắt đầu.");
-        _db.DotThucTaps.Add(new DotThucTap { MaSo=r.MaSo, TenDot=r.TenDot, NamHoc=r.NamHoc, ThoiGianBD=r.ThoiGianBD, ThoiGianKT=r.ThoiGianKT, TrangThai=r.TrangThai });
+        if (string.IsNullOrWhiteSpace(r.MaSo) || r.MaSo.Length > 20 || string.IsNullOrWhiteSpace(r.TenDot) || r.TenDot.Length > 200
+            || string.IsNullOrWhiteSpace(r.NamHoc) || r.NamHoc.Length > 20 || r.TrangThai is not ("ChuaBatDau" or "DangDienRa" or "DaKetThuc"))
+            throw new ArgumentException("Thông tin đợt không hợp lệ.");
+        await RubricService.ValidateRoundRubricAsync(_db, r.MaLoaiThucTap, r.MaRubric);
+        _db.DotThucTaps.Add(new DotThucTap { MaSo=r.MaSo, TenDot=r.TenDot, NamHoc=r.NamHoc, ThoiGianBD=r.ThoiGianBD, ThoiGianKT=r.ThoiGianKT, TrangThai=r.TrangThai,
+            MaLoaiThucTap = r.MaLoaiThucTap, MaRubric = r.MaRubric! });
         await _db.SaveChangesAsync();
+        if (tx != null) await tx.CommitAsync();
     }
+
+    private async Task<bool> HasRoundActivityAsync(string id) =>
+        await _db.SinhVienThamGiaDots.AnyAsync(x => x.MaDot == id) || await _db.DangKyThucTaps.AnyAsync(x => x.MaDot == id)
+        || await _db.PhanBoThucTaps.AnyAsync(x => x.MaDot == id) || await _db.DeXuatThucTapTuTims.AnyAsync(x => x.MaDot == id)
+        || await _db.GVHuongDans.AnyAsync(x => x.MaDot == id) || await _db.TienDoThucTaps.AnyAsync(x => x.MaDot == id)
+        || await _db.PhieuChamDiems.AnyAsync(x => x.MaDot == id) || await _db.LanHoTroThucTaps.AnyAsync(x => x.MaDot == id);
 }

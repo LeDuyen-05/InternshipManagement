@@ -6,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InternshipManagement.BLL.Services.SinhVienTheoDot;
 
-public record GhiNhanChuaCoNoiRequest(int PhienBan, string LyDo, string CanCu, bool DaXacMinh, bool ThuHoi = false);
+public record GhiNhanChuaCoNoiRequest(int PhienBan, string LyDo, string CanCu, bool DaXacMinh, bool ThuHoi = false,
+    string? MaLyDo = null, string? MaLanHoTro = null, int? PhienBanHoTro = null);
 public record DongRaSoatNoi(string MaSV, string HoTen, string? Lop, string Nhom, string TinhTrang,
     bool CoTheXacNhan, bool DaGhiNhan, bool CoTheThuHoi, string? LyDo, string? CanCu);
 public record RaSoatNoiDto(string MaDot, int PhienBan, bool CoTheSua, int TongSV, int DaCoNoi,
@@ -64,11 +65,22 @@ public class RaSoatNoiService(AppDbContext db, SinhVienTheoDotService roster, Ti
         if (!data.CoTheSua) throw new InvalidOperationException("Chỉ rà/xác nhận trước chốt danh sách chính thức và trước ngày bắt đầu thực tập.");
         if (data.PhienBan != request.PhienBan) throw new DbUpdateConcurrencyException("Kết quả rà soát đã thay đổi. Tải lại.");
         var row = data.SinhViens.SingleOrDefault(x => x.MaSV == maSV) ?? throw new KeyNotFoundException("SV không thuộc đợt.");
+        if (request.MaLyDo is not (null or "ChuaCoNoi" or "TuChoiHoTro")) throw new ArgumentException("Mã lý do không hợp lệ.");
+        if (!request.ThuHoi && request.MaLyDo == "TuChoiHoTro")
+        {
+            var sessions = await db.LanHoTroThucTaps.AsNoTracking().Where(x => x.MaDot == maDot && x.TrangThai != "DaXoa").ToListAsync();
+            var session = sessions.SingleOrDefault(x => x.MaLan == request.MaLanHoTro) ?? throw new ArgumentException("Chọn lần hỗ trợ có phản hồi từ chối.");
+            if (session.PhienBan != request.PhienBanHoTro) throw new DbUpdateConcurrencyException();
+            var latest = DAL.Common.SupportConsent.Latest(sessions, maSV);
+            if (latest?.PhanHoi != "TuChoiHoTro" || latest.MaLan != session.MaLan)
+                throw new InvalidOperationException("Chưa có phản hồi từ chối hiệu lực hoặc SV đã nhận hỗ trợ lại; không xác nhận rớt.");
+        }
         if (request.ThuHoi ? !row.CoTheThuHoi : !row.CoTheXacNhan) throw new InvalidOperationException("SV còn hồ sơ chờ/có nơi hoặc xác nhận không phù hợp. Rà hồ sơ trước khi xử lý.");
         var item = await db.KhongHoanTatDots.SingleOrDefaultAsync(x => x.MaDot == maDot && x.MaSV == maSV);
         var before = item == null ? null : JsonSerializer.Serialize(item);
         if (item == null) { item = new() { MaDot = maDot, MaSV = maSV }; db.KhongHoanTatDots.Add(item); }
         item.TruocChotDanhSach = true; item.HieuLuc = !request.ThuHoi; item.LyDo = reason; item.CanCu = evidence; item.NguoiXacNhan = actor; item.NgayXacNhan = Now;
+        if (!request.ThuHoi) { item.MaLyDo = request.MaLyDo ?? "ChuaCoNoi"; item.MaLanHoTro = request.MaLyDo == "TuChoiHoTro" ? request.MaLanHoTro : null; }
         var state = await db.ChotDotThucTaps.SingleOrDefaultAsync(x => x.MaDot == maDot);
         if (state == null) { state = new() { MaDot = maDot }; db.ChotDotThucTaps.Add(state); }
         state.PhienBan++; state.NguoiCapNhat = actor; state.NgayCapNhat = Now; state.LyDo = reason;

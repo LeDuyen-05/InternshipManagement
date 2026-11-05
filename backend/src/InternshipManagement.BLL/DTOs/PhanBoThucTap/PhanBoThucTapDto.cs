@@ -10,6 +10,8 @@ public class PhanBoThucTapDto
     public string? ThoiGianThucTap { get; set; }
     public string MaDot { get; set; } = default!;
     public string? TenDot { get; set; }
+    public string? MaLoaiThucTap { get; set; }
+    public string? TenLoaiThucTap { get; set; }
     public DateTime NgayPhanBo { get; set; }
     public string TrangThai { get; set; } = default!;
     public bool DaDuocKhoaDuyet { get; set; }

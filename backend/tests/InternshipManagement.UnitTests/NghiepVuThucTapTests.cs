@@ -42,9 +42,9 @@ public class NghiepVuThucTapTests
     public async Task GiangVienCham_KhongXoaDiemDoanhNghiep_VaTongDiemGopCaHaiPhan()
     {
         var repo = new Mock<IPhieuChamDiemRepository>();
-        repo.Setup(r => r.GetDanhSachTieuChiAsync()).ReturnsAsync(BoTieuChi());
-        repo.Setup(r => r.GetDotThucTapAsync("DOT02")).ReturnsAsync(new DotThucTap { MaSo = "DOT02", TrangThai = "DangDienRa" });
-        repo.Setup(r => r.GetActiveAssignmentAsync("SV001")).ReturnsAsync(new GVHuongDan { MaSo = "PC1", MaGiangVien = "GV001", MaSinhVien = "SV001" });
+        repo.Setup(r => r.GetDanhSachTieuChiAsync("DOT02")).ReturnsAsync(BoTieuChi());
+        repo.Setup(r => r.GetDotThucTapAsync("DOT02")).ReturnsAsync(new DotThucTap { MaSo = "DOT02", TrangThai = "DangDienRa", MoChamGV = DateTimeOffset.UtcNow.AddDays(-1), HanChamGV = DateTimeOffset.UtcNow.AddDays(1) });
+        repo.Setup(r => r.GetActiveAssignmentAsync("SV001", "DOT02")).ReturnsAsync(new GVHuongDan { MaSo = "PC1", MaGiangVien = "GV001", MaSinhVien = "SV001" });
 
         var existing = new PhieuChamDiem
         {
@@ -66,7 +66,6 @@ public class NghiepVuThucTapTests
         await service.LuuPhieuChamDiemAsync(new LuuPhieuChamRequest("SV001", "DOT02", null, null, new()
         {
             new("CLO1.1", 0.7m), new("CLO3.4", 0.5m),
-            new("CLO4.1", 1.8m), new("CLO4.2", 2.7m) // gửi lại đúng điểm DN → được bỏ qua
         }, "Tốt"), "GV001");
 
         Assert.Equal(5.7m, saved!.TongDiem);
@@ -78,9 +77,9 @@ public class NghiepVuThucTapTests
     public async Task GiangVien_KhongDuocSuaDiemDoanhNghiepDaChamTrenHeThong()
     {
         var repo = new Mock<IPhieuChamDiemRepository>();
-        repo.Setup(r => r.GetDanhSachTieuChiAsync()).ReturnsAsync(BoTieuChi());
+        repo.Setup(r => r.GetDanhSachTieuChiAsync("DOT02")).ReturnsAsync(BoTieuChi());
         repo.Setup(r => r.GetDotThucTapAsync("DOT02")).ReturnsAsync(new DotThucTap { MaSo = "DOT02", TrangThai = "DangDienRa" });
-        repo.Setup(r => r.GetActiveAssignmentAsync("SV001")).ReturnsAsync(new GVHuongDan { MaSo = "PC1", MaGiangVien = "GV001", MaSinhVien = "SV001" });
+        repo.Setup(r => r.GetActiveAssignmentAsync("SV001", "DOT02")).ReturnsAsync(new GVHuongDan { MaSo = "PC1", MaGiangVien = "GV001", MaSinhVien = "SV001" });
         repo.Setup(r => r.GetPhieuChamBySinhVienAndDotAsync("SV001", "DOT02")).ReturnsAsync(new PhieuChamDiem
         {
             MaPhieu = "P1", MaSV = "SV001", MaDot = "DOT02", MaDaiDien = "DD001",
@@ -88,7 +87,7 @@ public class NghiepVuThucTapTests
         });
 
         var service = new PhieuChamDiemService(repo.Object);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LuuPhieuChamDiemAsync(
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.LuuPhieuChamDiemAsync(
             new LuuPhieuChamRequest("SV001", "DOT02", null, null, new() { new("CLO4.1", 2.0m) }), "GV001"));
     }
 
@@ -96,14 +95,15 @@ public class NghiepVuThucTapTests
     public async Task DoanhNghiep_ChiChamTieuChiPhieuNhanXet_VaPhaiDuTieuChi()
     {
         var repo = new Mock<IPhieuChamDiemRepository>();
-        repo.Setup(r => r.GetDanhSachTieuChiAsync()).ReturnsAsync(BoTieuChi());
+        repo.Setup(r => r.CanEnterpriseGradeAsync("SV001", "DOT02", "DD001")).ReturnsAsync(true);
+        repo.Setup(r => r.GetDanhSachTieuChiAsync("DOT02")).ReturnsAsync(BoTieuChi());
         repo.Setup(r => r.GetDotThucTapAsync("DOT02")).ReturnsAsync(new DotThucTap { MaSo = "DOT02", TrangThai = "DangDienRa" });
         var service = new PhieuChamDiemService(repo.Object);
 
         await Assert.ThrowsAsync<ArgumentException>(() => service.LuuDiemDoanhNghiepAsync(
             "SV001", "DOT02", "DD001", new List<ChiTietDiemInput> { new("CLO1.1", 0.5m), new("CLO4.1", 1m), new("CLO4.2", 2m) }, null));
         await Assert.ThrowsAsync<ArgumentException>(() => service.LuuDiemDoanhNghiepAsync(
-            "SV001", "DOT02", "DD001", new List<ChiTietDiemInput> { new("CLO4.1", 1m) }, null));
+            "SV001", "DOT02", "DD001", new List<ChiTietDiemInput> { new("CLO4.1", 1m) }, null, khoaChinhThuc: true));
     }
 
     // ------------------------------------------------------------ Phân công tự động
@@ -112,24 +112,22 @@ public class NghiepVuThucTapTests
     public async Task PhanCongTuDong_UuTienGiangVienGioiThieuDoanhNghiep()
     {
         var repo = new Mock<IGVHuongDanRepository>();
+        repo.Setup(r => r.GetDotThucTapAsync("DOT02")).ReturnsAsync(new DotThucTap { MaSo = "DOT02", TrangThai = "DangDienRa" });
         var congTy = new CongTy { MaCongTy = "CT001", TenCongTy = "FPT" };
         var sv = new SinhVien
         {
             MaSV = "SV016", HoTen = "A", ChuyenNganh = "Công nghệ thông tin", CongNghe = "React, Node.js",
-            PhanBoThucTaps = new List<PhanBoThucTap> { new() { MaCongTy = "CT001", CongTy = congTy, TrangThai = "DangThucTap" } }
+            PhanBoThucTaps = new List<PhanBoThucTap> { new() { MaDot = "DOT02", DaDuocKhoaDuyet = true, MaCongTy = "CT001", CongTy = congTy, TrangThai = "DangThucTap" } }
         };
-        repo.Setup(r => r.GetDanhSachSVChuaPhanCongAsync(null)).ReturnsAsync(new List<SinhVien> { sv });
-        repo.Setup(r => r.GetDanhSachGiangVienKemTaiAsync()).ReturnsAsync(new List<GiangVien>
+        repo.Setup(r => r.GetDanhSachSVChuaPhanCongAsync("DOT02", null)).ReturnsAsync(new List<SinhVien> { sv });
+        repo.Setup(r => r.GetDanhSachGiangVienKemTaiAsync("DOT02")).ReturnsAsync(new List<GiangVien>
         {
             new() { MaGV = "GV010", HoTen = "Web Cloud", ChuyenMon = "Phát triển ứng dụng Web", ChiTieuHD = 10 },
             new() { MaGV = "GV002", HoTen = "HTTT", ChuyenMon = "Hệ thống thông tin", ChiTieuHD = 2 },
         });
-        repo.Setup(r => r.GetGioiThieuDaDuyetAsync()).ReturnsAsync(new List<GioiThieu>
-        {
-            new() { MaGV = "GV002", MaCongTy = "CT001", TrangThaiKetNoi = "DaDuyet" }
-        });
+        repo.Setup(r => r.GetGiangVienGioiThieuTheoDotAsync("DOT02")).ReturnsAsync(new List<GiangVienGioiThieuTheoDot> { new("DOT02", "CT001", "GV002", "HTTT") });
 
-        var result = await new GVHuongDanService(repo.Object).DeXuatPhanCongTuDongAsync();
+        var result = await new GVHuongDanService(repo.Object).DeXuatPhanCongTuDongAsync("DOT02");
 
         var item = Assert.Single(result.DanhSachDeXuat);
         Assert.Equal("GV002", item.MaGV);
@@ -140,24 +138,22 @@ public class NghiepVuThucTapTests
     public async Task PhanCongTuDong_KhiGVGioiThieuHetChiTieu_ChuyenSangPhuHopChuyenMon()
     {
         var repo = new Mock<IGVHuongDanRepository>();
+        repo.Setup(r => r.GetDotThucTapAsync("DOT02")).ReturnsAsync(new DotThucTap { MaSo = "DOT02", TrangThai = "DangDienRa" });
         var sv = new SinhVien
         {
             MaSV = "SV016", HoTen = "A", CongNghe = "React, Node.js",
-            PhanBoThucTaps = new List<PhanBoThucTap> { new() { MaCongTy = "CT001", CongTy = new CongTy { MaCongTy = "CT001", TenCongTy = "FPT" } } }
+            PhanBoThucTaps = new List<PhanBoThucTap> { new() { MaDot = "DOT02", DaDuocKhoaDuyet = true, TrangThai = "DangThucTap", MaCongTy = "CT001", CongTy = new CongTy { MaCongTy = "CT001", TenCongTy = "FPT" } } }
         };
-        repo.Setup(r => r.GetDanhSachSVChuaPhanCongAsync(null)).ReturnsAsync(new List<SinhVien> { sv });
-        repo.Setup(r => r.GetDanhSachGiangVienKemTaiAsync()).ReturnsAsync(new List<GiangVien>
+        repo.Setup(r => r.GetDanhSachSVChuaPhanCongAsync("DOT02", null)).ReturnsAsync(new List<SinhVien> { sv });
+        repo.Setup(r => r.GetDanhSachGiangVienKemTaiAsync("DOT02")).ReturnsAsync(new List<GiangVien>
         {
             new() { MaGV = "GV010", HoTen = "Web", ChuyenMon = "Phát triển ứng dụng Web", ChiTieuHD = 10 },
             new() { MaGV = "GV002", HoTen = "HTTT", ChuyenMon = "Hệ thống thông tin", ChiTieuHD = 1,
-                    GVHuongDans = new List<GVHuongDan> { new() { TrangThai = "DangHuongDan" } } },
+                    GVHuongDans = new List<GVHuongDan> { new() { MaDot = "DOT02", TrangThai = "DangHuongDan" } } },
         });
-        repo.Setup(r => r.GetGioiThieuDaDuyetAsync()).ReturnsAsync(new List<GioiThieu>
-        {
-            new() { MaGV = "GV002", MaCongTy = "CT001", TrangThaiKetNoi = "DaDuyet" }
-        });
+        repo.Setup(r => r.GetGiangVienGioiThieuTheoDotAsync("DOT02")).ReturnsAsync(new List<GiangVienGioiThieuTheoDot> { new("DOT02", "CT001", "GV002", "HTTT") });
 
-        var result = await new GVHuongDanService(repo.Object).DeXuatPhanCongTuDongAsync();
+        var result = await new GVHuongDanService(repo.Object).DeXuatPhanCongTuDongAsync("DOT02");
 
         var item = Assert.Single(result.DanhSachDeXuat);
         Assert.Equal("GV010", item.MaGV);
@@ -197,8 +193,8 @@ public class NghiepVuThucTapTests
         var pb = Assert.Single(db.PhanBoThucTaps);
         Assert.Equal(("SV001", "CT001", "DOT02", "ChuaNhanViec"), (pb.MaSinhVien, pb.MaCongTy, pb.MaDot, pb.TrangThai));
         Assert.Equal("DaDuyet", db.DangKyThucTaps.Single(d => d.MaDK == "DK1").TrangThai);
-        Assert.Equal("TuChoi", db.DangKyThucTaps.Single(d => d.MaDK == "DK2").TrangThai); // NV khác của SV001
-        Assert.Equal("TuChoi", db.DangKyThucTaps.Single(d => d.MaDK == "DK3").TrangThai); // tự đóng tuyển
+        Assert.Equal("ChoDuyet", db.DangKyThucTaps.Single(d => d.MaDK == "DK2").TrangThai); // Chưa xác nhận chọn nơi.
+        Assert.Equal("ChoDuyet", db.DangKyThucTaps.Single(d => d.MaDK == "DK3").TrangThai); // Đủ chỉ tiêu chỉ khóa nhận mới.
 
         var chiTieu = await service.GetChiTieuAsync(db.CongTys.Single(c => c.MaCongTy == "CT001"));
         Assert.Equal("DaDuChiTieu", chiTieu.TrangThaiTuyen);
@@ -207,7 +203,7 @@ public class NghiepVuThucTapTests
     }
 
     [Fact]
-    public async Task DatRoiKhongDat_HuyTiepNhan_RoiDatLaiDuoc()
+    public async Task DangThucTap_KhongDuocHuyTiepNhanBangKetQuaPhongVanCu()
     {
         await using var db = TaoDb();
         var service = new DoanhNghiepService(db, new Mock<IPhieuChamDiemService>().Object);
@@ -217,13 +213,10 @@ public class NghiepVuThucTapTests
         await db.SaveChangesAsync();
 
         var huy = await service.CapNhatKetQuaPhongVanAsync("PV1", "KhongDat", "CT001");
-        Assert.True(huy.ThanhCong);
-        Assert.Equal("Huy", db.PhanBoThucTaps.Single().TrangThai);
-        Assert.Equal("TuChoi", db.DangKyThucTaps.Single(d => d.MaDK == "DK1").TrangThai);
-
-        var datLai = await service.CapNhatKetQuaPhongVanAsync("PV1", "Dat", "CT001");
-        Assert.True(datLai.ThanhCong);
-        Assert.Single(db.PhanBoThucTaps, p => p.TrangThai != "Huy");
+        Assert.False(huy.ThanhCong);
+        Assert.Equal("DangThucTap", db.PhanBoThucTaps.Single().TrangThai);
+        Assert.Equal("DaDuyet", db.DangKyThucTaps.Single(d => d.MaDK == "DK1").TrangThai);
+        Assert.Equal("Dat", db.PhongVans.Single().KetQua);
     }
 
     [Fact]
@@ -261,6 +254,8 @@ public class NghiepVuThucTapTests
     public async Task LichPhongVan_KhongTrungLich_KhongNgayQuaKhu_VaDoiLichDuoc()
     {
         await using var db = TaoDb();
+        db.PhongVans.Single().NgayPV = DateTime.Today.AddDays(1);
+        await db.SaveChangesAsync();
         var service = new DoanhNghiepService(db, new Mock<IPhieuChamDiemService>().Object);
 
         // SV001 đã có PV1 chờ kết quả → không tạo thêm
@@ -272,7 +267,9 @@ public class NghiepVuThucTapTests
         var moi = DateTime.Today.AddDays(3).AddHours(14);
         await service.DoiLichPhongVanAsync("PV1", new DoiLichPhongVanRequest { NgayPV = moi, HinhThuc = "Trực tiếp" }, "CT001");
         Assert.Equal(moi, db.PhongVans.Single(p => p.MaPV == "PV1").NgayPV);
-
+        // Chỉ ghi kết quả sau giờ bắt đầu buổi PV.
+        db.PhongVans.Single().NgayPV = DateTime.Today.AddDays(-1);
+        await db.SaveChangesAsync();
         await service.CapNhatKetQuaPhongVanAsync("PV1", "KhongDat", "CT001");
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.DoiLichPhongVanAsync(
             "PV1", new DoiLichPhongVanRequest { NgayPV = moi }, "CT001"));

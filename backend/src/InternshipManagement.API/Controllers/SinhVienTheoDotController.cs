@@ -12,6 +12,45 @@ public class SinhVienTheoDotController(SinhVienTheoDotService service) : Control
     [HttpGet]
     public async Task<IActionResult> Get([FromQuery] string maDot) => Ok(await service.GetAsync(maDot));
 
+    [HttpGet("paged")]
+    public async Task<IActionResult> GetPaged([FromQuery] RosterQuery query, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await service.GetPagedAsync(query, ct));
+        }
+        catch (Exception ex) when (ct.IsCancellationRequested || ex is OperationCanceledException || ex.Message.Contains("cancelled by user", StringComparison.OrdinalIgnoreCase))
+        {
+            return NoContent();
+        }
+    }
+
+    [HttpGet("catalog")]
+    public async Task<IActionResult> Catalog([FromQuery] RosterCatalogQuery query, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await service.GetCatalogPagedAsync(query, ct));
+        }
+        catch (Exception ex) when (ct.IsCancellationRequested || ex is OperationCanceledException || ex.Message.Contains("cancelled by user", StringComparison.OrdinalIgnoreCase))
+        {
+            return NoContent();
+        }
+    }
+
+    [HttpPost("present")]
+    public async Task<IActionResult> Present([FromQuery] string maDot, [FromBody] List<string> codes, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await service.PresentAsync(maDot, codes, ct));
+        }
+        catch (Exception ex) when (ct.IsCancellationRequested || ex is OperationCanceledException || ex.Message.Contains("cancelled by user", StringComparison.OrdinalIgnoreCase))
+        {
+            return NoContent();
+        }
+    }
+
     [HttpPost]
     public async Task<IActionResult> Add(ThemSinhVienTheoDotRequest request) => Ok(new
     {

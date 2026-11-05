@@ -122,6 +122,8 @@ public class DangKyThucTapService : IDangKyThucTapService
             KetQuaPhongVan = phongVans.Where(p => p.MaDK == d.MaDK || (p.MaDK == null && p.MaCongTy == d.MaCongTy && list.Count(a => a.MaCongTy == d.MaCongTy) == 1))
                 .OrderByDescending(p => p.NgayPV).Select(p => p.KetQua).FirstOrDefault(),
             MaDK = d.MaDK,
+            MaLanHoTro = d.MaLanHoTro,
+            LanDangKy = d.LanDangKy,
             MaSV = d.MaSV,
             MaCongTy = d.MaCongTy,
             MaViTri = d.MaViTri,
@@ -129,6 +131,8 @@ public class DangKyThucTapService : IDangKyThucTapService
             ViTriTuyen = d.ViTriDangKy ?? d.CongTy?.ViTriTuyen,
             MaDot = d.MaDot,
             TenDot = d.DotThucTap?.TenDot,
+            MaLoaiThucTap = d.DotThucTap?.MaLoaiThucTap,
+            TenLoaiThucTap = d.DotThucTap?.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
             NgayDangKy = d.NgayDangKy,
             ThuTuUuTien = d.ThuTuUuTien,
             TrangThai = d.TrangThai
@@ -148,6 +152,7 @@ public class DangKyThucTapService : IDangKyThucTapService
     public async Task<string?> KiemTraDieuKienDangKyAsync(string maSV, string maDot, string hanhDong = "đăng ký thêm nguyện vọng")
     {
         var phanBos = await _dangKyRepo.GetPhanBoConHieuLucAsync(maSV) ?? Array.Empty<PhanBoThucTap>();
+        var targetRound = await _dangKyRepo.GetDotAsync(maDot);
         foreach (var pb in phanBos.OrderByDescending(p => p.MaDot == maDot))
         {
             var tenCongTy = pb.CongTy?.TenCongTy ?? pb.MaCongTy;
@@ -161,6 +166,8 @@ public class DangKyThucTapService : IDangKyThucTapService
 
             if (pb.TrangThai == "HoanThanh")
             {
+                if (targetRound?.MaLoaiThucTap != null && pb.DotThucTap?.MaLoaiThucTap != null
+                    && targetRound.MaLoaiThucTap != pb.DotThucTap.MaLoaiThucTap) continue;
                 var (tongDiem, daDu) = await _dangKyRepo.GetKetQuaThucTapAsync(maSV, pb.MaDot);
                 var khongDat = daDu && tongDiem.HasValue && !ThangDiem.QuyDoi(tongDiem.Value).Dat;
                 if (!khongDat)
@@ -169,6 +176,8 @@ public class DangKyThucTapService : IDangKyThucTapService
                         : $"Bạn đã hoàn thành thực tập tại {tenCongTy} ({tenDot}) và đang chờ kết quả đánh giá nên không thể {hanhDong}.";
             }
         }
+        if (await _dangKyRepo.HasActiveRegistrationInDotAsync(maSV, maDot))
+            return "Bạn đang có một hồ sơ ứng tuyển chờ xử lý trong đợt. Chỉ đăng ký công ty khác sau khi hồ sơ trước đã bị từ chối, không đạt hoặc được rút hợp lệ.";
         return null;
     }
 
@@ -204,15 +213,13 @@ public class DangKyThucTapService : IDangKyThucTapService
         if (dot.TrangThai != "DangDienRa")
             throw new InvalidOperationException("Đợt thực tập không trong thời gian tiếp nhận đăng ký nguyện vọng.");
 
-        if (request.ThuTuUuTien < 1 || request.ThuTuUuTien > MaxNguyenVong)
-            throw new ArgumentException($"Thứ tự ưu tiên phải từ 1 đến {MaxNguyenVong}.");
+        if (request.ThuTuUuTien < 1)
+            throw new ArgumentException("Lượt đăng ký phải là số nguyên dương.");
 
         // Đã trúng tuyển (có quyết định tiếp nhận) thì không đăng ký thêm — kiểm tra trước để báo đúng lý do
         await KiemTraChuaTrungTuyenAsync(request.MaSV, request.MaDot);
 
-        var count = await _dangKyRepo.CountBySinhVienDotAsync(request.MaSV, request.MaDot);
-        if (count >= MaxNguyenVong)
-            throw new InvalidOperationException($"Sinh viên chỉ được đăng ký tối đa {MaxNguyenVong} nguyện vọng trong một đợt.");
+        // Quota (including an explicit faculty grant) is checked under the round lock in AddWithinLimitAsync.
 
         var already = await _dangKyRepo.HasRegisteredAsync(request.MaSV, request.MaCongTy, request.MaDot);
         if (already)
@@ -233,6 +240,7 @@ public class DangKyThucTapService : IDangKyThucTapService
             MaSV = request.MaSV,
             MaCongTy = request.MaCongTy,
             MaViTri = request.MaViTri,
+            MaLanHoTro = request.MaLanHoTro,
             MaDot = request.MaDot,
             NgayDangKy = DateTime.Now,
             ThuTuUuTien = request.ThuTuUuTien,
@@ -244,6 +252,8 @@ public class DangKyThucTapService : IDangKyThucTapService
         return new DangKyThucTapDto
         {
             MaDK = dangKy.MaDK,
+            MaLanHoTro = dangKy.MaLanHoTro,
+            LanDangKy = dangKy.LanDangKy,
             MaSV = dangKy.MaSV,
             MaCongTy = dangKy.MaCongTy,
             MaViTri = dangKy.MaViTri,
@@ -251,6 +261,8 @@ public class DangKyThucTapService : IDangKyThucTapService
             ViTriTuyen = dangKy.ViTriDangKy ?? congTy.ViTriTuyen,
             MaDot = dangKy.MaDot,
             TenDot = dot.TenDot,
+            MaLoaiThucTap = dot.MaLoaiThucTap,
+            TenLoaiThucTap = dot.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
             NgayDangKy = dangKy.NgayDangKy,
             ThuTuUuTien = dangKy.ThuTuUuTien,
             TrangThai = dangKy.TrangThai

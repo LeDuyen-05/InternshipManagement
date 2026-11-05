@@ -11,6 +11,10 @@ public class DangKyThucTapConfiguration : IEntityTypeConfiguration<DangKyThucTap
         builder.Property(x => x.LyDoKetThuc).HasMaxLength(1000);
         builder.ToTable("DANGKYTHUCTAP");
         builder.Property(x => x.ViTriDangKy).HasMaxLength(500);
+        builder.Property(x => x.MaLanHoTro).HasMaxLength(32);
+        builder.Property(x => x.KetQuaHoSo).HasMaxLength(20);
+        builder.HasIndex(x => new { x.MaSV, x.MaCongTy, x.MaDot, x.LanDangKy }).IsUnique().HasDatabaseName("UQ_DKTT_SV_CT_DOT_LAN");
+        builder.HasOne<LanHoTroThucTap>().WithMany().HasForeignKey(x => x.MaLanHoTro).OnDelete(DeleteBehavior.Restrict);
         builder.HasKey(x => x.MaDK);
 
         builder.Property(x => x.MaDK).HasColumnName("maDK").HasMaxLength(20);

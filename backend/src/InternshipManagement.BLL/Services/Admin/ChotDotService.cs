@@ -46,8 +46,8 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
         var pendingApps = await db.DangKyThucTaps.AsNoTracking().Where(x => x.MaDot == id && (x.TrangThai == "ChoDuyet" || x.TrangThai == "DaDuyet")).ToListAsync();
         var pendingSelf = await db.DeXuatThucTapTuTims.AsNoTracking().Where(x => x.MaDot == id && x.TrangThai == "ChoDuyet").Select(x => x.MaSV).ToListAsync();
         var errors = new List<string>();
-        if (Today <= round.ThoiGianKT.Date) errors.Add("Chưa hết ngày kết thúc thực tập của đợt (UTC+7).");
-        if (list.SinhViens.Count == 0) errors.Add("Đợt chưa có danh sách SV tham gia để chốt điểm.");
+        if (Today <= round.ThoiGianKT.Date) errors.Add("Chưa kết thúc thời gian thực tập của đợt theo kế hoạch.");
+        if (list.SinhViens.Count == 0) errors.Add("Đợt chưa có danh sách sinh viên tham gia.");
         var rows = new List<SinhVienChotDotDto>();
         foreach (var student in list.SinhViens)
         {
@@ -66,8 +66,8 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
                 && placements.Any(p => p.MaSinhVien == student.MaSV);
             if (exception?.TruocChotDanhSach == true) canConfirm = false;
             var issues = new List<string>();
-            if (ownForms.Count > 1) issues.Add("Có nhiều phiếu điểm trong cùng đợt.");
-            if (pending) issues.Add("Còn hồ sơ đăng ký/tự tìm chờ xử lý; Khoa phải giải quyết trước khi chốt.");
+            if (ownForms.Count > 1) issues.Add("Tồn tại nhiều hơn một phiếu điểm trong cùng một đợt.");
+            if (pending) issues.Add("Còn hồ sơ đăng ký hoặc đề xuất tự tìm đang chờ Khoa xét duyệt.");
             if (exception is not null)
             {
                 var validPreRoster = exception.TruocChotDanhSach && active.Count == 0 && !pending && ownForms.Count == 0;
@@ -76,17 +76,17 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
             else
             {
                 if (active.Count != 1 || !active[0].DaDuocKhoaDuyet || active[0].TrangThai is not ("DangThucTap" or "HoanThanh"))
-                    issues.Add("Chưa có một phân bổ chính thức duy nhất; cần xử lý hồ sơ hoặc xác nhận không hoàn tất.");
+                    issues.Add("Chưa có phân bổ tiếp nhận thực tập chính thức.");
                 else
                 {
                     var period = PlacementPeriod.Resolve(active[0], round);
                     if (!period.Start.HasValue || !period.End.HasValue || period.Start.Value == default || period.End.Value < period.Start.Value)
-                        issues.Add("Chưa xác minh khoảng ngày thực tập tại DN hợp lệ.");
-                    else if (Today <= period.End.Value.Date) issues.Add("Chưa hết ngày thực tập thực tế tại DN.");
+                        issues.Add("Thời gian thực tập tại doanh nghiệp chưa được xác nhận hợp lệ.");
+                    else if (Today <= period.End.Value.Date) issues.Add("Chưa kết thúc thời gian thực tập thực tế tại doanh nghiệp.");
                 }
-                if (!result.EnterpriseComplete) issues.Add("Thiếu/sai điểm DN hoặc rubric nhóm DN.");
-                if (!result.LecturerComplete) issues.Add("Thiếu/sai điểm GVHD hoặc rubric nhóm GV.");
-                if (!result.Complete && result.EnterpriseComplete && result.LecturerComplete) issues.Add("Rubric/phiếu điểm không hợp lệ.");
+                if (!result.EnterpriseComplete) issues.Add("Chưa có kết quả đánh giá từ Doanh nghiệp (CLO4).");
+                if (!result.LecturerComplete) issues.Add("Chưa có điểm đánh giá từ Giảng viên hướng dẫn (CLO1–3).");
+                if (!result.Complete && result.EnterpriseComplete && result.LecturerComplete) issues.Add("Phiếu đánh giá chưa đủ các tiêu chí theo rubric của đợt.");
             }
             rows.Add(new(student.MaSV, student.HoTen, student.Lop, exception is not null ? "Không hoàn tất đợt" : result.Outcome,
                 result.Complete, !result.EnterpriseComplete, !result.LecturerComplete, exception is not null,
@@ -155,12 +155,17 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
         var snapshot = new
         {
             Dot = round, SinhViens = preview.SinhViens,
+            BoTieuChi = await db.BoTieuChis.AsNoTracking().SingleOrDefaultAsync(x => x.MaRubric == round.MaRubric),
             Rubric = await db.TieuChis.AsNoTracking().Where(x => x.MaRubric == round.MaRubric).ToListAsync(),
             PhieuDiem = await db.PhieuChamDiems.AsNoTracking().Include(x => x.ChiTietChamDiems).Where(x => x.MaDot == id).ToListAsync(),
             PhanBo = await db.PhanBoThucTaps.AsNoTracking().Include(x => x.CongTy).Include(x => x.HoSoTuTim).Where(x => x.MaDot == id).ToListAsync(),
             HuongDan = await db.GVHuongDans.AsNoTracking().Include(x => x.GiangVien).Where(x => x.MaDot == id).ToListAsync(),
             BaoCao = await db.TienDoThucTaps.AsNoTracking().Where(x => x.MaDot == id).ToListAsync(),
-            KhongHoanTat = await db.KhongHoanTatDots.AsNoTracking().Where(x => x.MaDot == id && x.HieuLuc).ToListAsync()
+            KhongHoanTat = await db.KhongHoanTatDots.AsNoTracking().Where(x => x.MaDot == id && x.HieuLuc).ToListAsync(),
+            UngTuyen = await db.DangKyThucTaps.AsNoTracking().Where(x => x.MaDot == id).ToListAsync(),
+            HoTro = await db.LanHoTroThucTaps.AsNoTracking().Where(x => x.MaDot == id && x.TrangThai != "DaXoa").ToListAsync(),
+            TaiLieu = await db.StoredDocuments.AsNoTracking().Where(x => x.RoundId == id && x.State == "Ready")
+                .Select(x => new { x.Id, x.Kind, x.ResourceId, x.FileName, x.Size, x.CreatedAt }).ToListAsync()
         };
         state.TrangThai = "DaChot"; state.HanMoLai = null;
         Stamp(state, actor, reason, "Chot", snapshot);

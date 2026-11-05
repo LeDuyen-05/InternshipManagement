@@ -898,7 +898,7 @@ public partial class DoanhNghiepService
 
         dk.TrangThai = trangThai;
 
-        if (trangThai == "TuChoi") dk.MaPVKetThuc = null;
+        if (trangThai == "TuChoi") { dk.MaPVKetThuc = null; dk.KetQuaHoSo = "KhongDat"; }
 
         if (trangThai == "TuChoi") dk.LyDoKetThuc = "Doanh nghiệp từ chối hồ sơ trước phỏng vấn; không phải kết quả PV không đạt.";
 
@@ -1662,7 +1662,7 @@ public partial class DoanhNghiepService
 
                 .OrderBy(c => c.TieuChi!.ThuTu)
 
-                .Select(c => new { c.MaTieuChi, c.DiemCham })
+                .Select(c => new { c.MaTieuChi, MaCLO = c.TieuChi!.MaCLO ?? c.MaTieuChi, c.TieuChi.DiemToiDa, c.DiemCham })
 
                 .ToList() ?? new();
 
@@ -1682,7 +1682,9 @@ public partial class DoanhNghiepService
 
                 pb.MaDot,
 
-                TenDot = pb.DotThucTap?.TenDot,
+                TenDot = pb.DotThucTap?.TenDot,
+                MaLoaiThucTap = pb.DotThucTap?.MaLoaiThucTap,
+                MaRubric = pb.DotThucTap?.MaRubric,
 
                 pb.NgayPhanBo,
 

@@ -8,6 +8,7 @@ namespace InternshipManagement.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class DangKyThucTapController : ControllerBase
 {
     private readonly IDangKyThucTapService _service;
@@ -20,11 +21,13 @@ public class DangKyThucTapController : ControllerBase
     }
 
     [HttpGet("sinhvien/{maSV}")]
-    public async Task<IActionResult> GetBySinhVien(string maSV)
+    public async Task<IActionResult> GetBySinhVien(string maSV, [FromQuery] string? maDot)
     {
-        if (!await _access.CanAccessStudentAsync(User, maSV)) return Forbid();
+        if (User.IsInRole(Roles.GiangVien) && string.IsNullOrWhiteSpace(maDot))
+            return BadRequest(new { message = "Vui lòng chọn đợt để xem đăng ký của sinh viên." });
+        if (!await _access.CanAccessStudentAsync(User, maSV, maDot)) return Forbid();
         var list = await _service.GetDanhSachDangKyBySinhVienAsync(maSV);
-        return Ok(list);
+        return Ok(string.IsNullOrWhiteSpace(maDot) ? list : list.Where(x => x.MaDot == maDot));
     }
 
     /// <summary>Sinh viên đang đăng nhập có được đăng ký nguyện vọng trong đợt không (kèm lý do nếu không).</summary>
@@ -45,6 +48,12 @@ public class DangKyThucTapController : ControllerBase
         var result = await _service.DangKyNguyenVongAsync(request);
         return Ok(new { success = true, data = result, message = "Đăng ký nguyện vọng thực tập thành công!" });
     }
+
+    [HttpGet("lan-dang-ky")]
+    [Authorize(Roles = Roles.SinhVien)]
+    public async Task<IActionResult> RegistrationContext([FromQuery] string maDot,
+        [FromServices] InternshipManagement.BLL.Services.SinhVienTheoDot.UngTuyenHoTroService tracking)
+        => Ok(await tracking.RegistrationContextAsync(maDot, User.MaSV() ?? throw new UnauthorizedAccessException()));
 
     [HttpDelete("{maDK}")]
     [Authorize(Roles = $"{Roles.SinhVien},{Roles.Khoa}")]

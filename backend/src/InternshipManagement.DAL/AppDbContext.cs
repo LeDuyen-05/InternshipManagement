@@ -12,6 +12,7 @@ public partial class AppDbContext : DbContext
     public DbSet<SinhVien> SinhViens => Set<SinhVien>();
     public DbSet<SinhVienThamGiaDot> SinhVienThamGiaDots => Set<SinhVienThamGiaDot>();
     public DbSet<LanHoTroThucTap> LanHoTroThucTaps => Set<LanHoTroThucTap>();
+    public DbSet<NhapDanhSachDot> NhapDanhSachDots => Set<NhapDanhSachDot>();
     public DbSet<CongBoDanhSachThucTap> CongBoDanhSachThucTaps => Set<CongBoDanhSachThucTap>();
     public DbSet<PhanHoiDanhSachThucTap> PhanHoiDanhSachThucTaps => Set<PhanHoiDanhSachThucTap>();
     public DbSet<XuLyPhanHoiDanhSach> XuLyPhanHoiDanhSachs => Set<XuLyPhanHoiDanhSach>();
@@ -22,6 +23,8 @@ public partial class AppDbContext : DbContext
     public DbSet<DaiDienDoanhNghiep> DaiDienDoanhNghieps => Set<DaiDienDoanhNghiep>();
     public DbSet<HoSoNangLuc> HoSoNangLucs => Set<HoSoNangLuc>();
     public DbSet<DotThucTap> DotThucTaps => Set<DotThucTap>();
+    public DbSet<LoaiThucTap> LoaiThucTaps => Set<LoaiThucTap>();
+    public DbSet<BoTieuChi> BoTieuChis => Set<BoTieuChi>();
     public DbSet<ChotDotThucTap> ChotDotThucTaps => Set<ChotDotThucTap>();
     public DbSet<KhongHoanTatDot> KhongHoanTatDots => Set<KhongHoanTatDot>();
     public DbSet<NhatKyChotDot> NhatKyChotDots => Set<NhatKyChotDot>();
@@ -106,6 +109,9 @@ public partial class AppDbContext : DbContext
         });
         modelBuilder.Entity<KhongHoanTatDot>(e =>
         {
+            e.Property(x => x.MaLyDo).HasMaxLength(30);
+            e.Property(x => x.MaLanHoTro).HasMaxLength(32);
+            e.HasOne<LanHoTroThucTap>().WithMany().HasForeignKey(x => x.MaLanHoTro).OnDelete(DeleteBehavior.Restrict);
             e.ToTable("KHONGHOANTATDOT"); e.HasKey(x => new { x.MaDot, x.MaSV });
             e.Property(x => x.MaDot).HasMaxLength(20); e.Property(x => x.MaSV).HasMaxLength(20);
             e.Property(x => x.LyDo).HasMaxLength(1000); e.Property(x => x.CanCu).HasMaxLength(1000);
@@ -180,6 +186,10 @@ public partial class AppDbContext : DbContext
             e.Property(x => x.NamHoc).HasColumnName("namHoc").HasMaxLength(20);
             e.Property(x => x.TrangThai).HasColumnName("trangThai").HasMaxLength(50);
             e.Property(x => x.MaRubric).HasColumnName("maRubric").HasMaxLength(40);
+            e.Property(x => x.MaRubric).IsConcurrencyToken();
+            e.Property(x => x.MaLoaiThucTap).HasMaxLength(20).IsConcurrencyToken();
+            e.HasOne<LoaiThucTap>().WithMany().HasForeignKey(x => x.MaLoaiThucTap).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<BoTieuChi>().WithMany().HasForeignKey(x => x.MaRubric).OnDelete(DeleteBehavior.Restrict);
             e.Property(x => x.HanDieuChinhNoiThucTap).IsConcurrencyToken();
             e.Property(x => x.PhienBanThoiHan).IsConcurrencyToken();
             e.Property(x => x.PhienBanXacNhan).IsConcurrencyToken();

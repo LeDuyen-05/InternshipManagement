@@ -13,6 +13,8 @@
 [Oo]bj/
 backend/**/bin/
 backend/**/obj/
+appsettings.*.private.json
+backend/src/InternshipManagement.API/App_Data/uploads/
 *.log
 *-build-diagnostic.txt
 *.diagnostic.txt
@@ -58,3 +60,5 @@ scratch/
 
 Thumbs.db
 Desktop.ini
+backend/src/InternshipManagement.API/wwwroot/
+backend/tools/

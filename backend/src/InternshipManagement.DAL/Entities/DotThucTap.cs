@@ -9,6 +9,7 @@ public class DotThucTap
     public DateTime ThoiGianKT { get; set; }
     public string TrangThai { get; set; } = "ChuaBatDau";
     public string MaRubric { get; set; } = "CNTT_CLO_V1";
+    public string? MaLoaiThucTap { get; set; }
     public DateTimeOffset? HanDieuChinhNoiThucTap { get; set; }
     public DateTimeOffset? MoChamGV { get; set; }
     public DateTimeOffset? HanChamGV { get; set; }

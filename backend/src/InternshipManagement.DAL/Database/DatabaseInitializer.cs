@@ -52,6 +52,13 @@ public static class DatabaseInitializer
         }
 
         target.InitialCatalog = dbName;
+        // The first probe may cache a login failure while the database did not exist.
+        // Clear only this target pool after creation so the next connection actually retries.
+        if (!dbReady)
+        {
+            using var targetPool = new SqlConnection(target.ConnectionString);
+            SqlConnection.ClearPool(targetPool);
+        }
         await using var conn = new SqlConnection(target.ConnectionString);
         await conn.OpenAsync(ct);
 
@@ -61,7 +68,7 @@ public static class DatabaseInitializer
             if (Convert.ToInt32(await check.ExecuteScalarAsync(ct)) > 0)
             {
                 logger.LogInformation("Database {Db} đã có bảng — tự động cập nhật các cột và bảng tương thích nếu còn thiếu.", dbName);
-                foreach (var migration in Migrations.Concat(AccountSecurityMigration.Statements).Concat(GVHuongDanRoundMigration.Statements).Concat(ThucTapTuTimMigration.Statements).Concat(KhoaChotPhanBoMigration.Statements).Concat(SinhVienThamGiaDotMigration.Statements).Concat(DieuChinhNoiThucTapMigration.Statements).Concat(InterviewOutcomeMigration.Statements).Concat(InterviewCorrectionMigration.Statements).Concat(ThoiHanMigration.Statements).Concat(ConfirmationDeadlineMigration.Statements).Concat(PlacementPeriodMigration.Statements).Concat(CompanyRoundMigration.Statements).Concat(CompanyPositionMigration.Statements).Concat(ChotDotMigration.Statements).Concat(DocumentStorageMigration.Statements).Concat(LanHoTroMigration.Statements).Concat(CongBoDanhSachMigration.Statements).Concat(XuLyDanhSachMigration.Statements))
+                foreach (var migration in Migrations.Concat(AccountSecurityMigration.Statements).Concat(GVHuongDanRoundMigration.Statements).Concat(ThucTapTuTimMigration.Statements).Concat(KhoaChotPhanBoMigration.Statements).Concat(SinhVienThamGiaDotMigration.Statements).Concat(DieuChinhNoiThucTapMigration.Statements).Concat(InterviewOutcomeMigration.Statements).Concat(InterviewCorrectionMigration.Statements).Concat(ThoiHanMigration.Statements).Concat(ConfirmationDeadlineMigration.Statements).Concat(PlacementPeriodMigration.Statements).Concat(CompanyRoundMigration.Statements).Concat(CompanyPositionMigration.Statements).Concat(ChotDotMigration.Statements).Concat(DocumentStorageMigration.Statements).Concat(LanHoTroMigration.Statements).Concat(CongBoDanhSachMigration.Statements).Concat(XuLyDanhSachMigration.Statements).Concat(InternshipCatalogMigration.Statements).Concat(WorkflowExtensionsMigration.Statements))
                 {
                     await using var migCmd = conn.CreateCommand();
                     migCmd.CommandText = migration;
@@ -101,7 +108,7 @@ public static class DatabaseInitializer
                 await cmd.ExecuteNonQueryAsync(ct);
             }
             await tx.CommitAsync(ct);
-            foreach (var migration in AccountSecurityMigration.Statements.Concat(GVHuongDanRoundMigration.Statements).Concat(ThucTapTuTimMigration.Statements).Concat(KhoaChotPhanBoMigration.Statements).Concat(SinhVienThamGiaDotMigration.Statements).Concat(DieuChinhNoiThucTapMigration.Statements).Concat(InterviewOutcomeMigration.Statements).Concat(InterviewCorrectionMigration.Statements).Concat(ThoiHanMigration.Statements).Concat(ConfirmationDeadlineMigration.Statements).Concat(PlacementPeriodMigration.Statements).Concat(CompanyRoundMigration.Statements).Concat(CompanyPositionMigration.Statements).Concat(ChotDotMigration.Statements).Concat(DocumentStorageMigration.Statements).Concat(LanHoTroMigration.Statements).Concat(CongBoDanhSachMigration.Statements).Concat(XuLyDanhSachMigration.Statements))
+            foreach (var migration in AccountSecurityMigration.Statements.Concat(GVHuongDanRoundMigration.Statements).Concat(ThucTapTuTimMigration.Statements).Concat(KhoaChotPhanBoMigration.Statements).Concat(SinhVienThamGiaDotMigration.Statements).Concat(DieuChinhNoiThucTapMigration.Statements).Concat(InterviewOutcomeMigration.Statements).Concat(InterviewCorrectionMigration.Statements).Concat(ThoiHanMigration.Statements).Concat(ConfirmationDeadlineMigration.Statements).Concat(PlacementPeriodMigration.Statements).Concat(CompanyRoundMigration.Statements).Concat(CompanyPositionMigration.Statements).Concat(ChotDotMigration.Statements).Concat(DocumentStorageMigration.Statements).Concat(LanHoTroMigration.Statements).Concat(CongBoDanhSachMigration.Statements).Concat(XuLyDanhSachMigration.Statements).Concat(InternshipCatalogMigration.Statements).Concat(WorkflowExtensionsMigration.Statements))
             {
                 await using var migCmd = conn.CreateCommand();
                 migCmd.CommandText = migration;
@@ -121,6 +128,9 @@ public static class DatabaseInitializer
     // Mỗi phần tử là một batch riêng: SQL Server không cho tham chiếu cột vừa ALTER ADD trong cùng batch.
     private static readonly string[] Migrations =
     {
+        "IF COL_LENGTH('DOTTHUCTAP','maRubric') IS NULL ALTER TABLE DOTTHUCTAP ADD maRubric NVARCHAR(40) NULL;",
+        "IF COL_LENGTH('TIEUCHI','maRubric') IS NULL ALTER TABLE TIEUCHI ADD maRubric NVARCHAR(40) NULL;",
+        "IF COL_LENGTH('TIEUCHI','maCLO') IS NULL ALTER TABLE TIEUCHI ADD maCLO NVARCHAR(20) NULL;",
         @"
 IF COL_LENGTH('GIANGVIEN','chiTieuHD') IS NULL
     ALTER TABLE GIANGVIEN ADD chiTieuHD INT NOT NULL CONSTRAINT DF_GIANGVIEN_chiTieuHD DEFAULT 10;
@@ -157,9 +167,9 @@ IF EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
            WHERE TABLE_NAME = 'PHONGVAN' AND COLUMN_NAME = 'ngayPV' AND DATA_TYPE = 'date')
     ALTER TABLE PHONGVAN ALTER COLUMN ngayPV DATETIME2(0) NOT NULL;
 ",
-        // Bộ tiêu chí 11 CLO duy nhất theo file chấm điểm của Khoa CNTT. Xóa mọi tiêu chí không liên quan.
+        // Seed the original rubric only when missing; other rubrics are preserved.
         @"
-DELETE FROM TIEUCHI WHERE maTieuChi NOT IN (N'CLO1.1', N'CLO1.2', N'CLO1.3', N'CLO2.1', N'CLO2.2', N'CLO3.1', N'CLO3.2', N'CLO3.3', N'CLO3.4', N'CLO4.1', N'CLO4.2');
+-- Preserve every rubric and all historical score references.
 
 IF NOT EXISTS (SELECT 1 FROM TIEUCHI WHERE maTieuChi = N'CLO1.1')
 BEGIN

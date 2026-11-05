@@ -23,7 +23,8 @@ public class ThongKeService : IThongKeService
         var sinhViens = await _repository.GetSinhViensAsync(resolvedMaDot);
         var gvHuongDans = (await _repository.GetGVHuongDansAsync()).Where(g => g.MaDot == resolvedMaDot).ToList();
         var giangViens = await _repository.GetGiangViensKemTaiAsync();
-        var tienDos = await _repository.GetTienDoThucTapsAsync(resolvedMaDot);
+        var allReports = await _repository.GetTienDoThucTapsAsync(resolvedMaDot);
+        var tienDos = allReports.Where(t => t.MaPhanBoLuuTru == null).ToList();
         var phieuDiems = await _repository.GetPhieuChamDiemsAsync(resolvedMaDot);
         var rubric = await _repository.GetTieuChisAsync(resolvedMaDot);
         var finalization = await _repository.GetChotDotAsync(resolvedMaDot);
@@ -85,6 +86,7 @@ public class ThongKeService : IThongKeService
             ChuaPhanCongGVHD = chuaPhanCongCount,
             TiLePhanCong = tiLePhanCong,
             TongBaoCaoTienDo = tongBaoCao,
+            BaoCaoLuuTru = allReports.Count(t => t.MaPhanBoLuuTru != null),
             TienDoDaDuyet = daDuyet,
             TienDoChoDuyet = choDuyet,
             TienDoChuaNop = chuaNop,
@@ -123,14 +125,14 @@ public class ThongKeService : IThongKeService
         var tongDiemToiDa = rubric.Sum(c => c.DiemToiDa);
         response.DiemTheoCLO = rubric.OrderBy(c => c.MaCLO).ThenBy(c => c.ThuTu).Select(c => new DiemChiTietCLODto {
             MaTieuChi = c.MaTieuChi, MaCLO = c.MaCLO, TenCLO = c.TenTieuChi, DiemToiDa = (double)c.DiemToiDa,
-            DiemTrungBinh = Math.Round(allChiTiets.Where(x => x.MaTieuChi == c.MaTieuChi).Select(x => (double?)x.DiemCham).Average() ?? 0, 2),
+            DiemTrungBinh = Math.Round(allChiTiets.Where(x => x.MaTieuChi == c.MaTieuChi || x.MaTieuChi == c.MaCLO || (!string.IsNullOrEmpty(c.MaCLO) && x.MaTieuChi.EndsWith("_" + c.MaCLO))).Select(x => (double?)x.DiemCham).Average() ?? 0, 2),
             TrongSo = tongDiemToiDa > 0 ? (double)(c.DiemToiDa / tongDiemToiDa) : 0
         }).ToList();
 
         // 6. Tải Giảng viên hướng dẫn
         response.TaiGiangVien = giangViens.Select(gv =>
         {
-            var curCount = gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan" && (h.MaDot == resolvedMaDot || h.MaDot == null));
+            var curCount = gv.GVHuongDans.Count(h => (h.TrangThai == "DangHuongDan" || h.TrangThai == "HoanThanh") && h.MaDot == resolvedMaDot);
             var maxCount = Math.Max(0, gv.ChiTieuHD);
             var rate = maxCount > 0 ? Math.Round((double)curCount / maxCount * 100, 1) : 0;
             return new ThongKeTaiGVDto
@@ -160,8 +162,10 @@ public class ThongKeService : IThongKeService
             // Điểm thô của từng nhóm CLO (CLO1: /2.0, CLO2: /1.0, CLO3: /2.0, CLO4: /5.0)
             double? TongNhom(string nhom)
             {
-                var ids = rubric.Where(c => NhomCLO(c.MaCLO ?? c.MaTieuChi) == nhom).Select(c => c.MaTieuChi).ToHashSet();
-                var cts = phieu?.ChiTietChamDiems.Where(c => ids.Contains(c.MaTieuChi)).ToList();
+                var targetCriteria = rubric.Where(c => NhomCLO(c.MaCLO ?? c.MaTieuChi) == nhom).ToList();
+                var ids = targetCriteria.Select(c => c.MaTieuChi).ToHashSet();
+                var clos = targetCriteria.Select(c => c.MaCLO).Where(c => !string.IsNullOrEmpty(c)).ToHashSet();
+                var cts = phieu?.ChiTietChamDiems.Where(c => ids.Contains(c.MaTieuChi) || clos.Contains(c.MaTieuChi) || clos.Any(clo => c.MaTieuChi.EndsWith("_" + clo))).ToList();
                 return cts == null || cts.Count == 0 ? null : Math.Round((double)cts.Sum(c => c.DiemCham), 2);
             }
             double? c1 = TongNhom("CLO1"), c2 = TongNhom("CLO2"), c3 = TongNhom("CLO3"), c4 = TongNhom("CLO4");
@@ -183,7 +187,15 @@ public class ThongKeService : IThongKeService
                 XepLoai = xepLoai,
                 KetQua = ketQua,
                 NgayCham = phieu?.NgayCham,
-                DiemTheoTieuChi = phieu?.ChiTietChamDiems.Where(c => rubric.Any(t => t.MaTieuChi == c.MaTieuChi)).OrderBy(c => c.TieuChi.MaCLO).Select(c => new DiemTieuChiSinhVienDto { MaTieuChi = c.MaTieuChi, MaCLO = c.TieuChi.MaCLO, DiemCham = (double)c.DiemCham, DiemToiDa = (double)c.TieuChi.DiemToiDa }).ToList() ?? new(),
+                DiemTheoTieuChi = phieu?.ChiTietChamDiems.Where(c => rubric.Any(t => t.MaTieuChi == c.MaTieuChi || t.MaCLO == c.MaTieuChi || (!string.IsNullOrEmpty(t.MaCLO) && c.MaTieuChi.EndsWith("_" + t.MaCLO)))).OrderBy(c => c.TieuChi?.MaCLO ?? c.MaTieuChi).Select(c => {
+                    var matched = rubric.FirstOrDefault(t => t.MaTieuChi == c.MaTieuChi || t.MaCLO == c.MaTieuChi || (!string.IsNullOrEmpty(t.MaCLO) && c.MaTieuChi.EndsWith("_" + t.MaCLO)));
+                    return new DiemTieuChiSinhVienDto {
+                        MaTieuChi = c.MaTieuChi,
+                        MaCLO = c.TieuChi?.MaCLO ?? matched?.MaCLO ?? c.MaTieuChi,
+                        DiemCham = (double)c.DiemCham,
+                        DiemToiDa = (double)(c.TieuChi?.DiemToiDa ?? matched?.DiemToiDa ?? 0)
+                    };
+                }).ToList() ?? new(),
             };
         }).OrderBy(s => s.MaSV).ToList();
 
@@ -270,7 +282,8 @@ public class ThongKeService : IThongKeService
                 "ChuaBatDau" => "Chưa bắt đầu",
                 _ => d.TrangThai
             },
-            MaRubric = d.MaRubric
+            MaRubric = d.MaRubric,
+            MaLoaiThucTap = d.MaLoaiThucTap
         }).ToList();
     }
 }

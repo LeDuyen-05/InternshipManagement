@@ -11,6 +11,8 @@ public interface IPhieuChamDiemRepository : IRepository<PhieuChamDiem>
     /// <summary>Chỉ trả về tiêu chí đang sử dụng (có nhóm đánh giá GV/DN), sắp theo thứ tự.</summary>
     Task<IReadOnlyList<TieuChi>> GetDanhSachTieuChiAsync();
     Task<DotThucTap?> GetDotThucTapAsync(string maDot);
+    Task<bool> IsRoundReopenedAsync(string maDot, DateTimeOffset now);
+    Task<string?> GetTenLoaiThucTapAsync(string maLoai);
     Task<PhieuChamDiem?> GetPhieuChamBySinhVienAndDotAsync(string maSV, string maDot);
     Task<IReadOnlyList<PhieuChamDiem>> GetDanhSachPhieuChamByGiangVienAsync(string maGV, string maDot);
 

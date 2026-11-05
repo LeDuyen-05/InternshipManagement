@@ -22,6 +22,10 @@ public class GVHuongDanService : IGVHuongDanService
             MaSo = g.MaSo,
             MaSV = g.MaSinhVien,
             MaDot = g.MaDot,
+            TenDot = g.DotThucTap?.TenDot,
+            MaLoaiThucTap = g.DotThucTap?.MaLoaiThucTap,
+            TenLoaiThucTap = g.DotThucTap?.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
+            MaRubric = g.DotThucTap?.MaRubric,
             HoTen = g.SinhVien.HoTen,
             Lop = g.SinhVien.Lop,
             ChuyenNganh = g.SinhVien.ChuyenNganh,
@@ -41,6 +45,10 @@ public class GVHuongDanService : IGVHuongDanService
             MaSo = g.MaSo,
             MaSV = g.MaSinhVien,
             MaDot = g.MaDot,
+            TenDot = g.DotThucTap?.TenDot,
+            MaLoaiThucTap = g.DotThucTap?.MaLoaiThucTap,
+            TenLoaiThucTap = g.DotThucTap?.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
+            MaRubric = g.DotThucTap?.MaRubric,
             HoTenSV = g.SinhVien?.HoTen ?? string.Empty,
             Lop = g.SinhVien?.Lop,
             ChuyenNganh = g.SinhVien?.ChuyenNganh,
@@ -296,7 +304,7 @@ public class GVHuongDanService : IGVHuongDanService
 
         var conLai = dsGiangVien.ToDictionary(
             gv => gv.MaGV,
-            gv => gv.ChiTieuHD - gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan" && (h.MaDot == maDot || h.MaDot == null)));
+            gv => gv.ChiTieuHD - gv.GVHuongDans.Count(h => h.TrangThai == "DangHuongDan" && h.MaDot == maDot));
         var gvTheoMa = dsGiangVien.ToDictionary(gv => gv.MaGV);
         var linhVucGV = dsGiangVien.ToDictionary(gv => gv.MaGV, gv => LinhVuc(gv.ChuyenMon));
 

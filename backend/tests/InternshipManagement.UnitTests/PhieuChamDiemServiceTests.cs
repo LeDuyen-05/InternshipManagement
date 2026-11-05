@@ -15,16 +15,16 @@ public class PhieuChamDiemServiceTests
     public PhieuChamDiemServiceTests()
     {
         _service = new PhieuChamDiemService(_repoMock.Object);
-        _repoMock.Setup(r => r.GetDanhSachTieuChiAsync()).ReturnsAsync(new List<TieuChi>
+        _repoMock.Setup(r => r.GetDanhSachTieuChiAsync("DOT01")).ReturnsAsync(new List<TieuChi>
         {
-            new() { MaTieuChi = "TC01", TenTieuChi = "Kỷ luật", DiemToiDa = 3 },
-            new() { MaTieuChi = "TC02", TenTieuChi = "Chuyên môn", DiemToiDa = 4 }
+            new() { MaTieuChi = "TC01", TenTieuChi = "Kỷ luật", DiemToiDa = 3, NhomDanhGia = "GV" },
+            new() { MaTieuChi = "TC02", TenTieuChi = "Chuyên môn", DiemToiDa = 4, NhomDanhGia = "GV" }
         });
         _repoMock.Setup(r => r.GetDotThucTapAsync("DOT01")).ReturnsAsync(new DotThucTap
         {
             MaSo = "DOT01",
             TenDot = "Đợt 1",
-            TrangThai = "DangDienRa"
+            TrangThai = "DangDienRa", MoChamGV = DateTimeOffset.UtcNow.AddDays(-1), HanChamGV = DateTimeOffset.UtcNow.AddDays(1)
         });
     }
 
@@ -32,7 +32,7 @@ public class PhieuChamDiemServiceTests
     public async Task LuuPhieuChamDiemAsync_WhenScoreExceedsMax_ThrowsArgumentException()
     {
         var assignment = new GVHuongDan { MaSo = "HD01", MaGiangVien = "GV001", MaSinhVien = "SV001", TrangThai = "DangHuongDan" };
-        _repoMock.Setup(r => r.GetActiveAssignmentAsync("SV001")).ReturnsAsync(assignment);
+        _repoMock.Setup(r => r.GetActiveAssignmentAsync("SV001", "DOT01")).ReturnsAsync(assignment);
 
         var req = new LuuPhieuChamRequest(
             "SV001",
@@ -52,7 +52,7 @@ public class PhieuChamDiemServiceTests
     public async Task LuuPhieuChamDiemAsync_WhenLecturerNotAssigned_ThrowsUnauthorizedAccessException()
     {
         var assignment = new GVHuongDan { MaSo = "HD01", MaGiangVien = "GV001", MaSinhVien = "SV001", TrangThai = "DangHuongDan" };
-        _repoMock.Setup(r => r.GetActiveAssignmentAsync("SV001")).ReturnsAsync(assignment);
+        _repoMock.Setup(r => r.GetActiveAssignmentAsync("SV001", "DOT01")).ReturnsAsync(assignment);
 
         var req = new LuuPhieuChamRequest(
             "SV001",
@@ -70,7 +70,7 @@ public class PhieuChamDiemServiceTests
     public async Task LuuPhieuChamDiemAsync_CalculatesTotalAndUsesAssignmentId()
     {
         var assignment = new GVHuongDan { MaSo = "HD999", MaGiangVien = "GV001", MaSinhVien = "SV001", TrangThai = "DangHuongDan" };
-        _repoMock.Setup(r => r.GetActiveAssignmentAsync("SV001")).ReturnsAsync(assignment);
+        _repoMock.Setup(r => r.GetActiveAssignmentAsync("SV001", "DOT01")).ReturnsAsync(assignment);
 
         PhieuChamDiem? capturedPhieu = null;
         _repoMock.Setup(r => r.LuuPhieuChamDiemAsync(It.IsAny<PhieuChamDiem>(), It.IsAny<IEnumerable<ChiTietChamDiem>>()))
@@ -101,6 +101,6 @@ public class PhieuChamDiemServiceTests
         Assert.NotNull(capturedPhieu);
         Assert.Equal("HD999", capturedPhieu.MaGVHuongDan); // Lưu mã phân công, không lưu fake mã GV
         Assert.Equal(5.0m, capturedPhieu.TongDiem); // Bỏ qua 9.9 từ client, tự tính 5.0
-        Assert.Equal(5.0m, result.TongDiem);
+        Assert.Null(result.TongDiem); // Chưa có phần DN nên chưa công bố tổng điểm hoàn tất.
     }
 }

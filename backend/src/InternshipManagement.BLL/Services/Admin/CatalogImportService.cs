@@ -1,3 +1,4 @@
+using InternshipManagement.BLL.Services.Auth;
 using System.Data;
 using System.Globalization;
 using InternshipManagement.BLL.Validators.SinhVien;
@@ -11,7 +12,7 @@ namespace InternshipManagement.BLL.Services.Admin;
 public sealed record CatalogImportError(int Dong, string Loi);
 public sealed record CatalogImportResult(int SoLuongNhap, IReadOnlyList<CatalogImportError> Loi);
 
-public sealed class CatalogImportService(AppDbContext db, SinhVienValidator studentValidator)
+public sealed class CatalogImportService(AppDbContext db, SinhVienValidator studentValidator, IPasswordService passwords)
 {
     private const int MaxRows = 1000;
     public static readonly IReadOnlyDictionary<string, string> Templates = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -75,7 +76,51 @@ public sealed class CatalogImportService(AppDbContext db, SinhVienValidator stud
         }
         if (errors.Count > 0) return new CatalogImportResult(0, errors);
 
-        if (kind.Equals("sv", StringComparison.OrdinalIgnoreCase)) db.SinhViens.AddRange(parsed.Cast<StudentEntity>());
+        if (kind.Equals("sv", StringComparison.OrdinalIgnoreCase))
+        {
+            var students = parsed.Cast<StudentEntity>().ToList();
+            db.SinhViens.AddRange(students);
+            var defaultPasswordHash = passwords.Hash("123456");
+            var existingAccountKeys = (await db.TaiKhoans.Where(x => x.MaSV != null).Select(x => x.MaSV!).ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingUsernames = (await db.TaiKhoans.Select(x => x.TenDangNhap).ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingAccountIds = (await db.TaiKhoans.Select(x => x.MaTaiKhoan).ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var s in students)
+            {
+                if (existingAccountKeys.Contains(s.MaSV)) continue;
+                var username = s.MaSV.Trim().ToLowerInvariant();
+                var accountId = "TK_" + s.MaSV.Trim();
+                if (accountId.Length > 20) accountId = accountId[..20];
+                var suffix = 1;
+                while (existingAccountIds.Contains(accountId))
+                {
+                    accountId = $"TK_{s.MaSV.Trim()}_{suffix++}";
+                    if (accountId.Length > 20) accountId = accountId[..20];
+                }
+                while (existingUsernames.Contains(username))
+                {
+                    username = $"{s.MaSV.Trim().ToLowerInvariant()}_{suffix++}";
+                }
+
+                existingAccountKeys.Add(s.MaSV);
+                existingAccountIds.Add(accountId);
+                existingUsernames.Add(username);
+
+                db.TaiKhoans.Add(new TaiKhoan
+                {
+                    MaTaiKhoan = accountId,
+                    TenDangNhap = username,
+                    MatKhau = defaultPasswordHash,
+                    TrangThai = "HoatDong",
+                    MaVaiTro = "VT04",
+                    MaSV = s.MaSV,
+                    Email = $"{username}@huit.edu.vn"
+                });
+            }
+        }
         else if (kind.Equals("gv", StringComparison.OrdinalIgnoreCase)) db.GiangViens.AddRange(parsed.Cast<GiangVien>());
         else db.CongTys.AddRange(parsed.Cast<CongTy>());
         await db.SaveChangesAsync();
@@ -143,7 +188,7 @@ public sealed class CatalogImportService(AppDbContext db, SinhVienValidator stud
 
     private static string? Optional(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static List<List<string>> Parse(string csv)
+    internal static List<List<string>> Parse(string csv)
     {
         var rows = new List<List<string>>();
         var row = new List<string>(); var cell = new System.Text.StringBuilder(); var quoted = false;

@@ -20,7 +20,7 @@ public class SinhVienController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Roles = $"{Roles.Khoa},{Roles.GiangVien}")]
+    [Authorize(Roles = Roles.Khoa)]
     public async Task<ActionResult<IReadOnlyList<SinhVienDto>>> GetAll()
         => Ok(await _service.GetAllAsync());
 

@@ -8,6 +8,7 @@ namespace InternshipManagement.API.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class TienDoThucTapController : ControllerBase
 {
     private readonly ITienDoThucTapService _tienDoThucTapService;
