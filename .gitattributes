@@ -1,0 +1,2 @@
+# The reviewed inference runtime is verified against its exact LF bytes.
+ml-service/src/inference/inference_v3.py text eol=lf
