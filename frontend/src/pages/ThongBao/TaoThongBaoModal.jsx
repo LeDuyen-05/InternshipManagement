@@ -1,11 +1,13 @@
 import { toast } from "../../contexts/ToastContext.jsx"
 import { useState } from 'react'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 export default function TaoThongBaoModal({ isOpen, onClose, onCreated, selectedDot }) {
+  const tenKhoa = useTenKhoa()
   const [tieuDe, setTieuDe] = useState('')
   const [doiTuong, setDoiTuong] = useState('ALL') // 'ALL' | 'GiangVien' | 'SinhVien'
   const [danhMuc, setDanhMuc] = useState('KHAN_CAP')
-  const [nguoiGui, setNguoiGui] = useState('Văn phòng Khoa CNTT')
+  const [nguoiGui, setNguoiGui] = useState(`Văn phòng ${tenKhoa}`)
   const [noiDung, setNoiDung] = useState('')
   
   // Tài liệu đính kèm qua Google Drive / OneDrive
@@ -63,7 +65,7 @@ export default function TaoThongBaoModal({ isOpen, onClose, onCreated, selectedD
     const newNotification = {
       id: Date.now(),
       title: isKhanCap && !tieuDe.startsWith('[KHẨN]') ? `[KHẨN] ${tieuDe.trim()}` : tieuDe.trim(),
-      sender: nguoiGui.trim() || 'Văn phòng Khoa CNTT',
+      sender: nguoiGui.trim() || `Văn phòng ${tenKhoa}`,
       date: 'Vừa xong • Hôm nay',
       category: danhMuc,
       categoryLabel: matchedCategory.label,
@@ -191,8 +193,8 @@ export default function TaoThongBaoModal({ isOpen, onClose, onCreated, selectedD
                 onChange={(e) => setNguoiGui(e.target.value)}
                 className="w-full border border-slate-300 rounded-xl p-2.5 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
-                <option value="Văn phòng Khoa CNTT">Văn phòng Khoa CNTT</option>
-                <option value="Ban Chủ nhiệm Khoa CNTT">Ban Chủ nhiệm Khoa CNTT</option>
+                <option value={`Văn phòng ${tenKhoa}`}>Văn phòng {tenKhoa}</option>
+                <option value={`Ban Chủ nhiệm ${tenKhoa}`}>Ban Chủ nhiệm {tenKhoa}</option>
                 <option value="Hội đồng chuyên môn Khoa">Hội đồng chuyên môn Khoa</option>
                 <option value="Tổ Giáo vụ & Học vụ Khoa">Tổ Giáo vụ & Học vụ Khoa</option>
                 <option value="Tổ Hợp tác Doanh nghiệp">Tổ Hợp tác Doanh nghiệp</option>

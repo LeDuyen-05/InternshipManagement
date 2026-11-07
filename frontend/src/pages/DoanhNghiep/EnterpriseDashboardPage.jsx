@@ -6,9 +6,9 @@ import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
 
 // Trạng thái hợp tác do Khoa phê duyệt (CONGTY.trangThai)
 const HOP_TAC = {
-  DaDuyet: { label: 'Đối tác đã được Khoa CNTT phê duyệt', icon: 'verified', cls: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30' },
-  ChoDuyet: { label: 'Đang chờ Khoa CNTT thẩm định', icon: 'hourglass_top', cls: 'bg-amber-500/20 text-amber-100 border-amber-400/30' },
-  TuChoi: { label: 'Khoa CNTT chưa chấp thuận hợp tác', icon: 'block', cls: 'bg-rose-500/20 text-rose-100 border-rose-400/30' },
+  DaDuyet: { label: 'Đối tác đã được Nhà trường phê duyệt', icon: 'verified', cls: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30' },
+  ChoDuyet: { label: 'Đang chờ Nhà trường thẩm định', icon: 'hourglass_top', cls: 'bg-amber-500/20 text-amber-100 border-amber-400/30' },
+  TuChoi: { label: 'Nhà trường chưa chấp thuận hợp tác', icon: 'block', cls: 'bg-rose-500/20 text-rose-100 border-rose-400/30' },
   DongBang: { label: 'Tạm ngưng hợp tác', icon: 'pause_circle', cls: 'bg-slate-500/20 text-slate-100 border-slate-400/30' },
 }
 
@@ -350,7 +350,7 @@ export default function EnterpriseDashboardPage() {
                       </div>
                       <div>
                         <div className="font-semibold text-slate-800">{uv.hoTen}</div>
-                        <div className="text-[11px] text-slate-500">{uv.chuyenNganh || 'Công nghệ thông tin'}{uv.viTriDangKy ? ` • ${uv.viTriDangKy}` : ''}</div>
+                        <div className="text-[11px] text-slate-500">{uv.chuyenNganh || '—'}{uv.viTriDangKy ? ` • ${uv.viTriDangKy}` : ''}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -443,7 +443,7 @@ export default function EnterpriseDashboardPage() {
 
           <div className="mt-5 p-3 rounded-xl bg-slate-50 border border-slate-100 text-[11px] text-slate-600 flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px] text-indigo-600 shrink-0">contact_support</span>
-            <span>Cần hỗ trợ về quy trình thực tập? Liên hệ Văn phòng Khoa CNTT.</span>
+            <span>Cần hỗ trợ về quy trình thực tập? Liên hệ Văn phòng Khoa phụ trách đợt thực tập.</span>
           </div>
         </div>
       </div>

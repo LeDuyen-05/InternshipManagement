@@ -10,6 +10,7 @@ import Pagination from '../../components/common/Pagination'
 import { deadlineText } from '../../hooks/useGradeDeadline'
 import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
 import { xuatBangHuitExcel, taiFileExcel } from '../../utils/exportHuitExcel'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 const local = (value) =>
   value ? new Date(Date.parse(value) + 7 * 3600000).toISOString().slice(0, 16) : ''
@@ -65,6 +66,7 @@ const historyText = (value) => {
 }
 
 export default function KhoaDoanhNghiepPage() {
+  const tenKhoa = useTenKhoa()
   const { selectedDot, roundLock } = useDotThucTap()
   const round = selectedDot?.maDot || ''
   const currentRound = useRef(round)
@@ -400,7 +402,7 @@ export default function KhoaDoanhNghiepPage() {
     try {
       const { default: ExcelJS } = await import('exceljs')
       const wb = new ExcelJS.Workbook()
-      wb.creator = 'Khoa CNTT - HUIT'
+      wb.creator = `${tenKhoa} - HUIT`
       wb.created = new Date()
 
       const ws = wb.addWorksheet('Mau_DoanhNghiep', {
@@ -412,7 +414,7 @@ export default function KhoaDoanhNghiepPage() {
       r1.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1E293B' } }
       ws.mergeCells(1, 1, 1, 4)
 
-      const r2 = ws.addRow(['KHOA CÔNG NGHỆ THÔNG TIN'])
+      const r2 = ws.addRow([tenKhoa.toUpperCase()])
       r2.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1D4ED8' } }
       ws.mergeCells(2, 1, 2, 4)
 
@@ -554,7 +556,7 @@ export default function KhoaDoanhNghiepPage() {
         fileName: `DanhSach_DoanhNghiep_${new Date().toISOString().slice(0, 10)}.xlsx`,
         sheetName: 'DanhSach_DN',
         title: 'DANH SÁCH DOANH NGHIỆP ĐỐI TÁC LIÊN KẾT',
-        subTitle: 'Cổng thông tin quản lý thực tập — Khoa Công nghệ Thông tin',
+        subTitle: `Cổng thông tin quản lý thực tập — ${tenKhoa}`,
         columns: [
           { header: 'STT', key: 'stt', width: 8, align: 'center' },
           { header: 'Mã DN', key: 'maCongTy', width: 16, align: 'center' },
@@ -602,7 +604,7 @@ export default function KhoaDoanhNghiepPage() {
         fileName: `KeHoach_DoanhNghiep_${round}_${new Date().toISOString().slice(0, 10)}.xlsx`,
         sheetName: 'KeHoach_Dot',
         title: `KẾ HOẠCH DOANH NGHIỆP TIẾP NHẬN THỰC TẬP — ${selectedDot?.tenDot || round}`,
-        subTitle: `Khoa Công nghệ Thông tin — Năm học ${selectedDot?.namHoc || ''}`,
+        subTitle: `${tenKhoa} — Năm học ${selectedDot?.namHoc || ''}`,
         columns: [
           { header: 'STT', key: 'stt', width: 8, align: 'center' },
           { header: 'Mã DN', key: 'maCongTy', width: 16, align: 'center' },
@@ -1924,7 +1926,7 @@ export default function KhoaDoanhNghiepPage() {
                       {isEditingCompany ? `Chỉnh sửa: ${companyForm.tenCongTy}` : 'Thêm Doanh nghiệp đối tác mới'}
                     </h3>
                     <p className="text-xs text-slate-500 m-0 mt-0.5">
-                      Danh bạ đối tác chính thức của Khoa CNTT
+                      Danh bạ đối tác chính thức của {tenKhoa}
                     </p>
                   </div>
                 </div>

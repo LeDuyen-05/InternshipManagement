@@ -256,7 +256,7 @@ export default function LichTrinhPhongVanPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Giảng viên hướng dẫn Khoa CNTT
+                      Giảng viên hướng dẫn của Khoa
                     </span>
                     <div className="text-sm font-bold text-slate-900 mt-0.5">
                       {placement.giangVienHD || 'Khoa chưa phân công'}

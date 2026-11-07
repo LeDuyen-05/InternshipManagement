@@ -12,8 +12,10 @@ import { PHAN_BO } from '../../utils/trangThai'
 import { studentJourney } from '../../utils/studentJourney'
 import DanhSachDuKienPanel from '../../components/common/DanhSachDuKienPanel'
 import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 export default function DashboardSinhVienPage() {
+  const tenKhoa = useTenKhoa()
   const { user, maSV: currentMaSV } = useIdentity()
   const { selectedDot } = useDotThucTap()
 
@@ -104,7 +106,7 @@ export default function DashboardSinhVienPage() {
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-700 mb-1">
             <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            HỆ THỐNG QUẢN LÝ THỰC TẬP TỐT NGHIỆP • KHOA CNTT
+            HỆ THỐNG QUẢN LÝ THỰC TẬP TỐT NGHIỆP • {tenKhoa.toUpperCase()}
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight m-0">
             Bảng Điều Khiển Sinh Viên
@@ -212,7 +214,7 @@ export default function DashboardSinhVienPage() {
                         {placement.giangVienHD || 'Chưa phân công'}
                       </div>
                       <div className="text-[11px] text-slate-500 truncate">
-                        {placement.chuyenMonGV || 'Khoa CNTT'}
+                        {placement.chuyenMonGV || tenKhoa}
                       </div>
                     </div>
                   </div>

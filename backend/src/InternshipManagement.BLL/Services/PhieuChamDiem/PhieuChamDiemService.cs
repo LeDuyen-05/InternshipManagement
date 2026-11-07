@@ -119,7 +119,7 @@ public class PhieuChamDiemService : IPhieuChamDiemService
         await EnsureDotChoPhepChamAsync(maDot, true);
         var existing = await _repo.GetPhieuChamBySinhVienAndDotAsync(maSV, maDot);
         if (existing?.DaDoiChieuPhieuDN == true && !isStaff && !await _repo.IsRoundReopenedAsync(maDot, _clock.GetUtcNow()))
-            throw new InvalidOperationException("Điểm đánh giá của doanh nghiệp đã được nộp và khóa chính thức. Vui lòng liên hệ Khoa CNTT nếu cần điều chỉnh.");
+            throw new InvalidOperationException("Điểm đánh giá của doanh nghiệp đã được nộp và khóa chính thức. Vui lòng liên hệ Khoa quản lý đợt thực tập nếu cần điều chỉnh.");
 
         var scores = details.Select(x => new ChiTietChamDiem { MaTieuChi = x.TieuChi.MaTieuChi, DiemCham = x.Input.DiemCham }).ToList();
         var saved = await _repo.LuuPhieuChamDiemAsync(new DAL.Entities.PhieuChamDiem

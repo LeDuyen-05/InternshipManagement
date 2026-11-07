@@ -6,8 +6,10 @@ import { gioiThieuService } from '../../services/gioiThieuService'
 import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { extractJdText } from '../../utils/jdTextExtraction'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 export default function GioiThieuCongTyPage() {
+  const tenKhoa = useTenKhoa()
   const { maGV, user } = useIdentity() || {}
   const currentMaGV = maGV || user?.maGV || 'GV001'
   const { selectedDot } = useDotThucTap()
@@ -232,7 +234,7 @@ export default function GioiThieuCongTyPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mb-1">
-            <span>Khoa Công nghệ Thông tin</span>
+            <span>{tenKhoa}</span>
             <span>/</span>
             <span>Giảng viên</span>
             <span>/</span>

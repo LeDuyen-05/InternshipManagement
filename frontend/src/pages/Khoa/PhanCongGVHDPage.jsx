@@ -935,7 +935,7 @@ export default function PhanCongGVHDPage() {
                           <span className="text-xs font-mono text-slate-400">({sv.maSV})</span>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                          <span>{sv.lop || 'CNTT'}</span>
+                          <span>{sv.lop || '—'}</span>
                           <span>•</span>
                           <span>GPA: {sv.gpa || '3.0'}</span>
                         </div>
@@ -1583,7 +1583,7 @@ export default function PhanCongGVHDPage() {
                           <td className="py-3 px-3">
                             <p className="font-bold text-slate-900">{sv.hoTen}</p>
                             <p className="text-[11px] text-slate-400 font-mono">
-                              {sv.maSV} • {sv.lop || 'CNTT'} {sv.gpa ? `• GPA: ${sv.gpa}` : ''}
+                              {sv.maSV} • {sv.lop || '—'} {sv.gpa ? `• GPA: ${sv.gpa}` : ''}
                             </p>
                           </td>
                           <td className="py-3 px-3">

@@ -78,6 +78,7 @@ export default function Header({ currentRole }) {
     const isKhoa = currentRole === 'Khoa' || rawRole === 'VT02' || rawRole === 'VT01'
 
     const code = authUser?.maSV || authUser?.maGV || authUser?.tenDangNhap || '—'
+    const khoa = authUser?.tenKhoa || 'Trường ĐH Công Thương TP.HCM'
     const name = authUser?.hoTen || authUser?.tenDangNhap || 'Người dùng'
 
     if (isSV) {
@@ -85,8 +86,8 @@ export default function Header({ currentRole }) {
         code,
         name,
         role: `Sinh viên • MSSV: ${code}`,
-        department: 'Khoa Công nghệ Thông tin',
-        faculty: 'Khoa Công nghệ Thông tin',
+        department: khoa,
+        faculty: khoa,
         email: authUser?.email || '—',
         phone: authUser?.soDienThoai || '—',
         office: 'Sinh viên thực tập',
@@ -100,12 +101,12 @@ export default function Header({ currentRole }) {
       return {
         code,
         name,
-        role: rawRole === 'VT01' ? 'Quản trị viên hệ thống' : 'Văn phòng Khoa CNTT',
-        department: 'Văn phòng Khoa CNTT',
-        faculty: 'Khoa Công nghệ Thông tin',
+        role: rawRole === 'VT01' ? 'Quản trị viên hệ thống' : `Văn phòng ${khoa}`,
+        department: rawRole === 'VT01' ? 'Quản trị hệ thống toàn trường' : `Văn phòng ${khoa}`,
+        faculty: rawRole === 'VT01' ? 'Trường ĐH Công Thương TP.HCM' : khoa,
         email: authUser?.email || '—',
         phone: authUser?.soDienThoai || '—',
-        office: 'Văn phòng Khoa CNTT',
+        office: rawRole === 'VT01' ? 'Quản trị hệ thống toàn trường' : `Văn phòng ${khoa}`,
         avatar: (name.charAt(0) || 'K').toUpperCase(),
         avatarColor: 'bg-indigo-700 text-white',
         badgeColor: 'bg-indigo-100 text-indigo-700 border-indigo-200',
@@ -118,8 +119,8 @@ export default function Header({ currentRole }) {
       code,
       name: gvDisplayName,
       role: `Giảng viên Hướng dẫn • ${code}`,
-      department: 'Khoa Công nghệ Thông tin',
-      faculty: 'Khoa Công nghệ Thông tin',
+      department: khoa,
+      faculty: khoa,
       email: authUser?.email || '—',
       phone: authUser?.soDienThoai || '—',
       office: 'Văn phòng Bộ môn',
@@ -168,7 +169,7 @@ export default function Header({ currentRole }) {
       {/* Left section: Breadcrumb / Title */}
       <div className="flex items-center text-slate-500 text-sm">
         <span className="material-symbols-outlined text-[18px] text-blue-700 mr-1.5">school</span>
-        <span className="font-semibold text-blue-900">FIT Portal</span>
+        <span className="font-semibold text-blue-900">HUIT Portal</span>
         <span className="mx-2 text-slate-300">/</span>
         <span className="text-slate-800 font-medium">
           {currentRole === 'Khoa'
@@ -432,7 +433,7 @@ export default function Header({ currentRole }) {
               </div>
 
               <div className="px-3 py-1.5 bg-slate-50 border-t border-slate-100 text-center">
-                <span className="text-[10px] text-slate-400">HUIT • FIT Portal v2.4</span>
+                <span className="text-[10px] text-slate-400">HUIT • HUIT Portal v2.4</span>
               </div>
             </div>
           )}

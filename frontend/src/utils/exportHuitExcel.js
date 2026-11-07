@@ -1,5 +1,14 @@
 import { requestReportAuthor, resolveReportAuthor } from './reportAuthor.js'
 
+// Đơn vị ban hành trên file xuất: khoa của người đang đăng nhập (QTV không thuộc khoa nào).
+function donViBanHanh() {
+  try {
+    return JSON.parse(localStorage.getItem('internship_user') || 'null')?.tenKhoa || 'HỆ THỐNG QUẢN LÝ THỰC TẬP'
+  } catch {
+    return 'HỆ THỐNG QUẢN LÝ THỰC TẬP'
+  }
+}
+
 /**
  * Tách họ và tên lót an toàn theo chuẩn Phòng Đào tạo HUIT:
  * - Dùng trim, gộp khoảng trắng thừa
@@ -58,7 +67,7 @@ export function appendHuitSheet(ws, {
   r1.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1E293B' } }
   ws.mergeCells(1, 1, 1, Math.min(4, nCols))
 
-  const r2 = ws.addRow(['KHOA CÔNG NGHỆ THÔNG TIN'])
+  const r2 = ws.addRow([donViBanHanh().toUpperCase()])
   r2.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1D4ED8' } }
   ws.mergeCells(2, 1, 2, Math.min(4, nCols))
 

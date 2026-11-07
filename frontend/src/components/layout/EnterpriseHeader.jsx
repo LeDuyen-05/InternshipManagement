@@ -188,7 +188,7 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
         <div className="flex items-center gap-4">
           <div className="hidden xl:flex items-center text-slate-500 text-sm">
             <span className="material-symbols-outlined text-[18px] text-indigo-700 mr-1.5">corporate_fare</span>
-            <span className="hidden xl:inline font-semibold text-indigo-950">FIT Portal</span>
+            <span className="hidden xl:inline font-semibold text-indigo-950">HUIT Portal</span>
             <span className="hidden sm:inline mx-2 text-slate-300">/</span>
             <span className="hidden sm:inline text-slate-800 font-medium">Cổng Doanh nghiệp</span>
           </div>

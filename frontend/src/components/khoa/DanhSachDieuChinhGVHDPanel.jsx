@@ -383,7 +383,7 @@ export default function DanhSachDieuChinhGVHDPanel({ onSwitchToWorkbench }) {
                         </div>
                       </td>
                       <td className="py-3 px-4 text-slate-600">
-                        {s.chuyenNganh || 'Công nghệ thông tin'}
+                        {s.chuyenNganh || '—'}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-1.5 text-slate-700">

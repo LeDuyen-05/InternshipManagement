@@ -273,7 +273,7 @@ export default function QuanLyUngVienPage() {
 
                       {/* Chuyên ngành đào tạo */}
                       <td className="py-3.5 px-3">
-                        <div className="font-semibold text-slate-800 text-xs">{c.chuyenNganh || 'Công nghệ thông tin'}</div>
+                        <div className="font-semibold text-slate-800 text-xs">{c.chuyenNganh || '—'}</div>
                         {c.khoaHoc && <div className="text-[11px] text-slate-400 mt-0.5">Khóa {c.khoaHoc}</div>}
                       </td>
 
@@ -378,7 +378,7 @@ export default function QuanLyUngVienPage() {
                   <h3 className="font-extrabold text-slate-900 text-base">{selectedCandidate.hoTen}</h3>
                   <div className="text-xs text-indigo-600 font-semibold">{selectedCandidate.viTriDangKy || 'Vị trí thực tập'}</div>
                   <div className="text-[11px] text-slate-500 mt-0.5">
-                    Ngành: {selectedCandidate.chuyenNganh || 'Công nghệ thông tin'}{selectedCandidate.khoaHoc ? ` • Khóa ${selectedCandidate.khoaHoc}` : ''}
+                    Ngành: {selectedCandidate.chuyenNganh || '—'}{selectedCandidate.khoaHoc ? ` • Khóa ${selectedCandidate.khoaHoc}` : ''}
                   </div>
                 </div>
               </div>
@@ -397,8 +397,8 @@ export default function QuanLyUngVienPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 text-center">
                 <div>
                   <div className="text-[10px] text-slate-400 uppercase font-bold">Chuyên ngành đào tạo</div>
-                  <div className="text-xs font-bold text-slate-800 mt-1 truncate" title={selectedCandidate.chuyenNganh || 'Công nghệ thông tin'}>
-                    {selectedCandidate.chuyenNganh || 'Công nghệ thông tin'}
+                  <div className="text-xs font-bold text-slate-800 mt-1 truncate" title={selectedCandidate.chuyenNganh || '—'}>
+                    {selectedCandidate.chuyenNganh || '—'}
                   </div>
                 </div>
                 <div>

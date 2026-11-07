@@ -59,18 +59,20 @@ export function AuthProvider({ children }) {
     })
   }
 
+  // Phiên đăng nhập cũ (trước khi có nhiều khoa) chưa lưu tên khoa: lấy lại từ hồ sơ tài khoản.
   useEffect(() => {
-    if (user && !user.hoTen) {
+    if (user && (!user.hoTen || user.tenKhoa === undefined)) {
       apiClient.get('/auth/profile').then((res) => {
-        if (res.data?.hoTen) {
-          updateUser({ hoTen: res.data.hoTen })
-        }
+        updateUser({ hoTen: res.data?.hoTen || user.hoTen, maKhoa: res.data?.maKhoa ?? null, tenKhoa: res.data?.tenKhoa ?? null })
       }).catch(() => {})
     }
-  }, [user?.token, user?.hoTen])
+  }, [user?.token, user?.hoTen, user?.tenKhoa])
 
   const value = useMemo(() => ({ user, login, logout, updateUser }), [user])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() { return useContext(AuthContext) }
+
+/** Tên khoa của người đang đăng nhập; QTV, doanh nghiệp hoặc khi chưa rõ thì dùng cách gọi chung. */
+export function useTenKhoa(fallback = 'Khoa') { return useContext(AuthContext)?.user?.tenKhoa || fallback }

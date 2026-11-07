@@ -149,7 +149,7 @@ export default function HoSoNangLucPage() {
             Hồ sơ năng lực &amp; Hồ sơ thực tập sinh
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Dữ liệu kết xuất chuẩn hóa Khoa CNTT phục vụ thẩm định và gợi ý doanh nghiệp tiếp nhận
+            Dữ liệu kết xuất chuẩn hóa của Khoa phục vụ thẩm định và gợi ý doanh nghiệp tiếp nhận
           </p>
         </div>
 
@@ -333,7 +333,7 @@ export default function HoSoNangLucPage() {
                     Định hướng &amp; Tóm tắt năng lực
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Chuyên ngành: {profile.chuyenNganh || 'Công nghệ thông tin'}
+                    Chuyên ngành: {profile.chuyenNganh || '—'}
                   </p>
                 </div>
               </div>

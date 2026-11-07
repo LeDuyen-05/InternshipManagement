@@ -37,7 +37,7 @@ export default function AuthPage() {
       <div className="fit-auth-alert-info">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>
-          <strong>Lưu ý hệ thống:</strong> Đăng nhập bằng tài khoản được cấp bởi Khoa Công nghệ Thông tin. Nếu gặp sự cố, vui lòng liên hệ Văn phòng Khoa.
+          <strong>Lưu ý hệ thống:</strong> Đăng nhập bằng tài khoản do Khoa hoặc Nhà trường cấp. Nếu gặp sự cố, vui lòng liên hệ Văn phòng Khoa.
         </span>
       </div>
 
@@ -48,13 +48,13 @@ export default function AuthPage() {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
           </div>
           <div>
-            <div className="fit-auth-brand-name">KHOA CNTT</div>
+            <div className="fit-auth-brand-name">HUIT</div>
             <div className="fit-auth-brand-sub">CỔNG THỰC TẬP TỐT NGHIỆP</div>
           </div>
         </div>
 
         <h1 className="fit-auth-title">Đăng nhập Cổng Thực tập Tốt nghiệp</h1>
-        <p className="fit-auth-desc">Khoa Công nghệ Thông tin • Hệ thống Quản lý Khóa luận &amp; Thực tập</p>
+        <p className="fit-auth-desc">Trường Đại học Công Thương TP.HCM • Hệ thống Quản lý Thực tập</p>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="fit-auth-form">
@@ -113,7 +113,7 @@ export default function AuthPage() {
         <div className="fit-auth-footer">
           <span>Hệ thống Quản lý Thực tập Tốt nghiệp</span>
           <span>•</span>
-          <span>FIT Portal</span>
+          <span>HUIT Portal</span>
         </div>
       </div>
     </div>

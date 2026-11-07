@@ -438,7 +438,7 @@ export default function DanhSachSVHuongDanPage() {
                       {/* Cột Lớp / Ngành */}
                       <td className="py-3.5 px-4">
                         <div className="font-medium text-slate-700">{sv.lop || 'N/A'}</div>
-                        <div className="text-xs text-slate-400">{sv.chuyenNganh || 'Công nghệ thông tin'}</div>
+                        <div className="text-xs text-slate-400">{sv.chuyenNganh || '—'}</div>
                       </td>
 
                       {/* Cột Doanh nghiệp */}

@@ -140,7 +140,7 @@ export default function ThucTapTuTimPanel({
           </h2>
           <p className="text-xs text-slate-500 m-0 leading-relaxed max-w-2xl">
             Dành cho sinh viên đã chủ động liên hệ, phỏng vấn hoặc có thỏa thuận tiếp nhận bên ngoài hệ thống.
-            Khoa CNTT sẽ thẩm định tính hợp lệ của doanh nghiệp để công nhận và phân công GVHD.
+            Khoa sẽ thẩm định tính hợp lệ của doanh nghiệp để công nhận và phân công GVHD.
           </p>
         </div>
 

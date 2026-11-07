@@ -87,7 +87,7 @@ export default function ChamDiemCLOPage() {
           maSV: x.sinhVien?.maSV || x.maSV,
           hoTen: x.sinhVien?.hoTen || x.hoTen,
           lop: x.sinhVien?.lop || x.lop || '—',
-          chuyenNganh: x.sinhVien?.chuyenNganh || x.chuyenNganh || 'Công nghệ thông tin',
+          chuyenNganh: x.sinhVien?.chuyenNganh || x.chuyenNganh || '—',
           tenCongTy: x.congTy?.tenCongTy || x.tenCongTy || 'Chưa phân bổ',
           maLoaiThucTap: x.maLoaiThucTap || x.dotThucTap?.maLoaiThucTap,
           tenDot: x.tenDot || x.dotThucTap?.tenDot,
@@ -305,7 +305,7 @@ export default function ChamDiemCLOPage() {
       <header className="bg-white rounded-2xl border border-slate-200 p-6 flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
         <div>
           <p className="text-xs font-bold uppercase text-blue-600">{formatTenDot(selectedDot)}</p>
-          <h1 className="text-xl font-bold text-slate-900">Đánh giá thực tập theo rubric CNTT</h1>
+          <h1 className="text-xl font-bold text-slate-900">Đánh giá thực tập theo rubric CLO</h1>
           <p className="text-sm text-slate-500">CLO1–CLO3 do GV nhập trực tiếp. Điểm doanh nghiệp do doanh nghiệp cập nhật, GVHD chỉ xem.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -390,7 +390,7 @@ export default function ChamDiemCLOPage() {
             )}
           </div>
           <p className="mt-3 text-xs text-slate-500">
-            Chuyên môn: <b>{currentLecturer?.chuyenMon || 'Công nghệ thông tin'}</b>
+            Chuyên môn: <b>{currentLecturer?.chuyenMon || '—'}</b>
           </p>
         </div>
 

@@ -114,7 +114,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
           </div>
           <div className="flex flex-col">
             <span className="font-bold text-blue-900 text-base leading-tight tracking-tight">
-              FIT Portal
+              HUIT Portal
             </span>
             <span className="text-[11px] text-slate-500 font-medium uppercase tracking-wider">
               {getRoleDisplayName(currentRole)}

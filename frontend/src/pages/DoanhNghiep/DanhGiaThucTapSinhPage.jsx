@@ -32,7 +32,7 @@ function ConfirmLockModal({ intern, totalScore, onConfirm, onCancel, busy }) {
             <h3 className="font-extrabold text-slate-900 text-base">
               Nộp & Khóa điểm chính thức
             </h3>
-            <p className="text-xs text-slate-500">Xác nhận gửi điểm đến Khoa CNTT</p>
+            <p className="text-xs text-slate-500">Xác nhận gửi điểm đến Khoa</p>
           </div>
         </div>
 
@@ -54,7 +54,7 @@ function ConfirmLockModal({ intern, totalScore, onConfirm, onCancel, busy }) {
         <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs leading-relaxed flex items-start gap-2">
           <span className="material-symbols-outlined text-[18px] text-amber-700 shrink-0 mt-0.5">info</span>
           <div>
-            <span className="font-bold">Lưu ý quan trọng:</span> Sau khi nộp và khóa điểm, doanh nghiệp sẽ <strong>không thể tự điều chỉnh lại</strong>. Bảng đánh giá sẽ được ghi nhận chính thức vào hệ thống học vụ của Khoa CNTT và GVHD để tổng kết điểm thực tập.
+            <span className="font-bold">Lưu ý quan trọng:</span> Sau khi nộp và khóa điểm, doanh nghiệp sẽ <strong>không thể tự điều chỉnh lại</strong>. Bảng đánh giá sẽ được ghi nhận chính thức vào hệ thống học vụ của Khoa và GVHD để tổng kết điểm thực tập.
           </div>
         </div>
 
@@ -145,9 +145,11 @@ function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
               <h4 className="font-bold uppercase tracking-wider text-[14px]">
                 TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP.HCM (HUIT)
               </h4>
-              <h3 className="font-bold uppercase text-[15px] mt-0.5">
-                KHOA CÔNG NGHỆ THÔNG TIN
-              </h3>
+              {intern.tenKhoa && (
+                <h3 className="font-bold uppercase text-[15px] mt-0.5">
+                  {intern.tenKhoa}
+                </h3>
+              )}
               <p className="text-[11px] text-slate-600 mt-1 italic">
                 Địa chỉ: 140 Lê Trọng Tấn, Phường Tây Thạnh, Quận Tân Phú, TP.HCM • Điện thoại: (028).38161673 - 136
               </p>
@@ -192,7 +194,7 @@ function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
 
             {/* Lời ngỏ từ Khoa */}
             <p className="text-[12px] italic text-slate-700 mb-5 leading-normal text-justify">
-              Nhằm mục đích đánh giá kết quả thực tập của sinh viên và chất lượng đào tạo của Nhà trường, Khoa Công nghệ Thông tin trường Đại học Công Thương (HUIT) rất mong nhận được những thông tin phản hồi của quý công ty. Chúng tôi xin ghi nhận tất cả những ý kiến đóng góp của quý doanh nghiệp.
+              Nhằm mục đích đánh giá kết quả thực tập của sinh viên và chất lượng đào tạo của Nhà trường, Trường Đại học Công Thương TP.HCM (HUIT) rất mong nhận được những thông tin phản hồi của quý công ty. Chúng tôi xin ghi nhận tất cả những ý kiến đóng góp của quý doanh nghiệp.
             </p>
 
             {/* Mục 1: Chất lượng công việc */}
@@ -267,7 +269,7 @@ function PrintHuitEvaluationModal({ intern, activeCompany, onClose }) {
             {/* Mục 7: Đánh giá chung & Cho điểm */}
             <div className="space-y-3 pt-2 border-t border-slate-300">
               <h5 className="font-bold text-[13px]">
-                7. Đánh giá chung & Cho điểm (Chuẩn Khoa CNTT - HUIT):
+                7. Đánh giá chung & Cho điểm (Chuẩn HUIT):
               </h5>
 
               <div className="grid grid-cols-2 gap-4 my-2">
@@ -361,7 +363,7 @@ function GradeInternModal({
         setReview(drafts.current[intern.maPhanBo]?.review ?? intern.danhGia ?? '')
       })
       .catch(() => {
-        if (active) setError('Không tải được danh mục tiêu chí đánh giá từ Khoa CNTT.')
+        if (active) setError('Không tải được danh mục tiêu chí đánh giá từ Khoa.')
       })
     return () => {
       active = false
@@ -543,7 +545,7 @@ function GradeInternModal({
                 type="button"
                 onClick={() => onOpenPrint(intern)}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-                title="Xem trước & In Phiếu nhận xét chuẩn mẫu Khoa CNTT HUIT"
+                title="Xem trước & In Phiếu nhận xét chuẩn mẫu HUIT"
               >
                 <span className="material-symbols-outlined text-[16px] text-indigo-600">print</span>
                 <span className="hidden sm:inline">In Phiếu HUIT</span>
@@ -596,7 +598,7 @@ function GradeInternModal({
                     Kết quả đánh giá đã được nộp và khóa chính thức
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
-                    Bảng điểm đã được chuyển đến Khoa CNTT và GVHD để tính điểm học phần. Điểm số ở chế độ chỉ xem (Read-only), không thể chỉnh sửa.
+                    Bảng điểm đã được chuyển đến Khoa và GVHD để tính điểm học phần. Điểm số ở chế độ chỉ xem (Read-only), không thể chỉnh sửa.
                   </div>
                 </div>
               </div>
@@ -632,7 +634,7 @@ function GradeInternModal({
                   <span>{isLocked ? 'Đã khóa điểm chính thức' : isFullGraded ? 'Đã nhập đủ tiêu chí' : 'Chưa hoàn tất điểm'}</span>
                 </span>
                 <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-                  Chuẩn đầu ra CLO4 (Khoa CNTT - HUIT)
+                  Chuẩn đầu ra CLO4 (HUIT)
                 </span>
               </div>
 
@@ -1035,7 +1037,7 @@ export default function DanhGiaThucTapSinhPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 max-w-2xl leading-relaxed">
-              Doanh nghiệp nhập và cập nhật điểm đánh giá chuẩn đầu ra CLO4 (CLO4.1 & CLO4.2, tối đa 5.00 điểm) theo quy định của Khoa CNTT - HUIT. Sau khi hoàn tất, vui lòng <strong>Nộp & Khóa điểm chính thức</strong>.
+              Doanh nghiệp nhập và cập nhật điểm đánh giá chuẩn đầu ra CLO4 (CLO4.1 & CLO4.2, tối đa 5.00 điểm) theo quy định của HUIT. Sau khi hoàn tất, vui lòng <strong>Nộp & Khóa điểm chính thức</strong>.
             </p>
           </div>
 
@@ -1287,7 +1289,7 @@ export default function DanhGiaThucTapSinhPage() {
                           {intern.viTriThucTap || 'Thực tập sinh'}
                         </div>
                         <div className="text-[11px] text-slate-400 mt-0.5">
-                          {intern.chuyenNganhSV || 'Công nghệ thông tin'}
+                          {intern.chuyenNganhSV || '—'}
                         </div>
                       </td>
 

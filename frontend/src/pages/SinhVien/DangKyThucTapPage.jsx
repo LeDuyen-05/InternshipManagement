@@ -470,7 +470,7 @@ export default function DangKyThucTapPage() {
                 <span className="text-slate-400">Đang cập nhật chỉ tiêu đợt</span>
               ) : (
                 <>
-                  <span className="text-emerald-600 font-semibold">Đã kiểm duyệt</span> bởi Khoa CNTT
+                  <span className="text-emerald-600 font-semibold">Đã kiểm duyệt</span> bởi Khoa
                 </>
               )}
             </div>
@@ -671,7 +671,7 @@ export default function DangKyThucTapPage() {
                 <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed m-0">
                   {searchQuery
                     ? `Không có kết quả nào khớp với từ khóa "${searchQuery}". Hãy thử tìm kiếm với từ khóa khác.`
-                    : 'Khoa CNTT đang tiếp nhận và thẩm định chỉ tiêu từ các đối tác doanh nghiệp cho đợt này. Vui lòng theo dõi thông báo hoặc sử dụng luồng Khai báo nơi tự tìm nếu bạn đã có nơi tiếp nhận.'}
+                    : 'Khoa đang tiếp nhận và thẩm định chỉ tiêu từ các đối tác doanh nghiệp cho đợt này. Vui lòng theo dõi thông báo hoặc sử dụng luồng Khai báo nơi tự tìm nếu bạn đã có nơi tiếp nhận.'}
                 </p>
                 {searchQuery ? (
                   <button

@@ -8,6 +8,7 @@ import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
 import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 import { loadLecturerDashboard, lecturerLoad } from '../../utils/lecturerDashboard'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 import {
   ResponsiveContainer,
   BarChart,
@@ -22,6 +23,7 @@ import {
 } from 'recharts'
 
 export default function DashboardGVPage() {
+  const tenKhoa = useTenKhoa()
   const [searchParams] = useSearchParams()
   const { selectedDot } = useDotThucTap()
   const { maGV: identityMaGV, role } = useIdentity() || {}
@@ -107,7 +109,7 @@ export default function DashboardGVPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-            <span>Khoa Công nghệ Thông tin</span>
+            <span>{tenKhoa}</span>
             <span>•</span>
             <span className="text-blue-600 font-bold">Cổng Giảng Viên</span>
           </div>

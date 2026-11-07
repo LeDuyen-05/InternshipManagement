@@ -3,8 +3,10 @@ import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useIdentity } from '../../hooks/useIdentity'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 export default function HoSoChuyenMonPage() {
+  const tenKhoa = useTenKhoa()
   const [searchParams] = useSearchParams()
   const { maGV: identityMaGV, role } = useIdentity() || {}
   const isStaff = role === 'VT01' || role === 'VT02'
@@ -84,7 +86,7 @@ export default function HoSoChuyenMonPage() {
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
-            <span>Khoa Công nghệ thông tin</span>
+            <span>{tenKhoa}</span>
             <span>•</span>
             <span className="text-blue-600 font-bold">Hồ sơ giảng viên</span>
           </div>
@@ -168,7 +170,7 @@ export default function HoSoChuyenMonPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-sm text-slate-400">school</span>
-                  <span>Khoa Công nghệ Thông tin - HUIT</span>
+                  <span>{tenKhoa} - HUIT</span>
                 </div>
               </div>
             </div>

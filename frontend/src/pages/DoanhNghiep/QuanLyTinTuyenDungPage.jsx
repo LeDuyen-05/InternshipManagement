@@ -382,7 +382,7 @@ export default function QuanLyTinTuyenDungPage() {
           </div>
           <div className="space-y-1">
             <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
-              Cơ chế tiếp nhận Đa vị trí giữa Doanh nghiệp và Khoa CNTT
+              Cơ chế tiếp nhận Đa vị trí giữa Doanh nghiệp và Nhà trường
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
               Doanh nghiệp có thể thiết lập nhiều vị trí công việc với các yêu cầu kỹ năng (JD) khác nhau. Sinh viên khi nộp đơn sẽ lựa chọn vị trí chuyên môn phù hợp nhất để tham gia phỏng vấn và thực tập.

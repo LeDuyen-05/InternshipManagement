@@ -291,7 +291,7 @@ export default function KhoaOperationsPage({ mode }) {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm">
           <div>
             <div className="flex items-center gap-2 text-slate-400 text-xs font-semibold mb-1">
-              <span>FIT Portal</span>
+              <span>HUIT Portal</span>
               <span>/</span>
               <span>Văn phòng Khoa</span>
               <span>/</span>
@@ -312,7 +312,7 @@ export default function KhoaOperationsPage({ mode }) {
               {isRegistration ? 'Tiếp nhận & Xét duyệt hồ sơ thực tập' : 'Theo dõi tiến độ thực tập toàn khoa'}
             </h1>
             {isRegistration && (
-              <span className="sr-only">cả hai do Khoa CNTT quản lý</span>
+              <span className="sr-only">cả hai do Khoa quản lý</span>
             )}
           </div>
 
@@ -1264,7 +1264,7 @@ export default function KhoaOperationsPage({ mode }) {
               {/* Modal Footer */}
               <div className="px-6 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50/60">
                 <span className="text-xs text-slate-500">
-                  Chế độ giám sát học vụ &bull; FIT Portal
+                  Chế độ giám sát học vụ &bull; HUIT Portal
                 </span>
                 <button
                   type="button"

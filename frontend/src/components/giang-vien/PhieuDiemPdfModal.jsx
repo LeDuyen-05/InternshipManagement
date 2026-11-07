@@ -1,4 +1,5 @@
 import { hasScore, summarizeGrade } from '../../utils/diemGiangVien'
+import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 export default function PhieuDiemPdfModal({
   isOpen,
@@ -14,6 +15,7 @@ export default function PhieuDiemPdfModal({
   dnChuyenMon = '',
   lecturerName = '',
 }) {
+  const tenKhoa = useTenKhoa()
   if (!isOpen || !currentStudent) return null
 
   const clo1to3 = criteria.filter((c) => c.nhomDanhGia === 'GV' || (c.maCLO !== 'CLO4.1' && c.maCLO !== 'CLO4.2'))
@@ -78,8 +80,7 @@ export default function PhieuDiemPdfModal({
           <div className="grid grid-cols-2 gap-4 pb-4 border-b border-slate-300">
             <div className="text-center space-y-0.5">
               <p className="font-semibold uppercase text-[11px] tracking-wide">TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP.HCM</p>
-              <p className="font-bold uppercase text-[12px] text-blue-900">KHOA CÔNG NGHỆ THÔNG TIN</p>
-              <p className="text-[10px] text-slate-500 italic">Bộ môn Công nghệ phần mềm &amp; Hệ thống thông tin</p>
+              <p className="font-bold uppercase text-[12px] text-blue-900">{tenKhoa}</p>
             </div>
             <div className="text-center space-y-0.5">
               <p className="font-bold uppercase text-[11px]">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
@@ -120,7 +121,7 @@ export default function PhieuDiemPdfModal({
             </div>
             <div>
               <span className="text-slate-500">Ngành đào tạo: </span>
-              <strong className="text-slate-900">{currentStudent.chuyenNganh || 'Công nghệ thông tin'}</strong>
+              <strong className="text-slate-900">{currentStudent.chuyenNganh || '—'}</strong>
             </div>
             <div className="col-span-2 pt-1 border-t border-slate-200/60 flex items-center justify-between">
               <div>

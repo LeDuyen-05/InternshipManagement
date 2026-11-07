@@ -100,7 +100,7 @@ export default function ThongBaoPage() {
     return {
       id: `srv-${sn.maThongBao}`,
       title: sn.tieuDe,
-      sender: sn.maNguoiGui || 'Văn phòng Khoa CNTT',
+      sender: sn.maNguoiGui || 'Văn phòng Khoa',
       date: sn.ngayTao
         ? new Date(sn.ngayTao).toLocaleDateString('vi-VN', {
             day: '2-digit',
@@ -225,7 +225,7 @@ export default function ThongBaoPage() {
                 </span>
               </div>
               <h1 className="text-xl font-bold text-slate-900">Bảng Tin Thông Báo Khoa</h1>
-              <p className="text-sm text-slate-500">Cập nhật kế hoạch học vụ, hạn chót và thông báo chính thức từ Khoa CNTT</p>
+              <p className="text-sm text-slate-500">Cập nhật kế hoạch học vụ, hạn chót và thông báo chính thức từ Khoa và Nhà trường</p>
             </div>
           </div>
         </div>

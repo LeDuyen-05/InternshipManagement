@@ -9,7 +9,7 @@ export default function RubricCLOModal({ isOpen, onClose, criteria = [] }) {
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
         <header className="p-5 bg-blue-700 text-white flex justify-between items-center shrink-0">
           <div>
-            <h2 className="font-bold text-lg">Rubric đánh giá thực tập CNTT</h2>
+            <h2 className="font-bold text-lg">Rubric đánh giá thực tập theo CLO</h2>
             <p className="text-xs text-blue-100 mt-0.5">Tổng điểm tối đa: {total.toFixed(2)}</p>
           </div>
           <button onClick={onClose} className="text-2xl leading-none hover:opacity-80 transition-opacity">×</button>
