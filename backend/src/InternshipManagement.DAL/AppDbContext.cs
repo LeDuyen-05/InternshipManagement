@@ -5,7 +5,11 @@ namespace InternshipManagement.DAL;
 
 public partial class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
+    private readonly IKhoaScope? _khoaScope;
+
+    public AppDbContext(DbContextOptions<AppDbContext> options, IKhoaScope? khoaScope = null) : base(options) { _khoaScope = khoaScope; }
+
+    public DbSet<Khoa> Khoas => Set<Khoa>();
 
     public DbSet<TaiKhoan> TaiKhoans => Set<TaiKhoan>();
     public DbSet<VaiTro> VaiTros => Set<VaiTro>();
@@ -345,6 +349,8 @@ public partial class AppDbContext : DbContext
             e.HasOne(x => x.HoSoNangLuc).WithMany().HasForeignKey(x => x.MaHoSo);
             e.HasOne(x => x.CongTy).WithMany(x => x.GoiYCongTys).HasForeignKey(x => x.MaCongTy);
         });
+
+        CauHinhKhoa(modelBuilder);
     }
 }
 

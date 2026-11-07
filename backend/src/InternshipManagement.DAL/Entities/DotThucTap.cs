@@ -10,6 +10,8 @@ public class DotThucTap
     public string TrangThai { get; set; } = "ChuaBatDau";
     public string MaRubric { get; set; } = "CNTT_CLO_V1";
     public string? MaLoaiThucTap { get; set; }
+    // Mỗi đợt thuộc đúng một khoa; dữ liệu đăng ký, phân bổ, chấm điểm... của đợt thuộc khoa đó.
+    public string? MaKhoa { get; set; }
     public DateTimeOffset? HanDieuChinhNoiThucTap { get; set; }
     public DateTimeOffset? MoChamGV { get; set; }
     public DateTimeOffset? HanChamGV { get; set; }

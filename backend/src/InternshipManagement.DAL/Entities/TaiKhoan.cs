@@ -13,5 +13,7 @@ public class TaiKhoan
     public string? MaSV { get; set; }
     public string? MaGV { get; set; }
     public string? MaDaiDien { get; set; }
+    // Chỉ dùng cho tài khoản cán bộ Khoa (VT02); SV/GV lấy khoa từ hồ sơ của mình.
+    public string? MaKhoa { get; set; }
     public VaiTro VaiTro { get; set; } = default!;
 }

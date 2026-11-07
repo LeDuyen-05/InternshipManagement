@@ -19,4 +19,5 @@ public class BoTieuChi
     public DateTimeOffset NgayTao { get; set; }
     public string? NguoiPhatHanh { get; set; }
     public DateTimeOffset? NgayPhatHanh { get; set; }
+    public string? MaKhoa { get; set; }
 }

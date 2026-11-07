@@ -11,6 +11,8 @@ public class SinhVien
     public string? ChuyenNganh { get; set; }
     public string? CongNghe { get; set; }
     public string? DuAnDaThucHien { get; set; }
+    // Khoa quản lý sinh viên; mọi dữ liệu theo khoa được lọc theo cột này.
+    public string? MaKhoa { get; set; }
 
     public HoSoNangLuc? HoSoNangLuc { get; set; }
     public ICollection<DangKyThucTap> DangKyThucTaps { get; set; } = new List<DangKyThucTap>();

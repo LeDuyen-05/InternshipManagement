@@ -11,4 +11,6 @@ public class ThongBao
     public string? LoaiThongBao { get; set; } = "Chung";
     public string? TepDinhKem { get; set; }
     public bool? Ghim { get; set; } = false;
+    // NULL = thông báo toàn trường (Quản trị viên); có giá trị = chỉ khoa đó thấy.
+    public string? MaKhoa { get; set; }
 }

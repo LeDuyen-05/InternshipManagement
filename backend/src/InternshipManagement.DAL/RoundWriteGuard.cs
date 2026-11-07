@@ -32,6 +32,7 @@ public partial class AppDbContext
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken ct = default)
     {
         await using var ownTx = Database.IsRelational() && Database.CurrentTransaction is null ? await Database.BeginTransactionAsync(ct) : null;
+        await KiemTraKhoaAsync(ct);
         await CheckRoundWritesAsync(ct);
         var result = await base.SaveChangesAsync(acceptAllChangesOnSuccess, ct);
         if (ownTx is not null) await ownTx.CommitAsync(ct);
