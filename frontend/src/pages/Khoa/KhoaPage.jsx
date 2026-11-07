@@ -9,6 +9,7 @@ import { loadOverviewWorkbook } from '../../utils/overviewExcel'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import { useRoundLock } from '../../hooks/useRoundLock'
 import KhoaOverviewPanel from '../../components/khoa/KhoaOverviewPanel'
+import { rubricService } from '../../services/rubricService'
 
 const tabs = [
   ['overview', 'Tổng quan'],
@@ -830,6 +831,10 @@ function RoundRow({ row: x, onStatus, onEdit }) {
           <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
             Nghề nghiệp (TTNN)
           </span>
+        ) : x.maLoaiThucTap ? (
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 text-teal-700 border border-teal-200">
+            {x.maLoaiThucTap}
+          </span>
         ) : (
           <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
             Chưa phân loại
@@ -911,7 +916,19 @@ function CreateForm({ tab, reload, editItem, onCancel }) {
           ['ThoiGianBD', 'Bắt đầu'],
           ['ThoiGianKT', 'Kết thúc'],
           ['TrangThai', 'Trạng thái'],
+          ['MaLoaiThucTap', 'Loại thực tập'],
+          ['MaRubric', 'Bộ tiêu chí'],
         ]
+  // Đợt bắt buộc gắn loại thực tập và bộ tiêu chí đã ban hành của khoa.
+  const [loaiList, setLoaiList] = useState([])
+  const [rubricList, setRubricList] = useState([])
+  useEffect(() => {
+    if (tab !== 'dot') return
+    rubricService.getLoaiThucTap().then((items) => setLoaiList(items.filter((x) => x.hoatDong))).catch(() => setLoaiList([]))
+    rubricService.getBoTieuChi().then((items) => setRubricList(Array.isArray(items) ? items : [])).catch(() => setRubricList([]))
+  }, [tab])
+  const rubricOptions = rubricList.filter((r) => r.maLoaiThucTap === f['MaLoaiThucTap']
+    && (r.trangThai === 'PhatHanh' || r.maRubric === editItem?.maRubric))
 
   useEffect(() => {
     if (editItem) {
@@ -1125,6 +1142,48 @@ function CreateForm({ tab, reload, editItem, onCancel }) {
                 <option value="DangDienRa">Đang diễn ra</option>
                 <option value="DaKetThuc">Đã kết thúc</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Loại thực tập <span className="text-rose-500">*</span>
+              </label>
+              <select
+                name="MaLoaiThucTap"
+                required
+                value={f['MaLoaiThucTap'] || ''}
+                onChange={(e) => setF({ ...f, MaLoaiThucTap: e.target.value, MaRubric: '' })}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
+              >
+                <option value="">-- Chọn loại thực tập --</option>
+                {loaiList.map((l) => (
+                  <option key={l.maLoai} value={l.maLoai}>{l.tenLoai} ({l.maLoai})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Bộ tiêu chí đánh giá <span className="text-rose-500">*</span>
+              </label>
+              <select
+                name="MaRubric"
+                required
+                value={f['MaRubric'] || ''}
+                onChange={(e) => setF({ ...f, MaRubric: e.target.value })}
+                disabled={!f['MaLoaiThucTap']}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <option value="">{f['MaLoaiThucTap'] ? '-- Chọn bộ tiêu chí đã ban hành --' : 'Chọn loại thực tập trước'}</option>
+                {rubricOptions.map((r) => (
+                  <option key={r.maRubric} value={r.maRubric}>{r.tenBo} ({r.maRubric} • v{r.phienBan})</option>
+                ))}
+              </select>
+              {f['MaLoaiThucTap'] && rubricOptions.length === 0 && (
+                <p className="text-[11px] text-amber-700 mt-1">
+                  Khoa chưa có bộ tiêu chí đã ban hành cho loại này. Vào “Tiêu chí đánh giá CLO” để rà soát và ban hành trước.
+                </p>
+              )}
             </div>
           </div>
 
