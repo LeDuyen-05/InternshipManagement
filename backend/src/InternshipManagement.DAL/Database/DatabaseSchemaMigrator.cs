@@ -21,6 +21,12 @@ public static class DatabaseSchemaMigrator
             "IF COL_LENGTH('PHIEUCHAMDIEM', 'daDoiChieuPhieuDN') IS NULL ALTER TABLE PHIEUCHAMDIEM ADD daDoiChieuPhieuDN BIT NOT NULL CONSTRAINT DF_PHIEUCHAMDIEM_daDoiChieuPhieuDN DEFAULT 0;",
             "IF COL_LENGTH('PHIEUCHAMDIEM', 'ghiChuPhieuDN') IS NULL ALTER TABLE PHIEUCHAMDIEM ADD ghiChuPhieuDN NVARCHAR(500) NULL;",
 
+            // THONGBAO: CSDL tạo trước khi có thông báo theo đối tượng/ghim thiếu các cột mà entity đang ánh xạ → lỗi 500 ở trang Thông báo
+            "IF COL_LENGTH('THONGBAO', 'doiTuong') IS NULL ALTER TABLE THONGBAO ADD doiTuong NVARCHAR(50) NOT NULL CONSTRAINT DF_THONGBAO_doiTuong DEFAULT N'ALL';",
+            "IF COL_LENGTH('THONGBAO', 'loaiThongBao') IS NULL ALTER TABLE THONGBAO ADD loaiThongBao NVARCHAR(50) NULL CONSTRAINT DF_THONGBAO_loaiThongBao DEFAULT N'Chung';",
+            "IF COL_LENGTH('THONGBAO', 'tepDinhKem') IS NULL ALTER TABLE THONGBAO ADD tepDinhKem NVARCHAR(500) NULL;",
+            "IF COL_LENGTH('THONGBAO', 'ghim') IS NULL ALTER TABLE THONGBAO ADD ghim BIT NULL CONSTRAINT DF_THONGBAO_ghim DEFAULT 0;",
+
             // Dọn dẹp dứt điểm các mã tiêu chí thừa cũ (CLO11..CLO42 không có trong phiếu chấm) để bảo đảm duy nhất 1 bộ 11 CLO chuẩn
             "DELETE FROM TIEUCHI WHERE maTieuChi IN ('CLO11','CLO12','CLO13','CLO21','CLO22','CLO31','CLO32','CLO33','CLO34','CLO41','CLO42') AND NOT EXISTS (SELECT 1 FROM CHITIETCHAMDIEM c WHERE c.maTieuChi = TIEUCHI.maTieuChi);"
         };
