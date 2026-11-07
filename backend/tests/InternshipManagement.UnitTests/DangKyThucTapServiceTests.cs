@@ -36,11 +36,12 @@ public class DangKyThucTapServiceTests
         _dangKyRepoMock.Setup(r => r.GetDotAsync("DOT01"))
             .ReturnsAsync(new DotThucTap { MaSo = "DOT01", TenDot = "Đợt 1", TrangThai = "DangDienRa" });
 
-        // Currently has 3 registrations
-        _dangKyRepoMock.Setup(r => r.CountBySinhVienDotAsync("SV001", "DOT01"))
-            .ReturnsAsync(3);
+        // Giới hạn lượt được kiểm tra nguyên tử trong repository (khóa theo đợt) → service phải gọi đúng mức tối đa
+        _dangKyRepoMock.Setup(r => r.AddWithinLimitAsync(It.IsAny<DangKyThucTap>(), DangKyThucTapService.MaxNguyenVong))
+            .ThrowsAsync(new InvalidOperationException("Đã dùng đủ 3 lượt đăng ký trong đợt."));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.DangKyNguyenVongAsync(request));
+        _dangKyRepoMock.Verify(r => r.AddWithinLimitAsync(It.IsAny<DangKyThucTap>(), DangKyThucTapService.MaxNguyenVong), Times.Once);
     }
 
     [Fact]
@@ -127,7 +128,7 @@ public class DangKyThucTapServiceTests
     }
 
     [Fact]
-    public async Task HuyDangKyAsync_StaffCancelling_DeletesAndSaves()
+    public async Task HuyDangKyAsync_StaffCancelling_EndsRegistrationAndKeepsHistory()
     {
         var service = CreateService();
         var dangKy = new DangKyThucTap { MaDK = "DK001", MaSV = "SV001", TrangThai = "DaDuyet" };
@@ -135,8 +136,11 @@ public class DangKyThucTapServiceTests
 
         var result = await service.HuyDangKyAsync("DK001", requesterMaSV: null, isStaff: true);
 
+        // Không xóa bản ghi: chuyển sang TuChoi kèm lý do để giữ lịch sử và lượt đăng ký
         Assert.True(result);
-        _dangKyRepoMock.Verify(r => r.Delete(dangKy), Times.Once);
+        Assert.Equal("TuChoi", dangKy.TrangThai);
+        Assert.False(string.IsNullOrWhiteSpace(dangKy.LyDoKetThuc));
+        _dangKyRepoMock.Verify(r => r.Delete(It.IsAny<DangKyThucTap>()), Times.Never);
         _dangKyRepoMock.Verify(r => r.SaveChangesAsync(), Times.Once);
     }
 }

@@ -153,5 +153,6 @@ public class SupplementalRegistrationTests
 
 internal static class SupplementalTestPublication
 {
-    public static async Task DatabaseSafeSetPublication(this AppDbContext db) { var round=await db.DotThucTaps.FindAsync("EXTRA_D"); round!.TrangThaiDanhSachNoi="DuKien"; await db.SaveDanhSachControlAsync(); }
+    // Giống CongBoDanhSachService.PublishAsync: ChuaCongBo → DuKien lưu qua SaveChanges thường; SaveDanhSachControlAsync chỉ dành cho bước chốt ChinhThuc.
+    public static async Task DatabaseSafeSetPublication(this AppDbContext db) { var round=await db.DotThucTaps.FindAsync("EXTRA_D"); round!.TrangThaiDanhSachNoi="DuKien"; await db.SaveChangesAsync(); }
 }
