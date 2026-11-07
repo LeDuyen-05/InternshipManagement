@@ -6,9 +6,14 @@ import EnterpriseOnboardingPanel from '../../components/khoa/EnterpriseOnboardin
 import { downloadExcelResponse, parseBlobError } from '../../utils/exportHuitExcel'
 import { roleLabel } from '../../utils/roleLabels'
 import StudentImportPreview from '../../components/admin/StudentImportPreview'
+import KhoaManagementPanel from '../../components/admin/KhoaManagementPanel'
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState('accounts') // 'accounts' | 'enterprises'
+  const [activeTab, setActiveTab] = useState('accounts') // 'accounts' | 'enterprises' | 'khoa'
+  const [khoaList, setKhoaList] = useState([])
+  const [khoaRefresh, setKhoaRefresh] = useState(0)
+  const [selectedKhoa, setSelectedKhoa] = useState('ALL')
+  const [importKhoa, setImportKhoa] = useState('')
   const [pagedData, setPagedData] = useState({
     items: [],
     totalCount: 0,
@@ -32,6 +37,7 @@ export default function AdminPage() {
     MatKhau: '',
     MaVaiTro: 'VT04',
     OwnerId: '',
+    MaKhoa: '',
   })
 
   // State bộ lọc (Filter & Search)
@@ -88,6 +94,15 @@ export default function AdminPage() {
     loadMeta()
   }, [enterpriseRefresh])
 
+  // Danh mục khoa: dùng cho tab Khoa, ô chọn khoa của tài khoản cán bộ và bộ lọc
+  useEffect(() => {
+    apiClient.get('/admin/khoa')
+      .then((res) => setKhoaList(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setKhoaList([]))
+  }, [khoaRefresh])
+  const activeKhoas = useMemo(() => khoaList.filter((k) => k.hoatDong), [khoaList])
+  const tenKhoaTheoMa = useMemo(() => Object.fromEntries(khoaList.map((k) => [k.maKhoa, k.tenKhoa])), [khoaList])
+
   // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -125,6 +140,7 @@ export default function AdminPage() {
       if (selectedRole && selectedRole !== 'ALL') cleanParams.maVaiTro = selectedRole
       if (selectedStatus && selectedStatus !== 'ALL') cleanParams.trangThai = selectedStatus
       if (selectedDot && selectedDot !== 'ALL') cleanParams.maDot = selectedDot
+      if (selectedKhoa && selectedKhoa !== 'ALL') cleanParams.maKhoa = selectedKhoa
 
       const res = await apiClient.get('/admin/accounts/paged', { params: cleanParams })
       if (v === requestVersion.current) {
@@ -137,7 +153,7 @@ export default function AdminPage() {
     } finally {
       if (v === requestVersion.current) setLoading(false)
     }
-  }, [currentPage, pageSize, debouncedSearch, selectedRole, selectedStatus, selectedDot])
+  }, [currentPage, pageSize, debouncedSearch, selectedRole, selectedStatus, selectedDot, selectedKhoa])
 
   useEffect(() => {
     if (activeTab === 'accounts') {
@@ -162,11 +178,13 @@ export default function AdminPage() {
       MaSV: form.MaVaiTro === 'VT04' ? owner : null,
       MaGV: form.MaVaiTro === 'VT03' ? owner : null,
       MaDaiDien: form.MaVaiTro === 'VT05' ? owner : null,
+      MaKhoa: form.MaVaiTro === 'VT02' ? (form.MaKhoa || null) : null,
     }
     try {
       await apiClient.post('/admin/accounts', payload)
       setSuccessMsg(`Đã tạo thành công tài khoản "${payload.TenDangNhap}"!`)
-      setForm({ MaTaiKhoan: '', TenDangNhap: '', MatKhau: '', MaVaiTro: 'VT04', OwnerId: '' })
+      setForm({ MaTaiKhoan: '', TenDangNhap: '', MatKhau: '', MaVaiTro: 'VT04', OwnerId: '', MaKhoa: '' })
+      setKhoaRefresh((value) => value + 1)
       setEnterpriseOwner(null)
       setEnterpriseRefresh((value) => value + 1)
       setTimeout(() => setSuccessMsg(''), 4000)
@@ -185,6 +203,7 @@ export default function AdminPage() {
         MaSV: x.maSV,
         MaGV: x.maGV,
         MaDaiDien: x.maDaiDien,
+        MaKhoa: x.maVaiTro === 'VT02' ? x.maKhoa : null,
       })
       const actionText = nextStatus === 'HoatDong' ? (x.trangThai === 'ChuaKichHoat' ? 'kích hoạt' : 'mở khóa') : 'khóa'
       setSuccessMsg(`Đã ${actionText} tài khoản "${x.tenDangNhap}" thành công.`)
@@ -398,6 +417,7 @@ export default function AdminPage() {
     try {
       const res = await apiClient.post('/admin/accounts/import-students', {
         rows: importRows,
+        maKhoa: importKhoa || null,
       })
       const msg = res.data?.message || `Đã khởi tạo thành công ${res.data?.createdCount || 0} tài khoản mới.`
       setSuccessMsg(msg)
@@ -424,6 +444,7 @@ export default function AdminPage() {
       if (selectedRole && selectedRole !== 'ALL') cleanParams.maVaiTro = selectedRole
       if (selectedStatus && selectedStatus !== 'ALL') cleanParams.trangThai = selectedStatus
       if (selectedDot && selectedDot !== 'ALL') cleanParams.maDot = selectedDot
+      if (selectedKhoa && selectedKhoa !== 'ALL') cleanParams.maKhoa = selectedKhoa
 
       const res = await apiClient.get('/admin/accounts/export-xlsx', {
         params: cleanParams,
@@ -576,7 +597,7 @@ export default function AdminPage() {
       {/* Header trang Admin */}
       <div className="page-head">
         <div>
-          <span className="eyebrow">KHOA CÔNG NGHỆ THÔNG TIN • HỆ THỐNG QUẢN LÝ THỰC TẬP</span>
+          <span className="eyebrow">TRƯỜNG ĐH CÔNG THƯƠNG TP.HCM • HỆ THỐNG QUẢN LÝ THỰC TẬP</span>
           <h2>Quản trị tài khoản & người dùng</h2>
           <p className="text-xs text-slate-500 mt-1 max-w-2xl">
             Quản lý danh sách tài khoản, phân quyền truy cập và cấp tài khoản đại diện doanh nghiệp.
@@ -639,6 +660,22 @@ export default function AdminPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
           </svg>
           <span>Danh bạ doanh nghiệp</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('khoa')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+            activeTab === 'khoa'
+              ? 'bg-indigo-600 text-white shadow-xs shadow-indigo-500/20'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[16px]">account_tree</span>
+          <span>Khoa</span>
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${activeTab === 'khoa' ? 'bg-indigo-500 text-white' : 'bg-slate-200 text-slate-700'}`}>
+            {khoaList.length}
+          </span>
         </button>
       </div>
 
@@ -801,6 +838,24 @@ export default function AdminPage() {
                     ))}
                   </select>
                 </label>
+
+                {form.MaVaiTro === 'VT02' && (
+                  <label className="block text-xs font-semibold text-slate-700 space-y-1 sm:col-span-2">
+                    <span>Khoa quản lý <strong className="text-rose-500">*</strong></span>
+                    <select
+                      required={activeKhoas.length > 1}
+                      value={form.MaKhoa}
+                      onChange={(e) => setForm({ ...form, MaKhoa: e.target.value })}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-semibold text-slate-800 transition-all cursor-pointer"
+                    >
+                      <option value="">{activeKhoas.length > 1 ? '-- Chọn khoa của cán bộ --' : 'Khoa duy nhất của hệ thống'}</option>
+                      {activeKhoas.map((k) => (
+                        <option key={k.maKhoa} value={k.maKhoa}>{k.tenKhoa} ({k.maKhoa})</option>
+                      ))}
+                    </select>
+                    <span className="block text-[11px] font-normal text-slate-500">Cán bộ chỉ xem và quản lý đợt, sinh viên, giảng viên của khoa này.</span>
+                  </label>
+                )}
 
                 {form.MaVaiTro === 'VT05' ? (
                   <div className="space-y-1 sm:col-span-2">
@@ -1009,8 +1064,23 @@ export default function AdminPage() {
                   ))}
                 </select>
 
+                {/* Dropdown lọc theo Khoa */}
+                {khoaList.length > 1 && (
+                  <select
+                    value={selectedKhoa}
+                    onChange={(e) => { setSelectedKhoa(e.target.value); setCurrentPage(1) }}
+                    className="py-2 px-3 rounded-xl border border-slate-200 text-xs bg-slate-50/70 font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer max-w-[210px] truncate"
+                    title="Lọc tài khoản cán bộ, giảng viên, sinh viên theo khoa"
+                  >
+                    <option value="ALL">Tất cả khoa</option>
+                    {khoaList.map((k) => (
+                      <option key={k.maKhoa} value={k.maKhoa}>{k.tenKhoa}</option>
+                    ))}
+                  </select>
+                )}
+
                 {/* Nút đặt lại bộ lọc */}
-                {(searchKeyword || selectedRole !== 'ALL' || selectedStatus !== 'ALL' || selectedDot !== 'ALL') && (
+                {(searchKeyword || selectedRole !== 'ALL' || selectedStatus !== 'ALL' || selectedDot !== 'ALL' || selectedKhoa !== 'ALL') && (
                   <button
                     type="button"
                     onClick={() => {
@@ -1018,6 +1088,7 @@ export default function AdminPage() {
                       setSelectedRole('ALL')
                       setSelectedStatus('ALL')
                       setSelectedDot('ALL')
+                      setSelectedKhoa('ALL')
                     }}
                     className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold transition-colors cursor-pointer"
                   >
@@ -1106,6 +1177,9 @@ export default function AdminPage() {
                                 </div>
                               ) : (
                                 <span className="text-slate-400 text-xs italic">— Hệ thống</span>
+                              )}
+                              {x.maKhoa && khoaList.length > 1 && (
+                                <div className="text-[11px] text-indigo-700 font-semibold mt-0.5">{tenKhoaTheoMa[x.maKhoa] || x.maKhoa}</div>
                               )}
                             </td>
                             <td className="py-3 px-4">
@@ -1375,6 +1449,10 @@ export default function AdminPage() {
         </div>
       )}
 
+      {activeTab === 'khoa' && (
+        <KhoaManagementPanel khoaList={khoaList} onChanged={() => setKhoaRefresh((value) => value + 1)} />
+      )}
+
       {/* ===================== TAB 2: ĐẠI DIỆN DOANH NGHIỆP ===================== */}
       {activeTab === 'enterprises' && (
         <EnterpriseOnboardingPanel
@@ -1459,6 +1537,24 @@ export default function AdminPage() {
                 </button>
               </div>
 
+              {activeKhoas.length > 1 && (
+                <label className="block text-xs font-bold text-slate-700 space-y-1.5">
+                  <span>Khoa của sinh viên mới <strong className="text-rose-500">*</strong></span>
+                  <select
+                    value={importKhoa}
+                    onChange={(e) => setImportKhoa(e.target.value)}
+                    disabled={importing}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50/70 font-semibold text-slate-800 cursor-pointer"
+                  >
+                    <option value="">-- Chọn khoa --</option>
+                    {activeKhoas.map((k) => (
+                      <option key={k.maKhoa} value={k.maKhoa}>{k.tenKhoa}</option>
+                    ))}
+                  </select>
+                  <span className="block text-[11px] font-normal text-slate-500">Hồ sơ sinh viên chưa có trong hệ thống sẽ thuộc khoa này.</span>
+                </label>
+              )}
+
               {/* Vùng chọn file */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-700">
@@ -1509,7 +1605,7 @@ export default function AdminPage() {
               </button>
               <button
                 type="button"
-                disabled={importing || !importPreview?.canImport}
+                disabled={importing || !importPreview?.canImport || (activeKhoas.length > 1 && importPreview?.newStudents > 0 && !importKhoa)}
                 onClick={handleConfirmImport}
                 className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
