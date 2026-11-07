@@ -1119,8 +1119,9 @@ export default function KhoaCriteriaPage() {
                   }
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
                 >
-                  <option value="TTKS">Thực tập kỹ sư (TTKS)</option>
-                  <option value="TTNN">Thực tập nghề nghiệp (TTNN)</option>
+                  {loaiList.filter((l) => l.hoatDong).map((l) => (
+                    <option key={l.maLoai} value={l.maLoai}>{l.tenLoai} ({l.maLoai})</option>
+                  ))}
                 </select>
               </div>
 

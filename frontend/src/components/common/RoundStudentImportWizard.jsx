@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { roundStudentImportService } from '../../services/roundStudentImportService'
+import { getLoaiThucTapInfo, loaiThucTapOptions } from '../../utils/dotThucTap'
 
 const TRANG_THAI_DOT_LABELS = {
   ChuaBatDau: 'Chưa bắt đầu',
@@ -453,8 +454,9 @@ export default function RoundStudentImportWizard({
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
               >
                 <option value="ALL">Tất cả loại thực tập</option>
-                <option value="TTKS">Thực tập kỹ sư (TTKS - 12 tiêu chí)</option>
-                <option value="TTNN">Thực tập nghề nghiệp (TTNN - 11 tiêu chí)</option>
+                {loaiThucTapOptions(rounds).map((o) => (
+                  <option key={o.code} value={o.code}>{o.label} ({o.code})</option>
+                ))}
               </select>
             </div>
 
@@ -481,7 +483,7 @@ export default function RoundStudentImportWizard({
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span>Đợt học vụ: <strong className="text-slate-900">{currentRoundObj.tenDot}</strong></span>
                 <span className="text-slate-300">•</span>
-                <span>Chương trình: <strong className="text-blue-700">{currentRoundObj.maLoaiThucTap === 'TTKS' || currentRoundObj.tenDot?.includes('kỹ sư') ? 'Thực tập kỹ sư' : 'Thực tập nghề nghiệp'}</strong></span>
+                <span>Chương trình: <strong className="text-blue-700">{getLoaiThucTapInfo(currentRoundObj).label}</strong></span>
                 <span className="text-slate-300">•</span>
                 <span>Tình trạng: <span className="font-semibold text-emerald-700">{TRANG_THAI_DOT_LABELS[currentRoundObj.trangThai] || currentRoundObj.trangThai}</span></span>
               </div>

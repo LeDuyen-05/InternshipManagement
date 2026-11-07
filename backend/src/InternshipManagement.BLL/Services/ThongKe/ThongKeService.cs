@@ -284,6 +284,7 @@ public class ThongKeService : IThongKeService
             },
             MaRubric = d.MaRubric,
             MaLoaiThucTap = d.MaLoaiThucTap,
+            TenLoaiThucTap = DAL.Common.TenLoaiThucTap.Lay(d.MaLoaiThucTap),
             MaKhoa = d.MaKhoa
         }).ToList();
     }

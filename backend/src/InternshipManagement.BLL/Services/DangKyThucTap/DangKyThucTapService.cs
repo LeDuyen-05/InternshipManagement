@@ -132,7 +132,7 @@ public class DangKyThucTapService : IDangKyThucTapService
             MaDot = d.MaDot,
             TenDot = d.DotThucTap?.TenDot,
             MaLoaiThucTap = d.DotThucTap?.MaLoaiThucTap,
-            TenLoaiThucTap = d.DotThucTap?.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
+            TenLoaiThucTap = DAL.Common.TenLoaiThucTap.Lay(d.DotThucTap?.MaLoaiThucTap),
             NgayDangKy = d.NgayDangKy,
             ThuTuUuTien = d.ThuTuUuTien,
             TrangThai = d.TrangThai
@@ -262,7 +262,7 @@ public class DangKyThucTapService : IDangKyThucTapService
             MaDot = dangKy.MaDot,
             TenDot = dot.TenDot,
             MaLoaiThucTap = dot.MaLoaiThucTap,
-            TenLoaiThucTap = dot.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
+            TenLoaiThucTap = DAL.Common.TenLoaiThucTap.Lay(dot.MaLoaiThucTap),
             NgayDangKy = dangKy.NgayDangKy,
             ThuTuUuTien = dangKy.ThuTuUuTien,
             TrangThai = dangKy.TrangThai

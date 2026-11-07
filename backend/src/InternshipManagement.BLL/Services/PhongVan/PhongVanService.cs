@@ -69,7 +69,7 @@ public class PhongVanService : IPhongVanService
             MaDot = pb.MaDot,
             TenDot = pb.DotThucTap?.TenDot,
             MaLoaiThucTap = pb.DotThucTap?.MaLoaiThucTap,
-            TenLoaiThucTap = pb.DotThucTap?.MaLoaiThucTap == "TTNN" ? "Thực tập nghề nghiệp" : "Thực tập kỹ sư",
+            TenLoaiThucTap = DAL.Common.TenLoaiThucTap.Lay(pb.DotThucTap?.MaLoaiThucTap),
             NgayPhanBo = pb.NgayPhanBo,
             TrangThai = pb.TrangThai,
             DaDuocKhoaDuyet = pb.DaDuocKhoaDuyet,

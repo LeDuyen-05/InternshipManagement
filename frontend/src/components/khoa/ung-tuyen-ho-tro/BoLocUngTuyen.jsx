@@ -1,3 +1,4 @@
+import { loaiThucTapOptions } from '../../../utils/dotThucTap'
 export default function BoLocUngTuyen({
   filters,
   onChange,
@@ -66,8 +67,9 @@ export default function BoLocUngTuyen({
             className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500/20"
           >
             <option value="ALL">Tất cả loại thực tập</option>
-            <option value="TTNN">Thực tập nghề nghiệp (TTNN - 11 tiêu chí)</option>
-            <option value="TTKS">Thực tập kỹ sư (TTKS - 12 tiêu chí)</option>
+            {loaiThucTapOptions(danhSachNamHoc.flatMap((y) => y.dots || [])).map((o) => (
+              <option key={o.code} value={o.code}>{o.label} ({o.code})</option>
+            ))}
           </select>
         </div>
 

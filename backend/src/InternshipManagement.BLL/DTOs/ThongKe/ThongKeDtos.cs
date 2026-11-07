@@ -101,6 +101,7 @@ public class DotThucTapItemDto
     public string MaDot { get; set; } = default!;
     public string? MaKhoa { get; set; }
     public string? TenKhoa { get; set; }
+    public string? TenLoaiThucTap { get; set; }
     public string TenDot { get; set; } = default!;
     public string NamHoc { get; set; } = default!;
     public DateTime ThoiGianBD { get; set; }

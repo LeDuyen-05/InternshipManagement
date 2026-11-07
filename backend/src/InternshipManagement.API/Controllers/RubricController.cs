@@ -21,7 +21,14 @@ public class RubricController(RubricService service) : ControllerBase
 }
 
 [ApiController, Route("api/loai-thuc-tap"), Authorize]
-public class LoaiThucTapController(AppDbContext db) : ControllerBase
+public class LoaiThucTapController(LoaiThucTapService service) : ControllerBase
 {
-    [HttpGet] public async Task<IActionResult> List() => Ok(await db.LoaiThucTaps.AsNoTracking().OrderBy(x => x.MaLoai).ToListAsync());
+    [HttpGet] public async Task<IActionResult> List(CancellationToken ct) => Ok(await service.ListAsync(ct));
+
+    // Danh mục dùng chung toàn trường nên chỉ Quản trị viên thêm/sửa.
+    [HttpPost, Authorize(Roles = Roles.QuanTriVien)]
+    public async Task<IActionResult> Create(SaveLoaiThucTapRequest request, CancellationToken ct) => Ok(await service.CreateAsync(request, ct));
+
+    [HttpPut("{maLoai}"), Authorize(Roles = Roles.QuanTriVien)]
+    public async Task<IActionResult> Update(string maLoai, SaveLoaiThucTapRequest request, CancellationToken ct) => Ok(await service.UpdateAsync(maLoai, request, ct));
 }

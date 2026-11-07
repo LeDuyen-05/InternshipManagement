@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import apiClient from '../../services/api'
 import { toast } from '../../contexts/ToastContext.jsx'
+import LoaiThucTapPanel from './LoaiThucTapPanel'
 
 const EMPTY = { maKhoa: '', tenKhoa: '' }
 
@@ -131,6 +132,8 @@ export default function KhoaManagementPanel({ khoaList, onChanged }) {
           </table>
         </div>
       </section>
+
+      <LoaiThucTapPanel />
     </div>
   )
 }

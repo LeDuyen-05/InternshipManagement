@@ -67,6 +67,7 @@ public partial class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddScoped<IKhoaScope, HttpKhoaScope>();
         builder.Services.AddScoped<KhoaService>();
+        builder.Services.AddScoped<LoaiThucTapService>();
 
         // ---- Repositories (mỗi interface đăng ký ĐÚNG MỘT LẦN) ----
         builder.Services.AddScoped<ISinhVienRepository, SinhVienRepository>();
@@ -231,6 +232,7 @@ public partial class Program
             foreach (var statement in InternshipCatalogMigration.Statements.Concat(WorkflowExtensionsMigration.Statements))
                 await db.Database.ExecuteSqlRawAsync(statement);
             await catalogTransaction.CommitAsync();
+            await InternshipManagement.DAL.Common.TenLoaiThucTap.NapAsync(db);
         });
         app.Lifetime.ApplicationStarted.Register(() =>
             app.Logger.LogInformation("Startup: ready in {ElapsedMs} ms", startupTimer.ElapsedMilliseconds));
