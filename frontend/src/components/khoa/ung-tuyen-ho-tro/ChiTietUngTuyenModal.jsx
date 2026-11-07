@@ -88,7 +88,7 @@ export default function ChiTietUngTuyenModal({
     try {
       const comps = await dangKyThucTapService.getDanhSachCongTy(maDot)
       setCompaniesInRound(comps || [])
-    } catch (_e) {
+    } catch {
       // ignore
     }
   }

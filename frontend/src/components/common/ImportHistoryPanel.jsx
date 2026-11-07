@@ -28,7 +28,7 @@ export default function ImportHistoryPanel({ initialMaDot }) {
           const current = list.find((r) => r.trangThai === 'DangDienRa') || list[0]
           setSelectedMaDot(current?.maSo || '')
         }
-      } catch (_e) {
+      } catch {
         // ignore
       }
     }

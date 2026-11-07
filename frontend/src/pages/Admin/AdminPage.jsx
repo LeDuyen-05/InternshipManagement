@@ -81,7 +81,7 @@ export default function AdminPage() {
         ])
         setRoles(Array.isArray(r.data) ? r.data : [])
         setEnterpriseList(Array.isArray(eo.data) ? eo.data : [])
-      } catch (_e) {
+      } catch {
         // ignore
       }
     }
@@ -1077,7 +1077,6 @@ export default function AdminPage() {
                     ) : (
                       paginatedAccounts.map((x) => {
                         const owner = x.maSV || x.maGV || x.maDaiDien || null
-                        const isLocked = x.trangThai !== 'HoatDong'
                         return (
                           <tr key={x.maTaiKhoan} className="hover:bg-slate-50/70 transition-colors">
                             <td className="py-3 px-4 font-mono text-xs font-bold text-slate-800">

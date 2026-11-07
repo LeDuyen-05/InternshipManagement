@@ -115,7 +115,7 @@ export function DotThucTapProvider({ children }) {
     setSelectedDot(formatted)
     try {
       localStorage.setItem(selectionKey, dot.maDot)
-    } catch (_e) {
+    } catch {
       // ignore storage error
     }
   }
@@ -129,7 +129,7 @@ export function DotThucTapProvider({ children }) {
       setSelectedDot(defaultCurrent)
       try {
         localStorage.setItem(selectionKey, defaultCurrent.maDot)
-      } catch (_e) {
+      } catch {
         // ignore storage error
       }
     }

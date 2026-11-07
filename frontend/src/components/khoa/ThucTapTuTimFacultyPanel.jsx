@@ -215,7 +215,7 @@ export default function ThucTapTuTimFacultyPanel({ maDot, canEdit = true }) {
         </div>
       ) : (
         <div className="space-y-3">
-          {pagination.items.map(({ hoSo: item, hoTen, soDaiDien, taiKhoanDNHoatDong }) => (
+          {pagination.items.map(({ hoSo: item, hoTen }) => (
             <details
               key={item.maHoSo}
               className="group rounded-2xl border border-slate-200/80 bg-white p-4.5 shadow-2xs hover:border-slate-300 transition-all open:ring-1 open:ring-blue-100"

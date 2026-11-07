@@ -8,7 +8,7 @@ import { xepLoaiGpa } from '../../utils/trangThai'
 import DocumentAttachments from '../../components/common/DocumentAttachments'
 
 export default function HoSoNangLucPage() {
-  const { user, maSV: currentMaSV } = useIdentity()
+  const { maSV: currentMaSV } = useIdentity()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

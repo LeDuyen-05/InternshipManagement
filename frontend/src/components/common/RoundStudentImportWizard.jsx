@@ -107,7 +107,7 @@ export default function RoundStudentImportWizard({
       a.click()
       a.remove()
       window.URL.revokeObjectURL(url)
-    } catch (_err) {
+    } catch {
       setError('Không thể tải file mẫu CSV.')
     }
   }
@@ -210,7 +210,7 @@ export default function RoundStudentImportWizard({
       const buffer = await file.arrayBuffer()
       await workbook.xlsx.load(buffer)
       parseSheetData(workbook, sheetName)
-    } catch (_e) {
+    } catch {
       // ignore
     }
   }

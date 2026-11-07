@@ -7,11 +7,11 @@ import { tachHoTen, xuatBangHuitExcel } from '../../utils/exportHuitExcel'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
-import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
+import { getLoaiThucTapInfo } from '../../utils/dotThucTap'
 
 export default function DanhSachSVHuongDanPage() {
   const [searchParams] = useSearchParams()
-  const { selectedDot, isReadOnly } = useDotThucTap()
+  const { selectedDot } = useDotThucTap()
   const { user, maGV: identityMaGV, role } = useIdentity() || {}
   const isStaff = role === 'VT01' || role === 'VT02'
 

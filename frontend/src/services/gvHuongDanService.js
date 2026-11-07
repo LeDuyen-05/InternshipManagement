@@ -1,6 +1,6 @@
 import apiClient from './api'
 import { API_ROUTES } from '../constants/apiRoutes'
-import { tachHoTen, xuatBangHuitExcel, xuatMultiSheetHuitExcel } from '../utils/exportHuitExcel'
+import { tachHoTen, xuatBangHuitExcel } from '../utils/exportHuitExcel'
 
 export const gvHuongDanService = {
   // Giảng viên xem danh sách sinh viên mình hướng dẫn

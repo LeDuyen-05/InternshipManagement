@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Layout from '../../components/Layout'
-import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import apiClient from '../../services/api'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'

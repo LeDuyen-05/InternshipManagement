@@ -5,7 +5,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
-import { xepLoaiGpa } from '../../utils/trangThai'
 import { canApproveCandidate, canRejectCandidate, isVisibleToCompany } from '../../utils/ungVienActions.js'
 
 // Trạng thái hồ sơ theo đúng tiến trình tuyển: xét hồ sơ → phỏng vấn → trúng tuyển
