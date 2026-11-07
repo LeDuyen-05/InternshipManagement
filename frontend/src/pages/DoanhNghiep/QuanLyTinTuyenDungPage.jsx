@@ -3,7 +3,6 @@ import { useState, useEffect, useMemo } from 'react'
 import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
-import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
 
 // Danh mục mẫu JD chuẩn hóa theo chuyên ngành CNTT giúp DN chọn nhanh
 const SAMPLE_JDS = [
@@ -43,7 +42,8 @@ export default function QuanLyTinTuyenDungPage() {
   const { activeCompany, maDot, updateChiTieu } = useEnterprise()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState(null)
+  // Thông báo kết quả hiển thị trên trang (khác `toast` dùng chung cho cảnh báo nhanh)
+  const [banner, setBanner] = useState(null)
 
   // State Modal Vị trí tuyển dụng (Thêm / Sửa)
   const [positionModal, setPositionModal] = useState({ open: false, isEdit: false, position: null })
@@ -74,9 +74,6 @@ export default function QuanLyTinTuyenDungPage() {
   }, [activeCompany?.maCongTy, maDot])
 
   const chiTieu = data?.chiTieu
-  const trangThaiTuyen = chiTieu?.trangThaiTuyen
-  const dangMo = trangThaiTuyen === 'DangTuyen'
-  const nhanTrangThai = loading ? 'Đang kiểm tra...' : recruitmentStatusLabel(trangThaiTuyen)
 
   // Danh sách các vị trí tuyển dụng
   const viTris = useMemo(() => {
@@ -155,7 +152,7 @@ export default function QuanLyTinTuyenDungPage() {
           soLuongNhan: parseInt(posForm.soLuongNhan, 10),
           hoatDong: posForm.hoatDong,
         })
-        setToast({ type: 'success', message: 'Cập nhật thông tin vị trí tuyển dụng thành công!' })
+        setBanner({ type: 'success', message: 'Cập nhật thông tin vị trí tuyển dụng thành công!' })
       } else {
         // Thêm vị trí mới
         await doanhNghiepService.themViTri({
@@ -165,7 +162,7 @@ export default function QuanLyTinTuyenDungPage() {
           yeuCau: posForm.yeuCau.trim(),
           soLuongNhan: parseInt(posForm.soLuongNhan, 10),
         })
-        setToast({ type: 'success', message: 'Thêm vị trí tuyển dụng mới thành công!' })
+        setBanner({ type: 'success', message: 'Thêm vị trí tuyển dụng mới thành công!' })
       }
       setPositionModal({ open: false, isEdit: false, position: null })
       await fetchJobPosting()
@@ -174,7 +171,7 @@ export default function QuanLyTinTuyenDungPage() {
       toast.error(err.response?.data?.message || err.message || 'Không thể lưu vị trí tuyển dụng.')
     } finally {
       setPosSubmitting(false)
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setBanner(null), 4000)
     }
   }
 
@@ -187,14 +184,14 @@ export default function QuanLyTinTuyenDungPage() {
     try {
       await doanhNghiepService.toggleViTri(pos.maViTri)
       await fetchJobPosting()
-      setToast({
+      setBanner({
         type: 'success',
         message: pos.hoatDong ? 'Đã tạm dừng nhận hồ sơ cho vị trí này.' : 'Đã mở lại nhận hồ sơ cho vị trí này.',
       })
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Không thể thay đổi trạng thái vị trí.')
     } finally {
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setBanner(null), 4000)
     }
   }
 
@@ -210,11 +207,11 @@ export default function QuanLyTinTuyenDungPage() {
     try {
       const res = await doanhNghiepService.xoaViTri(pos.maViTri)
       await fetchJobPosting()
-      setToast({ type: 'success', message: res?.message || 'Đã xóa vị trí tuyển dụng thành công.' })
+      setBanner({ type: 'success', message: res?.message || 'Đã xóa vị trí tuyển dụng thành công.' })
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Không thể xóa vị trí tuyển dụng.')
     } finally {
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setBanner(null), 4000)
     }
   }
 
@@ -229,13 +226,13 @@ export default function QuanLyTinTuyenDungPage() {
         soLuongNhan: parseInt(generalForm.soLuongNhan, 10),
       })
       await fetchJobPosting()
-      setToast({ type: 'success', message: 'Cập nhật thông tin chung thành công!' })
+      setBanner({ type: 'success', message: 'Cập nhật thông tin chung thành công!' })
       setShowGeneralModal(false)
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Không thể lưu thông tin chung.')
     } finally {
       setGeneralSubmitting(false)
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setBanner(null), 4000)
     }
   }
 
@@ -254,21 +251,21 @@ export default function QuanLyTinTuyenDungPage() {
   return (
     <div className="space-y-6">
       {/* Toast Alert */}
-      {toast && (
+      {banner && (
         <div
           className={`p-4 rounded-xl text-sm font-semibold flex items-center justify-between border shadow-sm animate-in fade-in ${
-            toast.type === 'success'
+            banner.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
               : 'bg-rose-50 text-rose-800 border-rose-200'
           }`}
         >
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[20px]">
-              {toast.type === 'success' ? 'check_circle' : 'error'}
+              {banner.type === 'success' ? 'check_circle' : 'error'}
             </span>
-            <span>{toast.message}</span>
+            <span>{banner.message}</span>
           </div>
-          <button type="button" onClick={() => setToast(null)} className="text-slate-400 hover:text-slate-600">
+          <button type="button" onClick={() => setBanner(null)} className="text-slate-400 hover:text-slate-600">
             <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
