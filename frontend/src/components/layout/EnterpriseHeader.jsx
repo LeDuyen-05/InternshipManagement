@@ -177,7 +177,7 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
             >
               {danhSachNamHoc.flatMap((year) => year.dots).map((round) => (
                 <option key={round.maDot} value={round.maDot}>
-                  {round.tenDot}
+                  {round.tenDot}{round.tenKhoa ? ` — ${round.tenKhoa}` : ''}
                 </option>
               ))}
             </select>

@@ -58,6 +58,8 @@ export function DotThucTapProvider({ children }) {
               labelTrangThai: d.labelTrangThai,
               maRubric: d.maRubric,
               maLoaiThucTap: d.maLoaiThucTap,
+              maKhoa: d.maKhoa,
+              tenKhoa: d.tenKhoa,
               isDefault: d.trangThai === 'DangDienRa',
             })
           })

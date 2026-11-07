@@ -1634,6 +1634,8 @@ public partial class DoanhNghiepService
 
             .ToListAsync();
 
+        var tenKhoa = await _db.Khoas.AsNoTracking().ToDictionaryAsync(x => x.MaKhoa, x => x.TenKhoa);
+
         var tieuChisDN = await _db.TieuChis.AsNoTracking()
 
             .Where(t => t.NhomDanhGia == ThangDiem.NhomDoanhNghiep).ToListAsync();
@@ -1685,6 +1687,8 @@ public partial class DoanhNghiepService
                 TenDot = pb.DotThucTap?.TenDot,
                 MaLoaiThucTap = pb.DotThucTap?.MaLoaiThucTap,
                 MaRubric = pb.DotThucTap?.MaRubric,
+                // Khoa tổ chức đợt: in trên phiếu nhận xét vì DN có thể nhận SV của nhiều khoa.
+                TenKhoa = pb.DotThucTap?.MaKhoa == null ? null : tenKhoa.GetValueOrDefault(pb.DotThucTap.MaKhoa),
 
                 pb.NgayPhanBo,
 

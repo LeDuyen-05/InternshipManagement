@@ -2,6 +2,7 @@ using InternshipManagement.API.Infrastructure;
 using InternshipManagement.BLL.Services.ThongKe;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace InternshipManagement.API.Controllers;
 
@@ -38,12 +39,25 @@ public class ThongKeController : ControllerBase
     }
 
     [HttpGet("dot-thuc-tap")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetDanhSachDotThucTap()
+    [AllowAnonymous] // Mọi vai trò đã đăng nhập đều cần chọn đợt; lớp này chỉ cho Khoa nên kiểm tra đăng nhập ngay trong hàm.
+    public async Task<IActionResult> GetDanhSachDotThucTap([FromServices] InternshipManagement.DAL.AppDbContext db)
     {
+        if (User.Identity?.IsAuthenticated != true) return Unauthorized(new { message = "Vui lòng đăng nhập để xem đợt thực tập." });
         try
         {
-            var result = await _thongKeService.GetDanhSachDotThucTapAsync();
+            // SV/GV/cán bộ Khoa chỉ nhận đợt của khoa mình nhờ bộ lọc khoa của CSDL.
+            IEnumerable<InternshipManagement.BLL.DTOs.ThongKe.DotThucTapItemDto> result = await _thongKeService.GetDanhSachDotThucTapAsync();
+            if (User.IsInRole(Roles.DaiDienDN))
+            {
+                // Doanh nghiệp hợp tác với nhiều khoa: chỉ hiện đợt mà công ty được đưa vào, có đăng ký hoặc có SV thực tập.
+                var company = await db.DaiDienDoanhNghieps.Where(x => x.MaSo == User.MaDaiDien()).Select(x => x.MaCongTy).FirstOrDefaultAsync();
+                var rounds = await db.CongTyTheoDots.Where(x => x.MaCongTy == company).Select(x => x.MaDot)
+                    .Union(db.DangKyThucTaps.Where(x => x.MaCongTy == company).Select(x => x.MaDot))
+                    .Union(db.PhanBoThucTaps.Where(x => x.MaCongTy == company).Select(x => x.MaDot)).ToListAsync();
+                result = result.Where(x => rounds.Contains(x.MaDot));
+            }
+            var tenKhoa = await db.Khoas.AsNoTracking().ToDictionaryAsync(x => x.MaKhoa, x => x.TenKhoa);
+            result = result.Select(x => { x.TenKhoa = x.MaKhoa == null ? null : tenKhoa.GetValueOrDefault(x.MaKhoa); return x; }).ToList();
             return Ok(new
             {
                 Success = true,

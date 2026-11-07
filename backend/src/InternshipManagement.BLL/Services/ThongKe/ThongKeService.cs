@@ -283,7 +283,8 @@ public class ThongKeService : IThongKeService
                 _ => d.TrangThai
             },
             MaRubric = d.MaRubric,
-            MaLoaiThucTap = d.MaLoaiThucTap
+            MaLoaiThucTap = d.MaLoaiThucTap,
+            MaKhoa = d.MaKhoa
         }).ToList();
     }
 }
