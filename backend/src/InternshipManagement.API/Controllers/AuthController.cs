@@ -11,20 +11,35 @@ public class AuthController : ControllerBase
 {
     private readonly AuthService _service;
     private readonly JwtTokenService _jwt;
+    private readonly LoginAttemptLimiter _limiter;
 
-    public AuthController(AuthService service, JwtTokenService jwt)
+    public AuthController(AuthService service, JwtTokenService jwt, LoginAttemptLimiter limiter)
     {
         _service = service;
         _jwt = jwt;
+        _limiter = limiter;
     }
 
     [AllowAnonymous]
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
+        if (_limiter.ConBiKhoa(request.TenDangNhap) is { } conLai)
+        {
+            Response.Headers.RetryAfter = ((int)Math.Ceiling(conLai.TotalSeconds)).ToString();
+            return StatusCode(StatusCodes.Status429TooManyRequests, new
+            {
+                message = $"Đăng nhập sai quá {LoginAttemptLimiter.SoLanSaiToiDa} lần. Tài khoản tạm khóa đăng nhập, vui lòng thử lại sau {Math.Ceiling(conLai.TotalMinutes)} phút."
+            });
+        }
+
         var account = await _service.AuthenticateAsync(request.TenDangNhap, request.MatKhau);
         if (account is null)
+        {
+            _limiter.GhiNhanThatBai(request.TenDangNhap);
             return Unauthorized(new { message = "Tên đăng nhập hoặc mật khẩu không đúng, hoặc tài khoản chưa được kích hoạt/bị khóa." });
+        }
+        _limiter.GhiNhanThanhCong(request.TenDangNhap);
 
         var hoTen = await _service.ResolveHoTenAsync(account);
         return Ok(new LoginResponse(

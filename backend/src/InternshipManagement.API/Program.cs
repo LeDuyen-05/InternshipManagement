@@ -119,6 +119,7 @@ public partial class Program
         builder.Services.AddScoped<InternshipManagement.BLL.Services.Documents.DocumentService>();
         builder.Services.AddScoped<InternshipManagement.BLL.Services.ThucTapTuTim.ThucTapTuTimService>();
         builder.Services.AddSingleton<JwtTokenService>();
+        builder.Services.AddSingleton<LoginAttemptLimiter>();
         builder.Services.AddScoped<ISinhVienService, SinhVienService>();
         builder.Services.AddScoped<SinhVienValidator>();
         builder.Services.AddScoped<CreateSinhVienValidator>();
