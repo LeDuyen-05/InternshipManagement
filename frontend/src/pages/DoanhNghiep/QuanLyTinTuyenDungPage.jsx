@@ -4,39 +4,88 @@ import { useEnterprise } from '../../components/layout/EnterpriseLayout.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 
-// Danh mục mẫu JD chuẩn hóa theo chuyên ngành CNTT giúp DN chọn nhanh
+// Mẫu JD chuẩn hóa theo nhóm ngành giúp DN chọn nhanh; DN có thể nhận SV của nhiều khoa.
 const SAMPLE_JDS = [
   {
+    nganh: 'Công nghệ thông tin',
     title: 'Lập trình viên Web Frontend ReactJS',
     skills: 'ReactJS, JavaScript ES6+, HTML5/CSS3, TailwindCSS, Redux Toolkit, RESTful API, Git',
     jd: 'Tham gia phát triển giao diện người dùng (UI/UX) cho các ứng dụng web thực tế của công ty.\nThành thạo ReactJS, HTML5/CSS3, TailwindCSS và hiểu biết về RESTful API.\nCó tư duy thẩm mỹ tốt, kỹ năng làm việc nhóm và tinh thần trách nhiệm.',
   },
   {
+    nganh: 'Công nghệ thông tin',
     title: 'Lập trình viên Backend .NET / C#',
     skills: 'C#, ASP.NET Core, Entity Framework, SQL Server, Web API, OOP, Microservices, Git',
     jd: 'Tham gia xây dựng và bảo trì các dịch vụ backend, Web API bằng ASP.NET Core.\nNắm chắc kiến thức C#, lập trình hướng đối tượng, SQL Server và Entity Framework.\nHiểu biết về bảo mật API (JWT, OAuth) và tối ưu hóa truy vấn cơ sở dữ liệu.',
   },
   {
+    nganh: 'Công nghệ thông tin',
     title: 'Lập trình viên Backend Java Spring Boot',
     skills: 'Java Core, Spring Boot, Spring Data JPA, Hibernate, MySQL/PostgreSQL, REST API, Git',
     jd: 'Tham gia phát triển các module dịch vụ backend bằng Java Spring Boot.\nNắm vững Java Core, OOP, cấu trúc dữ liệu và giải thuật, Spring Data JPA.\nCó khả năng đọc hiểu tài liệu tiếng Anh kỹ thuật và ham học hỏi công nghệ mới.',
   },
   {
+    nganh: 'Công nghệ thông tin',
     title: 'Lập trình viên Di động Flutter / Mobile App',
     skills: 'Dart, Flutter, Android/iOS, State Management (Bloc/Provider), Firebase, REST API, Git',
     jd: 'Phát triển các tính năng ứng dụng di động đa nền tảng bằng Flutter (Android & iOS).\nNắm vững ngôn ngữ Dart, các pattern quản lý state (Bloc/Provider/GetX) và kết nối REST API.\nChủ động nghiên cứu và cập nhật các thư viện mới trong hệ sinh thái Mobile.',
   },
   {
+    nganh: 'Công nghệ thông tin',
     title: 'Kỹ sư Kiểm thử Phần mềm (QA/QC Manual & Automation)',
     skills: 'Test Cases, Test Plan, Black-box Testing, Postman, SQL, Selenium/Cypress, Jira',
     jd: 'Tham gia phân tích tài liệu yêu cầu, thiết kế kịch bản kiểm thử (Test Cases, Test Plan).\nThực hiện kiểm thử chức năng, giao diện, hiệu năng và kiểm thử API bằng Postman.\nTheo dõi và quản lý lỗi trên hệ thống Jira, phối hợp chặt chẽ với đội ngũ lập trình viên.',
   },
   {
+    nganh: 'Công nghệ thông tin',
     title: 'Chuyên viên Phân tích Dữ liệu & AI (Data Analyst / AI Engineer)',
     skills: 'Python, SQL, Pandas, NumPy, Machine Learning, Power BI / Tableau, Scikit-learn',
     jd: 'Tham gia thu thập, xử lý và trực quan hóa dữ liệu phục vụ các báo cáo kinh doanh.\nSử dụng thành thạo Python, SQL để khai phá dữ liệu và xây dựng các mô hình Machine Learning.\nKỹ năng tư duy logic tốt, khả năng trình bày và phân tích insight từ dữ liệu.',
   },
+  {
+    nganh: 'Kế toán - Tài chính',
+    title: 'Thực tập sinh Kế toán tổng hợp',
+    skills: 'Nguyên lý kế toán, Thuế GTGT/TNDN, Excel, MISA/FAST, Chứng từ, Báo cáo tài chính',
+    jd: 'Hỗ trợ lập, kiểm tra và lưu trữ chứng từ kế toán; hạch toán các nghiệp vụ phát sinh.\nHỗ trợ lập tờ khai thuế và báo cáo tài chính cuối kỳ dưới sự hướng dẫn của kế toán trưởng.\nSử dụng tốt Excel, ưu tiên biết phần mềm MISA/FAST; cẩn thận, trung thực.',
+  },
+  {
+    nganh: 'Kế toán - Tài chính',
+    title: 'Thực tập sinh Kiểm toán / Tài chính',
+    skills: 'Chuẩn mực kế toán VAS, Phân tích báo cáo tài chính, Excel nâng cao, Kiểm soát nội bộ',
+    jd: 'Tham gia đối chiếu số liệu, chọn mẫu và lập giấy tờ làm việc kiểm toán.\nPhân tích biến động các chỉ tiêu trên báo cáo tài chính và đề xuất điểm cần lưu ý.\nChịu được áp lực mùa kiểm toán, kỹ năng Excel và tư duy phân tích tốt.',
+  },
+  {
+    nganh: 'Quản trị - Marketing',
+    title: 'Thực tập sinh Marketing / Truyền thông số',
+    skills: 'Digital Marketing, Content, Facebook/Google Ads, SEO cơ bản, Canva, Phân tích số liệu chiến dịch',
+    jd: 'Tham gia lên ý tưởng và sản xuất nội dung cho các kênh truyền thông của doanh nghiệp.\nHỗ trợ chạy, theo dõi và báo cáo hiệu quả các chiến dịch quảng cáo trực tuyến.\nSáng tạo, viết tốt, chủ động cập nhật xu hướng thị trường.',
+  },
+  {
+    nganh: 'Quản trị - Marketing',
+    title: 'Thực tập sinh Kinh doanh / Chăm sóc khách hàng',
+    skills: 'Kỹ năng giao tiếp, Đàm phán, CRM, Tin học văn phòng, Lập báo cáo bán hàng',
+    jd: 'Tìm hiểu sản phẩm, hỗ trợ tư vấn và chăm sóc khách hàng hiện có.\nCập nhật dữ liệu khách hàng trên CRM, tổng hợp báo cáo doanh số theo tuần.\nGiao tiếp tốt, chủ động, có tinh thần cầu tiến.',
+  },
+  {
+    nganh: 'Quản trị - Marketing',
+    title: 'Thực tập sinh Nhân sự (HR)',
+    skills: 'Tuyển dụng, Quản lý hồ sơ nhân sự, Chấm công - tiền lương, Luật lao động cơ bản, Excel',
+    jd: 'Hỗ trợ đăng tin, sàng lọc hồ sơ và sắp xếp lịch phỏng vấn ứng viên.\nCập nhật hồ sơ nhân sự, hỗ trợ tổng hợp chấm công và các thủ tục onboarding.\nCẩn thận, bảo mật thông tin, kỹ năng tổ chức công việc tốt.',
+  },
+  {
+    nganh: 'Công nghệ thực phẩm',
+    title: 'Thực tập sinh QA/QC thực phẩm',
+    skills: 'HACCP, ISO 22000, Kiểm nghiệm vi sinh/hóa lý, GMP, Lập hồ sơ chất lượng',
+    jd: 'Tham gia lấy mẫu, kiểm tra chất lượng nguyên liệu, bán thành phẩm và thành phẩm.\nHỗ trợ giám sát vệ sinh, an toàn thực phẩm theo HACCP/ISO 22000 tại nhà máy.\nGhi chép số liệu chính xác, chịu được môi trường sản xuất.',
+  },
+  {
+    nganh: 'Du lịch - Khách sạn',
+    title: 'Thực tập sinh Lễ tân / Dịch vụ khách sạn',
+    skills: 'Nghiệp vụ lễ tân, Giao tiếp tiếng Anh, Phần mềm quản lý khách sạn, Xử lý tình huống',
+    jd: 'Hỗ trợ đón tiếp, làm thủ tục nhận - trả phòng và giải đáp yêu cầu của khách.\nPhối hợp các bộ phận buồng, nhà hàng để đảm bảo chất lượng dịch vụ.\nNgoại hình ưa nhìn, giao tiếp tiếng Anh tốt, làm việc theo ca.',
+  },
 ]
+const NHOM_NGANH_JD = [...new Set(SAMPLE_JDS.map((x) => x.nganh))]
 
 export default function QuanLyTinTuyenDungPage() {
   const { activeCompany, maDot, updateChiTieu } = useEnterprise()
@@ -49,6 +98,7 @@ export default function QuanLyTinTuyenDungPage() {
   const [positionModal, setPositionModal] = useState({ open: false, isEdit: false, position: null })
   const [posForm, setPosForm] = useState({ tenViTri: '', yeuCau: '', soLuongNhan: 1, hoatDong: true })
   const [posSubmitting, setPosSubmitting] = useState(false)
+  const [nganhMau, setNganhMau] = useState(NHOM_NGANH_JD[0])
 
   // State Modal Thông tin chung DN
   const [showGeneralModal, setShowGeneralModal] = useState(false)
@@ -680,8 +730,17 @@ export default function QuanLyTinTuyenDungPage() {
                   <span>Gợi ý mẫu yêu cầu (JD) nhanh theo chuyên ngành:</span>
                   <span className="text-[10px] text-indigo-600 font-normal">Nhấn để điền tự động</span>
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {NHOM_NGANH_JD.map((nganh) => (
+                    <button key={nganh} type="button" onClick={() => setNganhMau(nganh)}
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold border cursor-pointer transition-all ${nganh === nganhMau
+                        ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}>
+                      {nganh}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {SAMPLE_JDS.map((sample, idx) => (
+                  {SAMPLE_JDS.filter((sample) => sample.nganh === nganhMau).map((sample, idx) => (
                     <button
                       key={idx}
                       type="button"
