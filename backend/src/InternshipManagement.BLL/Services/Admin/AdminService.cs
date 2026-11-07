@@ -67,6 +67,8 @@ public class AdminService
             if (r.MaSV != null || r.MaGV != null || r.MaDaiDien != null)
                 throw new InvalidOperationException("Tài khoản Quản trị / Khoa không gắn với sinh viên, giảng viên hay doanh nghiệp.");
         }
+        // Cán bộ Khoa chỉ quản lý dữ liệu của một khoa; để trống khi hệ thống chỉ có một khoa.
+        var maKhoa = r.MaVaiTro == "VT02" ? await KhoaService.RequireActiveAsync(_db, r.MaKhoa) : null;
 
         if (await _db.TaiKhoans.AnyAsync(x => x.MaTaiKhoan == r.MaTaiKhoan || x.TenDangNhap == r.TenDangNhap))
             throw new InvalidOperationException("Mã tài khoản hoặc tên đăng nhập đã tồn tại.");
@@ -84,7 +86,8 @@ public class AdminService
             MaVaiTro = r.MaVaiTro,
             MaSV = r.MaVaiTro == "VT04" ? r.MaSV : null,
             MaGV = r.MaVaiTro == "VT03" ? r.MaGV : null,
-            MaDaiDien = r.MaVaiTro == "VT05" ? r.MaDaiDien : null
+            MaDaiDien = r.MaVaiTro == "VT05" ? r.MaDaiDien : null,
+            MaKhoa = maKhoa
         });
         await _db.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
@@ -268,7 +271,18 @@ public class AdminService
             && await DAL.Common.EnterpriseAccountPolicy.HasOtherActiveAccountAsync(_db, req.MaDaiDien, id))
             throw new InvalidOperationException("Doanh nghiệp đã có tài khoản đại diện hoạt động. QTV cần xác minh và khóa tài khoản dư trước khi kích hoạt/mở khóa; giữ nguyên lịch sử.");
 
-        var securityRelevantChange = x.TrangThai != req.TrangThai || x.MaVaiTro != req.MaVaiTro ||
+        string? maKhoa = null;
+        if (req.MaVaiTro == "VT02")
+        {
+            maKhoa = await KhoaService.RequireActiveAsync(_db, req.MaKhoa) ?? x.MaKhoa;
+            if (maKhoa == null)
+            {
+                var active = await _db.Khoas.Where(k => k.HoatDong).Select(k => k.MaKhoa).Take(2).ToListAsync();
+                if (active.Count > 1) throw new InvalidOperationException("Hệ thống có nhiều khoa: chọn khoa cho tài khoản cán bộ Khoa.");
+                maKhoa = active.SingleOrDefault();
+            }
+        }
+        var securityRelevantChange = x.TrangThai != req.TrangThai || x.MaVaiTro != req.MaVaiTro || x.MaKhoa != maKhoa ||
             x.MaSV != (req.MaVaiTro == "VT04" ? req.MaSV : null) ||
             x.MaGV != (req.MaVaiTro == "VT03" ? req.MaGV : null) ||
             x.MaDaiDien != (req.MaVaiTro == "VT05" ? req.MaDaiDien : null);
@@ -277,6 +291,7 @@ public class AdminService
         x.MaSV = req.MaVaiTro == "VT04" ? req.MaSV : null;
         x.MaGV = req.MaVaiTro == "VT03" ? req.MaGV : null;
         x.MaDaiDien = req.MaVaiTro == "VT05" ? req.MaDaiDien : null;
+        x.MaKhoa = maKhoa;
         if (securityRelevantChange) x.SecurityStamp = Guid.NewGuid().ToString("N");
         await _db.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();

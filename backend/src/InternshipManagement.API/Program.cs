@@ -61,7 +61,12 @@ public partial class Program
         var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
             ?? new[] { "http://localhost:5173" };
 
-        builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
+        // Bộ lọc theo khoa dựa vào các bảng cha; cảnh báo EF về điều hướng bắt buộc bị lọc là chủ đích.
+        builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString).ConfigureWarnings(w =>
+            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.PossibleIncorrectRequiredNavigationWithQueryFilterInteractionWarning)));
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<IKhoaScope, HttpKhoaScope>();
+        builder.Services.AddScoped<KhoaService>();
 
         // ---- Repositories (mỗi interface đăng ký ĐÚNG MỘT LẦN) ----
         builder.Services.AddScoped<ISinhVienRepository, SinhVienRepository>();
@@ -195,7 +200,17 @@ public partial class Program
                     }
                     if (account.MaVaiTro == "VT05" && await InternshipManagement.DAL.Common.EnterpriseAccountPolicy
                         .HasOtherActiveAccountAsync(db, account.MaDaiDien, account.MaTaiKhoan))
+                    {
                         context.Fail("Doanh nghiệp chưa có tài khoản đại diện duy nhất được xác minh. Liên hệ QTV.");
+                        return;
+                    }
+                    // Khoa đọc lại từ CSDL ở mỗi request: đổi khoa của SV/GV/cán bộ có hiệu lực ngay, không tin giá trị trong token.
+                    if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
+                    {
+                        foreach (var claim in identity.FindAll(HttpKhoaScope.ClaimType).ToList()) identity.RemoveClaim(claim);
+                        var phamVi = await InternshipManagement.DAL.Common.KhoaCuaTaiKhoan.PhamViAsync(db, account);
+                        if (phamVi != null) identity.AddClaim(new System.Security.Claims.Claim(HttpKhoaScope.ClaimType, phamVi));
+                    }
                 }
             };
         });

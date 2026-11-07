@@ -62,8 +62,10 @@ public sealed class StudentAccountImportService(AppDbContext db, IPasswordServic
             return (0, preview.TotalRows, preview.Items.Where(x => x.TrangThai is "KhongHopLe" or "TrungTrongFile").Select(x => $"Dòng {x.Dong}: {x.GhiChu}").ToList());
         var targets = preview.Items.Where(x => x.TrangThai is "TaoMoi" or "CapTaiKhoan").ToArray();
         var hash = targets.Length > 0 ? passwords.Hash("123456") : "";
+        // Hồ sơ SV mới thuộc khoa QTV chọn; để trống khi hệ thống chỉ có một khoa.
+        var maKhoa = await KhoaService.RequireActiveAsync(db, request.MaKhoa);
         foreach (var item in targets) {
-            if (item.TrangThai == "TaoMoi") db.SinhViens.Add(new() { MaSV = item.MaSV, HoTen = item.HoTen, Lop = string.IsNullOrWhiteSpace(item.Lop) ? null : item.Lop });
+            if (item.TrangThai == "TaoMoi") db.SinhViens.Add(new() { MaSV = item.MaSV, HoTen = item.HoTen, Lop = string.IsNullOrWhiteSpace(item.Lop) ? null : item.Lop, MaKhoa = maKhoa });
             db.TaiKhoans.Add(new() { MaTaiKhoan = "TK_" + Guid.NewGuid().ToString("N")[..17], TenDangNhap = item.MaSV.ToLowerInvariant(),
                 MatKhau = hash, MaVaiTro = "VT04", TrangThai = "HoatDong", MaSV = item.MaSV,
                 Email = string.IsNullOrWhiteSpace(item.Email) ? item.MaSV.ToLowerInvariant() + "@huit.edu.vn" : item.Email });

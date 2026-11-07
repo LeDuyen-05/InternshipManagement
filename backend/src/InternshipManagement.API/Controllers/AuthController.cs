@@ -42,6 +42,7 @@ public class AuthController : ControllerBase
         _limiter.GhiNhanThanhCong(request.TenDangNhap);
 
         var hoTen = await _service.ResolveHoTenAsync(account);
+        var (maKhoa, tenKhoa) = await _service.ResolveKhoaAsync(account);
         return Ok(new LoginResponse(
             _jwt.Create(account),
             account.MaTaiKhoan,
@@ -53,7 +54,9 @@ public class AuthController : ControllerBase
             account.MaDaiDien,
             account.Email,
             account.SoDienThoai,
-            hoTen));
+            hoTen,
+            maKhoa,
+            tenKhoa));
     }
 
     [AllowAnonymous]

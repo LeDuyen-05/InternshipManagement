@@ -14,7 +14,8 @@ public sealed class ResourceAccess(AppDbContext db) : IResourceAccess
 {
     public async Task<bool> CanAccessStudentAsync(ClaimsPrincipal u, string maSV, string? maDot = null)
     {
-        if (u.IsStaff()) return true;
+        // Cán bộ Khoa chỉ xem SV thuộc khoa mình (bộ lọc khoa của DbContext); QTV/hệ thống một khoa không bị giới hạn.
+        if (u.IsStaff()) return db.PhamViKhoaHienTai == null || await db.SinhViens.AnyAsync(x => x.MaSV == maSV);
         if (u.IsInRole(Roles.SinhVien)) return string.Equals(u.MaSV(), maSV, StringComparison.OrdinalIgnoreCase);
         if (u.IsInRole(Roles.GiangVien) && u.MaGV() is { } gv)
             return await db.GVHuongDans.AnyAsync(x => x.MaGiangVien == gv && x.MaSinhVien == maSV && x.TrangThai == "DangHuongDan" && (maDot == null || x.MaDot == maDot));

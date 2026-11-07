@@ -46,6 +46,9 @@ public sealed class AdminListService(AppDbContext db)
                 (x.MaGV != null && gvIds.Contains(x.MaGV)) ||
                 (x.MaDaiDien != null && dnIds.Contains(x.MaDaiDien)));
         }
+        if (f.MaKhoa is { } khoa)
+            query = query.Where(x => x.MaKhoa == khoa || db.SinhViens.Any(s => s.MaSV == x.MaSV && s.MaKhoa == khoa)
+                || db.GiangViens.Any(g => g.MaGV == x.MaGV && g.MaKhoa == khoa));
         if (f.Search is { } keyword)
         {
             var kw = keyword.ToLower();
@@ -68,7 +71,10 @@ public sealed class AdminListService(AppDbContext db)
                 : db.DaiDienDoanhNghieps.Where(d => d.MaSo == x.MaDaiDien).Select(d => d.HoTen).FirstOrDefault(),
             x.MaSV != null ? db.SinhViens.Where(s => s.MaSV == x.MaSV).Select(s => s.Lop).FirstOrDefault()
                 : x.MaGV != null ? db.GiangViens.Where(g => g.MaGV == x.MaGV).Select(g => g.ChuyenMon).FirstOrDefault()
-                : db.DaiDienDoanhNghieps.Where(d => d.MaSo == x.MaDaiDien).Select(d => d.CongTy.TenCongTy).FirstOrDefault()));
+                : db.DaiDienDoanhNghieps.Where(d => d.MaSo == x.MaDaiDien).Select(d => d.CongTy.TenCongTy).FirstOrDefault(),
+            x.MaSV != null ? db.SinhViens.Where(s => s.MaSV == x.MaSV).Select(s => s.MaKhoa).FirstOrDefault()
+                : x.MaGV != null ? db.GiangViens.Where(g => g.MaGV == x.MaGV).Select(g => g.MaKhoa).FirstOrDefault()
+                : x.MaKhoa));
 
     public async Task<object> AccountsAsync(AdminListQuery f, CancellationToken ct = default)
     {

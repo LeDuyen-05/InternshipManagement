@@ -116,7 +116,8 @@ public class AuthService
         var account = await _db.TaiKhoans.FindAsync(maTaiKhoan)
             ?? throw new KeyNotFoundException("Không tìm thấy tài khoản.");
         var hoTen = await ResolveHoTenAsync(account);
-        return ToProfileDto(account, hoTen);
+        var (maKhoa, tenKhoa) = await ResolveKhoaAsync(account);
+        return ToProfileDto(account, hoTen) with { MaKhoa = maKhoa, TenKhoa = tenKhoa };
     }
 
     public async Task<AccountProfileDto> UpdateProfileAsync(string maTaiKhoan, UpdateOwnProfileRequest request)
@@ -136,7 +137,8 @@ public class AuthService
         account.SoDienThoai = string.IsNullOrEmpty(phone) ? null : phone;
         await _db.SaveChangesAsync();
         var hoTen = await ResolveHoTenAsync(account);
-        return ToProfileDto(account, hoTen);
+        var (maKhoa, tenKhoa) = await ResolveKhoaAsync(account);
+        return ToProfileDto(account, hoTen) with { MaKhoa = maKhoa, TenKhoa = tenKhoa };
     }
 
     public async Task<string?> ResolveHoTenAsync(TaiKhoan account)
@@ -148,6 +150,14 @@ public class AuthService
         if (!string.IsNullOrEmpty(account.MaDaiDien))
             return (await _db.DaiDienDoanhNghieps.FindAsync(account.MaDaiDien))?.HoTen;
         return null;
+    }
+
+    /// <summary>Khoa quản lý của tài khoản (để giao diện hiện đúng tên khoa); QTV và DN không thuộc khoa nào.</summary>
+    public async Task<(string? MaKhoa, string? TenKhoa)> ResolveKhoaAsync(TaiKhoan account)
+    {
+        var maKhoa = await InternshipManagement.DAL.Common.KhoaCuaTaiKhoan.TimAsync(_db, account);
+        if (maKhoa == null) return (null, null);
+        return (maKhoa, await _db.Khoas.AsNoTracking().Where(x => x.MaKhoa == maKhoa).Select(x => x.TenKhoa).FirstOrDefaultAsync());
     }
 
     private static AccountProfileDto ToProfileDto(TaiKhoan account, string? hoTen) => new(

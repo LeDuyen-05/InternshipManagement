@@ -10,6 +10,7 @@ public class AdminListQuery
     public string? MaVaiTro { get; set; }
     public string? Lop { get; set; }
     public string? ChuyenNganh { get; set; }
+    public string? MaKhoa { get; set; }
     public string PhamVi { get; set; } = "HienHanh";
 
     public int Offset => (Page - 1) * PageSize;
@@ -21,7 +22,7 @@ public class AdminListQuery
         if (Page > 1_000_000 || PageSize > 100)
             throw new ArgumentException("Trang phải từ 1 đến 1.000.000; số dòng mỗi trang từ 1 đến 100.");
         Search = Clean(Search, 200); MaDot = Clean(MaDot, 20); TrangThai = Clean(TrangThai, 50);
-        MaVaiTro = Clean(MaVaiTro, 20); Lop = Clean(Lop, 50); ChuyenNganh = Clean(ChuyenNganh, 200);
+        MaVaiTro = Clean(MaVaiTro, 20); Lop = Clean(Lop, 50); ChuyenNganh = Clean(ChuyenNganh, 200); MaKhoa = Clean(MaKhoa, 20);
     }
 
     private static string? Clean(string? value, int maximum)
