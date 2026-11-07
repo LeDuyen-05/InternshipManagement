@@ -48,5 +48,12 @@ public static class FacultyMigration
         KhoaNgoai("BOTIEUCHI", "FK_BTC_KHOA"),
         KhoaNgoai("THONGBAO", "FK_TB_KHOA"),
         KhoaNgoai("TAIKHOAN", "FK_TK_KHOA"),
+        // Biểu mẫu cũ là bộ chung "GLOBAL" do Khoa CNTT tải lên: chuyển thành bộ biểu mẫu của khoa đó.
+        // Khi đã có danh mục khoa thì không tạo mới bộ "GLOBAL" nữa, nên câu lệnh chỉ có tác dụng một lần.
+        """
+        IF OBJECT_ID('STORED_DOCUMENT','U') IS NOT NULL AND EXISTS (SELECT 1 FROM KHOA)
+            UPDATE STORED_DOCUMENT SET ResourceId = (SELECT TOP 1 MaKhoa FROM KHOA ORDER BY MaKhoa)
+            WHERE Kind = N'Template' AND ResourceId = N'GLOBAL';
+        """,
     };
 }

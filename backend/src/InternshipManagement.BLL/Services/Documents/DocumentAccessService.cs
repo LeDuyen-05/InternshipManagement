@@ -69,8 +69,7 @@ public class DocumentAccessService(AppDbContext db, TimeProvider clock)
                     ?? throw new KeyNotFoundException($"Không tìm thấy thông báo có mã '{id}'.");
                 label = notice.TieuDe; read = NotificationAudience.CanRead(a.Role, notice.DoiTuong); edit = Faculty(a); break;
             default:
-                if (id != "GLOBAL") throw new KeyNotFoundException($"Mã bộ biểu mẫu không hợp lệ: '{id}'.");
-                label = "Biểu mẫu thực tập dùng chung"; read = NotificationAudience.Code(a.Role) != "NONE"; edit = Faculty(a); break;
+                (label, read, edit) = await TemplateAccessAsync(id, a); break;
         }
         if (!read || (write && !edit)) throw new UnauthorizedAccessException("Không có quyền thao tác tệp của hồ sơ hoặc đã hết hạn/trạng thái không cho sửa.");
         if (write && round != null) {
@@ -83,10 +82,52 @@ public class DocumentAccessService(AppDbContext db, TimeProvider clock)
         return new(id, label, round);
     }
 
+    // Mỗi khoa có bộ biểu mẫu riêng (mã bộ = mã khoa). "GLOBAL" chỉ còn cho cài đặt cũ chưa có danh mục khoa.
+    private async Task<(string Label, bool Read, bool Edit)> TemplateAccessAsync(string id, DocumentActor a)
+    {
+        var anyRole = NotificationAudience.Code(a.Role) != "NONE";
+        if (id == "GLOBAL")
+            return ("Biểu mẫu thực tập dùng chung", anyRole, Faculty(a) && !await db.Khoas.AnyAsync());
+        var khoa = await db.Khoas.AsNoTracking().SingleOrDefaultAsync(x => x.MaKhoa == id)
+            ?? throw new KeyNotFoundException($"Mã bộ biểu mẫu không hợp lệ: '{id}'.");
+        var scope = db.PhamViKhoaHienTai;
+        var read = a.Role switch
+        {
+            "Khoa" or "GiangVien" or "SinhVien" => scope == null || scope == id,
+            // Doanh nghiệp làm việc với nhiều khoa: xem biểu mẫu của khoa có đợt mà công ty tham gia.
+            "DaiDienDN" => await TemplateKhoaOfCompany(a).ContainsAsync(id),
+            _ => false
+        };
+        return ($"Biểu mẫu thực tập — {khoa.TenKhoa}", read, Faculty(a) && scope == id);
+    }
+
+    // Đợt mà công ty được đưa vào, có đăng ký hoặc có SV thực tập (giống danh sách đợt của doanh nghiệp).
+    private IQueryable<string> TemplateKhoaOfCompany(DocumentActor a)
+    {
+        var company = db.DaiDienDoanhNghieps.Where(d => d.MaSo == a.Representative).Select(d => d.MaCongTy);
+        var rounds = db.CongTyTheoDots.Where(c => company.Contains(c.MaCongTy)).Select(c => c.MaDot)
+            .Union(db.DangKyThucTaps.Where(x => company.Contains(x.MaCongTy)).Select(x => x.MaDot))
+            .Union(db.PhanBoThucTaps.Where(x => company.Contains(x.MaCongTy)).Select(x => x.MaDot));
+        return db.DotThucTaps.Where(d => rounds.Contains(d.MaSo) && d.MaKhoa != null).Select(d => d.MaKhoa!).Distinct();
+    }
+
+    private async Task<List<string>> TemplateIdsAsync(DocumentActor a)
+    {
+        if (!await db.Khoas.AnyAsync()) return ["GLOBAL"];
+        if (a.Role == "DaiDienDN") return await TemplateKhoaOfCompany(a).OrderBy(x => x).ToListAsync();
+        var scope = db.PhamViKhoaHienTai;
+        return scope == null || scope == PhamViKhoa.KhongCoKhoa ? [] : [scope];
+    }
+
     public async Task<object> ResourcesAsync(string kind, string? round, string? search, int page, DocumentActor a)
     {
         if (!Kinds.Contains(kind) || page is < 1 or > 10000 || search?.Length > 100) throw new ArgumentException("Bộ lọc tài liệu không hợp lệ.");
-        if (kind == "Template") return new { items = new[] { await RequireAsync(kind, "GLOBAL", a, false) }, page = 1, hasMore = false };
+        if (kind == "Template")
+        {
+            var templates = new List<DocumentResource>();
+            foreach (var id in await TemplateIdsAsync(a)) templates.Add(await RequireAsync(kind, id, a, false));
+            return new { items = templates, page = 1, hasMore = false };
+        }
         if (kind is not ("CV" or "Notification") && string.IsNullOrWhiteSpace(round)) throw new ArgumentException("Chọn đợt để xem hồ sơ.");
         var company = await Company(a);
         IQueryable<string> students = a.Role switch {
