@@ -51,11 +51,17 @@ public class RubricService(AppDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(); if (tx != null) await tx.CommitAsync();
     }
 
-    public static async Task RequireDraftAsync(AppDbContext db, string id)
+    /// <summary>
+    /// Bộ đã ban hành là văn bản chính thức: chỉ sửa được mô tả/thứ tự. Đổi điểm, nhóm, CLO hoặc thêm/xóa tiêu chí
+    /// (<paramref name="doiCauTruc"/>) phải sao chép thành phiên bản mới để không làm lệch thang điểm đang áp dụng.
+    /// </summary>
+    public static async Task RequireDraftAsync(AppDbContext db, string id, bool doiCauTruc = true)
     {
         var item = await db.BoTieuChis.SingleOrDefaultAsync(x => x.MaRubric == id)
             ?? throw new ArgumentException("Tạo bộ tiêu chí trước khi thêm/sửa tiêu chí.");
         if (item.TrangThai == "NgungApDung") throw new InvalidOperationException("Bộ tiêu chí đã ngừng áp dụng.");
+        if (item.TrangThai == "PhatHanh" && doiCauTruc)
+            throw new InvalidOperationException("Bộ tiêu chí đã ban hành: chỉ sửa được mô tả và thứ tự. Muốn đổi điểm, thêm hoặc xóa tiêu chí, hãy sao chép thành phiên bản mới.");
         item.PhienBanCapNhat++;
     }
 

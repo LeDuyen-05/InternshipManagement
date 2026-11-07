@@ -68,7 +68,7 @@ export default function KhoaCriteriaPage() {
       try {
         const types = await rubricService.getLoaiThucTap()
         setLoaiList(types)
-      } catch (_e) {
+      } catch {
         // ignore
       }
     }
@@ -198,6 +198,10 @@ export default function KhoaCriteriaPage() {
       setError('Bộ tiêu chí này đã ngừng áp dụng. Không thể thêm tiêu chí.')
       return
     }
+    if (isPublished) {
+      setError('Bộ tiêu chí đã ban hành: chỉ sửa được mô tả và thứ tự. Muốn đổi điểm, thêm hoặc xóa tiêu chí, hãy sao chép thành phiên bản mới.')
+      return
+    }
     setForm(createInitialForm(selectedRubric))
     setEditing(false)
     setError('')
@@ -277,6 +281,10 @@ export default function KhoaCriteriaPage() {
   const handleRemove = async (item) => {
     if (isRetired) {
       setError('Bộ tiêu chí này đã ngừng áp dụng. Không thể xóa tiêu chí.')
+      return
+    }
+    if (isPublished) {
+      setError('Bộ tiêu chí đã ban hành: chỉ sửa được mô tả và thứ tự. Muốn đổi điểm, thêm hoặc xóa tiêu chí, hãy sao chép thành phiên bản mới.')
       return
     }
     const confirmMsg = `Bạn có chắc chắn muốn xóa tiêu chí "${item.maTieuChi} - ${item.tenTieuChi}"?`
@@ -779,8 +787,8 @@ export default function KhoaCriteriaPage() {
                 )}
               </div>
 
-              {/* Nút Thêm tiêu chí đặt đúng trên thanh công cụ bảng */}
-              {!isRetired && (
+              {/* Nút Thêm tiêu chí đặt đúng trên thanh công cụ bảng (bộ đã ban hành chỉ sửa mô tả/thứ tự) */}
+              {isDraft && (
                 <button
                   type="button"
                   onClick={handleOpenAdd}
@@ -869,6 +877,7 @@ export default function KhoaCriteriaPage() {
                               >
                                 <span className="material-symbols-outlined text-sm">edit</span>
                               </button>
+                              {isDraft && (
                               <button
                                 onClick={() => handleRemove(item)}
                                 className="w-7 h-7 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center transition-colors cursor-pointer"
@@ -876,6 +885,7 @@ export default function KhoaCriteriaPage() {
                               >
                                 <span className="material-symbols-outlined text-sm">delete</span>
                               </button>
+                              )}
                             </div>
                           ) : (
                             <span className="text-[11px] text-slate-400 italic">Đã khóa</span>
@@ -909,6 +919,12 @@ export default function KhoaCriteriaPage() {
             </div>
 
           <form onSubmit={handleSave} className="space-y-4 text-xs">
+            {isPublished && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
+                Bộ tiêu chí đã ban hành: chỉ sửa được tên/mô tả và thứ tự. Muốn đổi CLO, người chấm hoặc điểm tối đa,
+                hãy sao chép thành phiên bản mới.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
@@ -918,6 +934,7 @@ export default function KhoaCriteriaPage() {
                   type="text"
                   required
                   placeholder="VD: CLO3.5"
+                  disabled={isPublished}
                   value={form.maCLO}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -964,6 +981,7 @@ export default function KhoaCriteriaPage() {
                   Người chấm <span className="text-rose-500">*</span>
                 </label>
                 <select
+                  disabled={isPublished}
                   value={form.nhomDanhGia}
                   onChange={(e) => setForm({ ...form, nhomDanhGia: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800"
@@ -984,6 +1002,7 @@ export default function KhoaCriteriaPage() {
                   max="10"
                   required
                   placeholder="0.50"
+                  disabled={isPublished}
                   value={form.diemToiDa}
                   onChange={(e) => setForm({ ...form, diemToiDa: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800"

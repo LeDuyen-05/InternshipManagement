@@ -397,14 +397,15 @@ public class AdminService
         if (double.IsNaN(request.DiemToiDa) || double.IsInfinity(request.DiemToiDa) || request.DiemToiDa > 10 || Math.Round(request.DiemToiDa, 2) != request.DiemToiDa)
             throw new InvalidOperationException("Điểm tối đa phải không vượt quá 10 và có tối đa hai chữ số thập phân.");
         if (request.DiemToiDa <= 0) throw new InvalidOperationException("Điểm tối đa phải lớn hơn 0.");
-        await RubricService.RequireDraftAsync(_db, request.MaRubric);
-        var clo = string.IsNullOrWhiteSpace(request.MaCLO) ? request.MaTieuChi : request.MaCLO.Trim();
-        if (request.MaTieuChi != id || request.ThuTu < 1 || await _db.TieuChis.AnyAsync(x => x.MaRubric == request.MaRubric && x.MaTieuChi != id && x.MaCLO == clo))
-            throw new ArgumentException("Không đổi mã tiêu chí; thứ tự phải dương và CLO không trùng trong bộ.");
-        var nhom = ValidateNhom(request.NhomDanhGia);
-        if ((await _db.TieuChis.Where(x => x.MaTieuChi != id && x.NhomDanhGia != null && x.MaRubric == request.MaRubric).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
         var item = await _db.TieuChis.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tiêu chí.");
         if (item.MaRubric != request.MaRubric) throw new ArgumentException("Không chuyển tiêu chí sang bộ khác.");
+        var clo = string.IsNullOrWhiteSpace(request.MaCLO) ? request.MaTieuChi : request.MaCLO.Trim();
+        var nhom = ValidateNhom(request.NhomDanhGia);
+        var doiCauTruc = item.DiemToiDa != (decimal)request.DiemToiDa || item.NhomDanhGia != nhom || item.MaCLO != clo;
+        await RubricService.RequireDraftAsync(_db, request.MaRubric, doiCauTruc);
+        if (request.MaTieuChi != id || request.ThuTu < 1 || await _db.TieuChis.AnyAsync(x => x.MaRubric == request.MaRubric && x.MaTieuChi != id && x.MaCLO == clo))
+            throw new ArgumentException("Không đổi mã tiêu chí; thứ tự phải dương và CLO không trùng trong bộ.");
+        if ((await _db.TieuChis.Where(x => x.MaTieuChi != id && x.NhomDanhGia != null && x.MaRubric == request.MaRubric).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
         if ((item.DiemToiDa != (decimal)request.DiemToiDa || item.NhomDanhGia != nhom || item.MaRubric != request.MaRubric || item.MaCLO != (string.IsNullOrWhiteSpace(request.MaCLO) ? item.MaTieuChi : request.MaCLO.Trim()))
             && await _db.ChiTietChamDiems.AnyAsync(x => x.MaTieuChi == id))
             throw new InvalidOperationException("Tiêu chí đã có điểm: chỉ được sửa mô tả và thứ tự để bảo toàn lịch sử.");
