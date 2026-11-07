@@ -1,23 +1,24 @@
 # ML Service — Gợi ý công ty thực tập (chạy dạng script offline)
 
-## Cấu trúc thư mục (29/10/2026)
+## Cấu trúc thư mục (cập nhật 07/11/2026)
 
 ```text
 ml-service/
   src/
-    inference/    # Suy luận, scorer HTTP và gợi ý batch cũ
-    training/     # Huấn luyện và đóng gói Colab
-    datasets/     # Chuẩn bị và đóng gói dữ liệu
-    evaluation/   # Đánh giá, đối chiếu JD
-    common/       # data_pipeline, db, services và đường dẫn dùng chung
-  requirements/   # Các bộ thư viện theo mục đích
+    inference/    # Suy luận LambdaMART v3 (inference_v3.py) và scorer HTTP cho backend (serve_inference_v3.py)
+    training/     # Huấn luyện xếp hạng v3 (ranking_pipeline_v3.py)
+    datasets/     # Phần A: run_data_pipeline.py (dữ liệu hệ thống), run_external_pipeline.py (du-lieu-train)
+    common/       # data_pipeline (tiền xử lý, embedding, gán nhãn), db (kết nối SQL Server), layout.py
+  requirements/   # requirements.txt (phần A), requirements-inference-v3.txt, requirements-colab-v3.txt
   tests/          # Kiểm thử tự động
-  data/           # Dữ liệu đầu vào có quản lý trong source
   data_raw/       # Dữ liệu thô local (Git bỏ qua)
   output/         # Model, cache và kết quả sinh ra (Git bỏ qua)
   reports/        # Báo cáo kiểm chứng, giữ lịch sử
-  .venv/          # Môi trường Python local (Git bỏ qua)
 ```
+
+> **Còn thiếu trong repo:** `src/training/run_colab_training.py` (bản gốc nằm ở `KET_QUA_V3/code/`) và
+> `requirements/requirements-ranking-v3.txt` mà `common/layout.py` / `ranking_pipeline_v3.py` tham chiếu khi đóng gói Colab.
+> Phần huấn luyện cần người phụ trách bổ sung trước khi tái lập kết quả từ repo.
 
 Các lệnh dưới chạy từ `ml-service/`. Thiết lập đường dẫn module trước khi chạy:
 
@@ -38,8 +39,8 @@ Gồm 2 phần:
 
 | Phần | Script | Phụ trách |
 |---|---|---|
-| A – Dữ liệu: tiền xử lý, embedding, tạo tập nhãn | `run_data_pipeline.py`, `data_pipeline/` | Người 2 |
-| B/C – Huấn luyện xếp hạng, ghi `GOIYCONGTY` | `generate_recommendations.py`, `services/` | Người 1, Người 3 |
+| A – Dữ liệu: tiền xử lý, embedding, tạo tập nhãn | `src/datasets/`, `src/common/data_pipeline/` | Người 2 |
+| B/C – Huấn luyện xếp hạng, suy luận cho backend | `src/training/`, `src/inference/` | Người 1, Người 3 |
 
 ## Cài đặt (Python 3.11–3.13)
 ```bash
@@ -136,7 +137,6 @@ Tiền xử lý (`data_pipeline/external_dataset.py`):
 học lại luật và NDCG cao giả. Dùng embedding/`tfidf_cosine`/`lsa_cosine`/GPA, và đánh giá cuối trên tập gán tay.
 
 ## Phần B/C — Gợi ý Top-K
-```bash
-python -m inference.generate_recommendations   # TF-IDF + cosine → ghi bảng GOIYCONGTY
-```
-Backend C# (`RecommendationService`) tính gợi ý trực tiếp lúc chạy; script này dùng để batch/đánh giá offline.
+Backend C# (`RecommendationService`) tính gợi ý lúc chạy: gọi scorer LambdaMART v3 (`src/inference/serve_inference_v3.py`,
+khởi động bằng `../scripts/ai/Manage-LtrRuntime.ps1`) khi đã cấu hình, ngược lại dùng TF-IDF/cosine.
+Script cũ `generate_recommendations.py` (ghi bảng GOIYCONGTY) đã bỏ, không còn dùng.
