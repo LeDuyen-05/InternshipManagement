@@ -45,10 +45,13 @@ public partial class Program
             .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.R2.private.json"), optional: true, reloadOnChange: false)
             .AddJsonFile(Path.Combine(builder.Environment.ContentRootPath, "appsettings.Inference.private.json"), optional: true, reloadOnChange: false)
             .AddJsonFile(Path.Combine(AppContext.BaseDirectory, "appsettings.Inference.private.json"), optional: true, reloadOnChange: false)
+            // Bí mật theo môi trường (chuỗi kết nối, JWT key) không commit: appsettings.{Env}.private.json – xem file .example.
+            .AddJsonFile(Path.Combine(builder.Environment.ContentRootPath, $"appsettings.{builder.Environment.EnvironmentName}.private.json"), optional: true, reloadOnChange: false)
             .AddEnvironmentVariables().AddCommandLine(args);
 
-        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException("Thiếu ConnectionStrings:DefaultConnection.");
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new InvalidOperationException($"Thiếu ConnectionStrings:DefaultConnection. Tạo appsettings.{builder.Environment.EnvironmentName}.private.json (xem file .example) hoặc đặt biến môi trường ConnectionStrings__DefaultConnection.");
         var jwtKey = builder.Configuration["Jwt:Key"]
             ?? throw new InvalidOperationException("Thiếu Jwt:Key (>= 32 byte).");
         if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
@@ -217,8 +220,12 @@ public partial class Program
             app.Logger.LogInformation("Startup: ready in {ElapsedMs} ms", startupTimer.ElapsedMilliseconds));
 
         app.UseExceptionHandler();
-        app.UseSwagger();
-        app.UseSwaggerUI();
+        // Swagger liệt kê toàn bộ API: chỉ bật khi phát triển, hoặc bật có chủ đích bằng Swagger:Enabled=true.
+        if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI();
+        }
 
         app.UseCors("Frontend");
 

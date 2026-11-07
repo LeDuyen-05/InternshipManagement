@@ -3,6 +3,13 @@
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
+# Chuoi ket noi va JWT key production KHONG nam trong repo: phai co file rieng (xem appsettings.Production.private.example.json)
+$prodSecrets = "backend\src\InternshipManagement.API\appsettings.Production.private.json"
+if (-not (Test-Path $prodSecrets)) {
+    Write-Host "Thieu $prodSecrets. Sao chep tu appsettings.Production.private.example.json va dien chuoi ket noi + JWT key that (khong commit file nay)." -ForegroundColor Red
+    exit 1
+}
+
 Write-Host "`n=== BUOC 1: Build Frontend (React + Vite) ===" -ForegroundColor Cyan
 npm run build --prefix frontend
 

@@ -18,5 +18,8 @@
   <ItemGroup>
     <Content Update="appsettings.R2.private.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
     <Content Update="appsettings.Inference.private.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
+    <!-- Bí mật production (không commit) phải theo gói publish để hosting đọc được -->
+    <Content Update="appsettings.Production.private.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="appsettings.*.example.json" CopyToOutputDirectory="Never" CopyToPublishDirectory="Never" />
   </ItemGroup>
 </Project>
