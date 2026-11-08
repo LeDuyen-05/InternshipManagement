@@ -515,20 +515,12 @@ public partial class DoanhNghiepService
         var dot = await GetReadRoundAsync(request.MaDot);
         if (dot == null) throw new InvalidOperationException("Không tìm thấy đợt thực tập phù hợp.");
 
-        var plan = await _db.CongTyTheoDots.SingleOrDefaultAsync(p => p.MaCongTy == congTy.MaCongTy && p.MaDot == dot.MaSo);
-        if (plan == null)
-        {
-            plan = new CongTyTheoDot
-            {
-                MaCongTy = congTy.MaCongTy,
-                MaDot = dot.MaSo,
-                ViTriTuyen = request.TenViTri.Trim(),
-                YeuCau = request.YeuCau?.Trim() ?? "",
-                SoLuongNhan = request.SoLuongNhan > 0 ? request.SoLuongNhan : 1,
-                HoatDong = true
-            };
-            _db.CongTyTheoDots.Add(plan);
-        }
+        // Chỉ Khoa đưa công ty vào đợt (kế hoạch, thời hạn, chỉ tiêu). Vị trí chỉ thêm vào kế hoạch đã có:
+        // không tự tạo kế hoạch, nếu không DN có thể tự gắn vào đợt của khoa khác.
+        if (!await _db.CongTyTheoDots.AnyAsync(p => p.MaCongTy == congTy.MaCongTy && p.MaDot == dot.MaSo))
+            throw new InvalidOperationException(phamViCongTy == null
+                ? "Công ty chưa có kế hoạch trong đợt này. Lập kế hoạch công ty theo đợt (thời hạn, chỉ tiêu) trước khi thêm vị trí."
+                : "Khoa chưa đưa công ty vào kế hoạch của đợt này. Liên hệ Khoa để lập kế hoạch tiếp nhận trước khi thêm vị trí.");
 
         var newId = "VT_" + Guid.NewGuid().ToString("N")[..8].ToUpper();
         var entity = new ViTriTheoDot
