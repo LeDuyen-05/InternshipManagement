@@ -851,14 +851,20 @@ public class AdminService
 
     public async Task CreateLecturerAsync(CreateLecturerRequest r)
     {
-        _db.GiangViens.Add(new GiangVien { MaGV=r.MaGV, HoTen=r.HoTen, ChuyenMon=r.ChuyenMon ?? "", SoLuongSVHD=0, ChiTieuHD=r.ChiTieuHD > 0 ? r.ChiTieuHD : 10 });
+        var chiTieu = r.ChiTieuHD > 0 ? r.ChiTieuHD : 10;
+        await DAL.Common.ChiTieuHuongDan.KiemTraAsync(_db, r.MaGV, chiTieu);
+        _db.GiangViens.Add(new GiangVien { MaGV=r.MaGV, HoTen=r.HoTen, ChuyenMon=r.ChuyenMon ?? "", SoLuongSVHD=0, ChiTieuHD=chiTieu });
         await _db.SaveChangesAsync();
     }
     public async Task UpdateLecturerAsync(string id, CreateLecturerRequest r)
     {
         var x = await _db.GiangViens.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy giảng viên.");
         x.HoTen=r.HoTen; x.ChuyenMon=r.ChuyenMon ?? "";
-        if (r.ChiTieuHD > 0) x.ChiTieuHD = r.ChiTieuHD;
+        if (r.ChiTieuHD > 0)
+        {
+            await DAL.Common.ChiTieuHuongDan.KiemTraAsync(_db, id, r.ChiTieuHD);
+            x.ChiTieuHD = r.ChiTieuHD;
+        }
         await _db.SaveChangesAsync();
     }
     public async Task CreateCompanyAsync(CreateCompanyRequest r)

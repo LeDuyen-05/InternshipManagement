@@ -436,8 +436,8 @@ export default function PhanCongGVHDPage() {
   const handleSaveQuota = async () => {
     if (!editQuotaGV) return
     const quotaNum = parseInt(newQuota, 10)
-    if (isNaN(quotaNum) || quotaNum < 0) {
-      toast.warning('Vui lòng nhập một số hợp lệ!')
+    if (isNaN(quotaNum) || quotaNum < 0 || quotaNum > 50) {
+      toast.warning('Chỉ tiêu hướng dẫn từ 0 đến 50 sinh viên mỗi đợt.')
       return
     }
     if (quotaNum < editQuotaGV.soLuongHienTai) {
@@ -1230,7 +1230,7 @@ export default function PhanCongGVHDPage() {
               <input
                 type="number"
                 min={editQuotaGV.soLuongHienTai}
-                max={30}
+                max={50}
                 value={newQuota}
                 onChange={(e) => setNewQuota(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"

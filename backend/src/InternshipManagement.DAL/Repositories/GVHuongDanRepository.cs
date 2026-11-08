@@ -172,6 +172,7 @@ public class GVHuongDanRepository : GenericRepository<GVHuongDan>, IGVHuongDanRe
         var gv = await Context.GiangViens.FirstOrDefaultAsync(g => g.MaGV == maGV);
         if (gv == null) return false;
 
+        await Common.ChiTieuHuongDan.KiemTraAsync(Context, maGV, soLuongMoi);
         gv.ChiTieuHD = soLuongMoi;
         await Context.SaveChangesAsync();
         return true;
