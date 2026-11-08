@@ -821,6 +821,8 @@ export default function AdminPage() {
                     value={form.MaTaiKhoan}
                     onChange={(e) => setForm({ ...form, MaTaiKhoan: e.target.value })}
                     required
+                    pattern="\s*\S{1,20}\s*"
+                    title="1–20 ký tự, không chứa khoảng trắng"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition-all"
                   />
                 </label>
@@ -832,6 +834,8 @@ export default function AdminPage() {
                     value={form.TenDangNhap}
                     onChange={(e) => setForm({ ...form, TenDangNhap: e.target.value })}
                     required
+                    pattern="\s*\S{4,100}\s*"
+                    title="4–100 ký tự, không chứa khoảng trắng"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50/70 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition-all"
                   />
                 </label>

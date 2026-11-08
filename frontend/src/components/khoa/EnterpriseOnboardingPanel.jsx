@@ -88,8 +88,9 @@ export default function EnterpriseOnboardingPanel({ onSelect, onChanged, refresh
     const rawUsername = rep.email ? rep.email.split('@')[0].toLowerCase().replace(/[^a-z0-9_]/g, '') : `dn_${rep.maDaiDien.toLowerCase()}`
     setAccountModal({ rep, company })
     setAccountForm({
-      maTaiKhoan: `TK_${rep.maDaiDien}`,
-      tenDangNhap: rawUsername || `rep_${rep.maDaiDien.toLowerCase()}`,
+      // Mã tài khoản tối đa 20 ký tự; mã đại diện tự sinh đã dài 20 ký tự nên cắt bớt.
+      maTaiKhoan: `TK_${rep.maDaiDien}`.slice(0, 20),
+      tenDangNhap: rawUsername.length >= 4 ? rawUsername : `rep_${rep.maDaiDien.toLowerCase()}`,
       matKhau: '',
     })
     setError('')
@@ -573,6 +574,8 @@ export default function EnterpriseOnboardingPanel({ onSelect, onChanged, refresh
                 <span>Mã tài khoản <strong className="text-rose-500">*</strong></span>
                 <input
                   required
+                  pattern="\s*\S{1,20}\s*"
+                  title="1–20 ký tự, không chứa khoảng trắng"
                   value={accountForm.maTaiKhoan}
                   onChange={(e) => setAccountForm({ ...accountForm, maTaiKhoan: e.target.value })}
                   placeholder="VD: TK_DD001"
@@ -584,6 +587,8 @@ export default function EnterpriseOnboardingPanel({ onSelect, onChanged, refresh
                 <span>Tên đăng nhập <strong className="text-rose-500">*</strong></span>
                 <input
                   required
+                  pattern="\s*\S{4,100}\s*"
+                  title="4–100 ký tự, không chứa khoảng trắng"
                   value={accountForm.tenDangNhap}
                   onChange={(e) => setAccountForm({ ...accountForm, tenDangNhap: e.target.value })}
                   placeholder="Tên đăng nhập cho đại diện"

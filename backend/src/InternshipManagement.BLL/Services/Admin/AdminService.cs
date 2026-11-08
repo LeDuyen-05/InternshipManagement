@@ -32,6 +32,7 @@ public class AdminService
     {
         await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         if (string.IsNullOrWhiteSpace(r.MatKhau) || r.MatKhau.Length < 6) throw new ArgumentException("Mật khẩu tối thiểu 6 ký tự.");
+        r = r with { MaTaiKhoan = Common.TaiKhoanDinhDanh.Ma(r.MaTaiKhoan), TenDangNhap = Common.TaiKhoanDinhDanh.TenDangNhap(r.TenDangNhap) };
 
         if (!callerIsAdmin && (r.MaVaiTro is "VT01" or "VT02"))
             throw new UnauthorizedAccessException("Bạn không có quyền tạo tài khoản Quản trị hoặc Khoa.");
