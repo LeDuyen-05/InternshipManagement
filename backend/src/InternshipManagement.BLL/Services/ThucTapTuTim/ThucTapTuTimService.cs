@@ -69,6 +69,9 @@ public class ThucTapTuTimService(AppDbContext db)
         await db.LockRoundsAsync([item.MaDot]);
         await CheckRoundAsync(item.MaDot);
         if (!await db.SinhViens.AnyAsync(x => x.MaSV == maSV)) throw new KeyNotFoundException("Tài khoản chưa liên kết sinh viên hợp lệ.");
+        var tenDot = await db.DotThucTaps.Where(x => x.MaSo == item.MaDot).Select(x => x.TenDot).FirstAsync();
+        if (DanhSachDot.LyDo(await DanhSachDot.ThamGiaAsync(db, maSV, item.MaDot), tenDot, "nộp hồ sơ nơi thực tập tự tìm") is { } ngoaiDanhSach)
+            throw new InvalidOperationException(ngoaiDanhSach);
         await CheckPlacementAsync(maSV, item.MaDot);
         if (await db.DeXuatThucTapTuTims.AnyAsync(x => x.MaSV == maSV && x.MaDot == item.MaDot && x.TrangThai == "ChoDuyet"))
             throw new InvalidOperationException("Bạn đã có hồ sơ tự tìm chờ Khoa duyệt trong đợt này.");

@@ -11,6 +11,7 @@ public interface IDangKyThucTapRepository : IRepository<DangKyThucTap>
     Task AddWithinLimitAsync(DangKyThucTap registration, int maximum);
     Task<bool> HasApprovedRegistrationInDotAsync(string maSV, string maDot);
     Task<bool> HasActiveRegistrationInDotAsync(string maSV, string maDot);
+    Task<Common.ThamGiaDot> GetThamGiaDotAsync(string maSV, string maDot);
     Task<bool> HasPriorityInDotAsync(string maSV, string maDot, int thuTuUuTien);
     Task<int> CountDaTiepNhanAsync(string maCongTy, string maDot);
     Task<bool> SinhVienDaDuocTiepNhanAsync(string maSV, string maDot);

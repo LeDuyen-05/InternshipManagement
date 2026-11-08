@@ -58,7 +58,7 @@ public class DangKyThucTapService : IDangKyThucTapService
 
         var dotHienTai = await _congTyRepo.GetDotDangDienRaAsync();
         if (dotHienTai != null && !string.IsNullOrWhiteSpace(request.MaSV))
-            await KiemTraChuaTrungTuyenAsync(request.MaSV, dotHienTai.MaSo, "đề xuất doanh nghiệp mới");
+            await KiemTraChuaTrungTuyenAsync(request.MaSV, dotHienTai.MaSo, "đề xuất doanh nghiệp mới", kiemTraDanhSachDot: false);
 
         var trimmedName = request.TenCongTy.Trim();
         if (trimmedName.Length > 200)
@@ -149,10 +149,14 @@ public class DangKyThucTapService : IDangKyThucTapService
     /// - đã hoàn thành nhưng KHÔNG ĐẠT (điểm F, &lt; 4.0) → được đăng ký học lại.
     /// Trả về null nếu đủ điều kiện, ngược lại là lý do.
     /// </summary>
-    public async Task<string?> KiemTraDieuKienDangKyAsync(string maSV, string maDot, string hanhDong = "đăng ký thêm nguyện vọng")
+    public async Task<string?> KiemTraDieuKienDangKyAsync(string maSV, string maDot, string hanhDong = "đăng ký thêm nguyện vọng", bool kiemTraDanhSachDot = true)
     {
-        var phanBos = await _dangKyRepo.GetPhanBoConHieuLucAsync(maSV) ?? Array.Empty<PhanBoThucTap>();
         var targetRound = await _dangKyRepo.GetDotAsync(maDot);
+        // SV không thuộc danh sách đợt do Khoa lập thì không tự đăng ký trong đợt.
+        if (kiemTraDanhSachDot && targetRound != null
+            && DAL.Common.DanhSachDot.LyDo(await _dangKyRepo.GetThamGiaDotAsync(maSV, maDot), targetRound.TenDot, hanhDong) is { } ngoaiDanhSach)
+            return ngoaiDanhSach;
+        var phanBos = await _dangKyRepo.GetPhanBoConHieuLucAsync(maSV) ?? Array.Empty<PhanBoThucTap>();
         foreach (var pb in phanBos.OrderByDescending(p => p.MaDot == maDot))
         {
             var tenCongTy = pb.CongTy?.TenCongTy ?? pb.MaCongTy;
@@ -181,9 +185,9 @@ public class DangKyThucTapService : IDangKyThucTapService
         return null;
     }
 
-    private async Task KiemTraChuaTrungTuyenAsync(string maSV, string maDot, string hanhDong = "đăng ký thêm nguyện vọng")
+    private async Task KiemTraChuaTrungTuyenAsync(string maSV, string maDot, string hanhDong = "đăng ký thêm nguyện vọng", bool kiemTraDanhSachDot = true)
     {
-        var lyDo = await KiemTraDieuKienDangKyAsync(maSV, maDot, hanhDong);
+        var lyDo = await KiemTraDieuKienDangKyAsync(maSV, maDot, hanhDong, kiemTraDanhSachDot);
         if (lyDo != null) throw new InvalidOperationException(lyDo);
     }
 

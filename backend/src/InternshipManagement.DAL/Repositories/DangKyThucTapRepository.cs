@@ -106,6 +106,8 @@ public class DangKyThucTapRepository : GenericRepository<DangKyThucTap>, IDangKy
     public Task<bool> HasActiveRegistrationInDotAsync(string maSV, string maDot) =>
         DbSet.AnyAsync(d => d.MaSV == maSV && d.MaDot == maDot && (d.TrangThai == "ChoDuyet" || d.TrangThai == "DaDuyet"));
 
+    public Task<Common.ThamGiaDot> GetThamGiaDotAsync(string maSV, string maDot) => Common.DanhSachDot.ThamGiaAsync(Context, maSV, maDot);
+
     public Task<int> CountDaTiepNhanAsync(string maCongTy, string maDot) =>
         Context.PhanBoThucTaps.CountAsync(p => p.MaCongTy == maCongTy && p.MaDot == maDot && p.TrangThai != "Huy");
 

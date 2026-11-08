@@ -23,6 +23,7 @@ public class EnterpriseOnboardingTests
         db.DotThucTaps.AddRange(new DotThucTap { MaSo = "DOT", TenDot = "Đợt", NamHoc = "2026", TrangThai = "DangDienRa", MaRubric = "R", ThoiGianKT = DateTime.UtcNow.AddDays(-2), HanChamDN = DateTimeOffset.UtcNow.AddDays(1) },
             new DotThucTap { MaSo = "OTHER", TenDot = "Khác", NamHoc = "2026", TrangThai = "DangDienRa", MaRubric = "R" });
         db.SinhViens.Add(new SinhVien { MaSV = "SV", HoTen = "Sinh viên" });
+        db.SinhVienThamGiaDots.Add(new SinhVienThamGiaDot { MaDot = "DOT", MaSV = "SV", NgayThem = DateTimeOffset.UtcNow, NguoiThem = "KHOA", NgayCapNhat = DateTimeOffset.UtcNow, NguoiCapNhat = "KHOA" });
         db.CongTys.AddRange(new CongTy { MaCongTy = "CT", TenCongTy = "Đã duyệt", TrangThai = "DaDuyet" },
             new CongTy { MaCongTy = "PENDING", TenCongTy = "Chờ duyệt", TrangThai = "ChoDuyet" });
         db.TieuChis.Add(new TieuChi { MaTieuChi = "DN", TenTieuChi = "DN", NhomDanhGia = "DN", MaRubric = "R", MaCLO = "CLO4", DiemToiDa = 5 });
