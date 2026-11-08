@@ -159,6 +159,11 @@ public class DieuChinhNoiThucTapService(AppDbContext db, TimeProvider? clock = n
             + "giữ báo cáo và hồ sơ cũ.", actor);
         pb.TrangThai = "Huy"; pb.LyDoHuy = reason; pb.CanCuHuy = reference; pb.NguoiHuy = actor;
         pb.NgayHuy = Now; pb.TrangThaiXuLyLai = "ChoPhanBoLai";
+        // Nguyện vọng đã được duyệt ở nơi bị hủy kết thúc cùng quyết định hủy; nếu không, rà soát coi SV còn hồ sơ mâu thuẫn
+        // và chặn công bố/chốt danh sách dù SV đã được phân bổ lại.
+        var ending = $"Khoa hủy nơi thực tập: {reason}"; if (ending.Length > 1000) ending = ending[..1000];
+        (await db.DangKyThucTaps.Where(x => x.MaSV == pb.MaSinhVien && x.MaDot == pb.MaDot && x.MaCongTy == pb.MaCongTy && x.TrangThai == "DaDuyet").ToListAsync())
+            .ForEach(x => { x.TrangThai = "TuChoi"; x.LyDoKetThuc = ending; });
         await ArchiveReports(pb.MaSinhVien, pb.MaDot, id);
         await db.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();

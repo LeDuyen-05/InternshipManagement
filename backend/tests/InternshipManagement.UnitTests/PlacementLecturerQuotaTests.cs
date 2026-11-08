@@ -6,6 +6,7 @@ using Xunit;
 namespace InternshipManagement.UnitTests;
 
 // Hủy nơi thực tập không được giữ chỗ trong chỉ tiêu GVHD; khi phân bổ lại, GV cũ hướng dẫn tiếp nếu còn chỉ tiêu.
+// Nguyện vọng đã duyệt ở nơi bị hủy kết thúc cùng quyết định hủy.
 public class PlacementLecturerQuotaTests
 {
     private sealed class Clock : TimeProvider
@@ -28,6 +29,7 @@ public class PlacementLecturerQuotaTests
             new() { MaPhanBo = "PB1", MaSinhVien = "SV", MaCongTy = "CT1", MaDot = "R", NgayPhanBo = new(2027, 1, 20), TrangThai = "DangThucTap", DaDuocKhoaDuyet = true },
             new() { MaPhanBo = "PB2", MaSinhVien = "SV2", MaCongTy = "CT1", MaDot = "R", NgayPhanBo = new(2027, 1, 20), TrangThai = "DangThucTap", DaDuocKhoaDuyet = true });
         db.GVHuongDans.Add(new() { MaSo = "HD1", MaGiangVien = "GV", MaSinhVien = "SV", MaDot = "R", NgayPC = new(2027, 2, 1), TrangThai = "DangHuongDan" });
+        db.DangKyThucTaps.Add(new() { MaDK = "DK1", MaSV = "SV", MaCongTy = "CT1", MaDot = "R", NgayDangKy = new(2027, 1, 10), TrangThai = "DaDuyet" });
         await db.SaveChangesAsync();
         return db;
     }
@@ -45,6 +47,10 @@ public class PlacementLecturerQuotaTests
         Assert.Equal(["GV"], paused);
         Assert.Equal("TamDung", (await db.GVHuongDans.FindAsync("HD1"))!.TrangThai);
         Assert.Equal(0, await AssignedAsync(db));
+        // Nguyện vọng ở nơi bị hủy không còn là hồ sơ đang xử lý.
+        var application = (await db.DangKyThucTaps.FindAsync("DK1"))!;
+        Assert.Equal("TuChoi", application.TrangThai);
+        Assert.StartsWith("Khoa hủy nơi thực tập", application.LyDoKetThuc);
 
         var result = await service.ReallocateAsync("PB1", new("R", "CT2", "Chuyển nơi", "Thư tiếp nhận của DN", true, true), "K");
 
