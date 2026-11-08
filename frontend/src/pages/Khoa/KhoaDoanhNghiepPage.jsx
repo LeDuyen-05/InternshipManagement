@@ -9,7 +9,8 @@ import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { deadlineText } from '../../hooks/useGradeDeadline'
 import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
-import { xuatBangHuitExcel, taiFileExcel } from '../../utils/exportHuitExcel'
+import { addHuitHeader, loadHuitLogo, xuatBangHuitExcel, taiFileExcel } from '../../utils/exportHuitExcel'
+import { laCotMaDoanhNghiep, laCotTenDoanhNghiep, timDongTieuDeCot } from '../../utils/excelImport'
 import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 
 const local = (value) =>
@@ -409,35 +410,27 @@ export default function KhoaDoanhNghiepPage() {
         views: [{ showGridLines: true }],
       })
 
-      // Tiêu ngữ cơ quan ban hành
-      const r1 = ws.addRow(['TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP. HỒ CHÍ MINH'])
-      r1.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1E293B' } }
-      ws.mergeCells(1, 1, 1, 4)
-
-      const r2 = ws.addRow([tenKhoa.toUpperCase()])
-      r2.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1D4ED8' } }
-      ws.mergeCells(2, 1, 2, 4)
-
-      ws.addRow([]) // Dòng 3 trống
-
-      // Tiêu đề biểu mẫu
-      const r4 = ws.addRow(['BIỂU MẪU NHẬP DANH SÁCH DOANH NGHIỆP ĐỐI TÁC'])
-      r4.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F172A' } }
-      r4.alignment = { horizontal: 'center', vertical: 'middle' }
-      r4.height = 28
-      ws.mergeCells(4, 1, 4, 6)
-
-      const r5 = ws.addRow([
-        'Lưu ý: Các cột có dấu (*) là bắt buộc. Cột "Chỉ tiêu tiếp nhận" điền số nguyên >= 0. Cột "Mã doanh nghiệp" không trùng lặp.',
-      ])
+      // Khối tiêu đề theo mẫu của Khoa (logo, đơn vị, tiêu đề). Khi nhập lại, hệ thống tự tìm dòng tiêu đề cột.
+      const widths = [22, 42, 32, 20, 20, 48]
+      widths.forEach((w, idx) => {
+        ws.getColumn(idx + 1).width = w
+      })
+      const noteRowNumber = addHuitHeader(ws, {
+        title: 'BIỂU MẪU NHẬP DANH SÁCH DOANH NGHIỆP ĐỐI TÁC',
+        widths,
+        logo: await loadHuitLogo(),
+        unit: tenKhoa,
+      })
+      const r5 = ws.getRow(noteRowNumber)
+      r5.getCell(1).value =
+        'Lưu ý: Các cột có dấu (*) là bắt buộc. Cột "Chỉ tiêu tiếp nhận" điền số nguyên >= 0. Cột "Mã doanh nghiệp" không trùng lặp.'
       r5.font = { name: 'Times New Roman', size: 9, italic: true, color: { argb: 'FFDC2626' } }
-      r5.alignment = { horizontal: 'center', vertical: 'middle' }
+      r5.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
       r5.height = 20
-      ws.mergeCells(5, 1, 5, 6)
+      ws.mergeCells(noteRowNumber, 1, noteRowNumber, 6)
+      ws.getRow(noteRowNumber + 1).height = 8
 
-      ws.addRow([]) // Dòng 6 trống
-
-      // Header bảng (Dòng 7)
+      // Header bảng (ngay dưới ghi chú)
       const headers = [
         'Mã doanh nghiệp (*)',
         'Tên doanh nghiệp (*)',
@@ -446,14 +439,15 @@ export default function KhoaDoanhNghiepPage() {
         'Chỉ tiêu tiếp nhận',
         'Yêu cầu tuyển dụng',
       ]
-      const headerRow = ws.addRow(headers)
+      const headerRow = ws.getRow(noteRowNumber + 2)
+      headerRow.values = headers
       headerRow.height = 28
       headerRow.eachCell((cell) => {
-        cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+        cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF002060' } }
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FF312E81' }, // Indigo đậm sang trọng
+          fgColor: { argb: 'FFDDEBF7' }, // Xanh nhạt, cùng tông với tiêu đề
         }
         cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
         cell.border = {
@@ -509,12 +503,6 @@ export default function KhoaDoanhNghiepPage() {
             right: { style: 'thin', color: { argb: 'FFE2E8F0' } },
           }
         })
-      })
-
-      // Đặt độ rộng các cột
-      const widths = [22, 42, 32, 20, 20, 48]
-      widths.forEach((w, idx) => {
-        ws.getColumn(idx + 1).width = w
       })
 
       const buffer = await wb.xlsx.writeBuffer()
@@ -656,20 +644,8 @@ export default function KhoaDoanhNghiepPage() {
           })
         })
 
-        // Tìm dòng header
-        let headerIdx = -1
-        for (let i = 0; i < Math.min(rows.length, 15); i++) {
-          const text = rows[i].values.map((v) => String(v).toLowerCase()).join(' ')
-          if (
-            text.includes('mã') ||
-            text.includes('macongty') ||
-            text.includes('doanh nghiệp') ||
-            text.includes('công ty')
-          ) {
-            headerIdx = i
-            break
-          }
-        }
+        // Tìm dòng tiêu đề cột: cần cả cột mã và cột tên doanh nghiệp (bỏ qua logo, tiêu đề, ghi chú phía trên).
+        const headerIdx = timDongTieuDeCot(rows.map((r) => r.values), [laCotMaDoanhNghiep, laCotTenDoanhNghiep])
 
         if (headerIdx === -1) {
           throw new Error('Không tìm thấy dòng tiêu đề cột hợp lệ trong file Excel. Vui lòng tải file mẫu để kiểm tra cấu trúc.')

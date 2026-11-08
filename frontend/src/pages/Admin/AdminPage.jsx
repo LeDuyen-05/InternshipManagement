@@ -3,7 +3,8 @@ import { useEffect, useState, useMemo, useRef, useCallback } from 'react'
 import apiClient from '../../services/api'
 import Layout from '../../components/Layout'
 import EnterpriseOnboardingPanel from '../../components/khoa/EnterpriseOnboardingPanel'
-import { downloadExcelResponse, parseBlobError } from '../../utils/exportHuitExcel'
+import { addHuitHeader, downloadExcelResponse, loadHuitLogo, parseBlobError } from '../../utils/exportHuitExcel'
+import { laCotHoTen, laCotMaSinhVien, timDongTieuDeCot } from '../../utils/excelImport'
 import { roleLabel } from '../../utils/roleLabels'
 import StudentImportPreview from '../../components/admin/StudentImportPreview'
 import KhoaManagementPanel from '../../components/admin/KhoaManagementPanel'
@@ -324,8 +325,14 @@ export default function AdminPage() {
         return
       }
 
-      // Đọc hàng tiêu đề
-      const headerRow = worksheet.getRow(1)
+      // Đọc hàng tiêu đề: tệp mẫu có khối logo/tiêu đề phía trên, nên tìm dòng có cột MSSV và cột họ tên.
+      const scanned = []
+      worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+        if (scanned.length < 25) scanned.push({ rowNumber, values: (row.values || []).slice(1).map((value) => getCellText({ value })) })
+      })
+      const headerIndex = timDongTieuDeCot(scanned.map((r) => r.values), [laCotMaSinhVien, laCotHoTen])
+      const headerRowNumber = headerIndex >= 0 ? scanned[headerIndex].rowNumber : 1
+      const headerRow = worksheet.getRow(headerRowNumber)
       const colMap = {}
       headerRow.eachCell((cell, colNum) => {
         const val = getCellText(cell).toLowerCase()
@@ -343,7 +350,7 @@ export default function AdminPage() {
 
       const rows = []
       worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return // Bỏ dòng tiêu đề
+        if (rowNumber <= headerRowNumber) return // Bỏ khối tiêu đề và dòng tiêu đề cột
         const maSV = getCellText(row.getCell(colMap.maSV))
         const hoTen = getCellText(row.getCell(colMap.hoTen))
         const lop = getCellText(row.getCell(colMap.lop))
@@ -377,18 +384,38 @@ export default function AdminPage() {
     try {
       const workbook = new ExcelJS.Workbook()
       const sheet = workbook.addWorksheet('DanhSachSinhVien')
-      sheet.columns = [
-        { header: 'MSSV', key: 'maSV', width: 16 },
-        { header: 'Họ và tên', key: 'hoTen', width: 26 },
-        { header: 'Lớp', key: 'lop', width: 16 },
-        { header: 'Email', key: 'email', width: 28 },
-      ]
-      sheet.getColumn('maSV').numFmt = '@'
-      sheet.addRow({ maSV: '2001215001', hoTen: 'Nguyễn Văn A', lop: '12DHTH01', email: '2001215001@huit.edu.vn' })
-      sheet.addRow({ maSV: '2001215002', hoTen: 'Trần Thị B', lop: '12DHTH02', email: '2001215002@huit.edu.vn' })
-
-      sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }
-      sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E40AF' } }
+      const widths = [16, 26, 16, 28]
+      widths.forEach((width, i) => {
+        sheet.getColumn(i + 1).width = width
+      })
+      // Khối tiêu đề theo mẫu của Khoa; khi nhập, hệ thống tự tìm dòng tiêu đề cột bên dưới.
+      const headerRowNumber = addHuitHeader(sheet, {
+        title: 'Biểu mẫu nhập danh sách sinh viên cấp tài khoản',
+        infoLines: ['Điền từ dòng sau tiêu đề cột; giữ nguyên tên các cột. MSSV nhập dạng văn bản.'],
+        widths,
+        logo: await loadHuitLogo(),
+      })
+      sheet.getColumn(1).numFmt = '@'
+      const headerRow = sheet.getRow(headerRowNumber)
+      headerRow.values = ['MSSV', 'Họ và tên', 'Lớp', 'Email']
+      headerRow.height = 24
+      headerRow.eachCell((cell) => {
+        cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF002060' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }
+        cell.alignment = { horizontal: 'center', vertical: 'middle' }
+        cell.border = Object.fromEntries(['top', 'left', 'bottom', 'right'].map((side) => [side, { style: 'thin', color: { argb: 'FF8EA9C1' } }]))
+      })
+      ;[
+        ['2001215001', 'Nguyễn Văn A', '12DHTH01', '2001215001@huit.edu.vn'],
+        ['2001215002', 'Trần Thị B', '12DHTH02', '2001215002@huit.edu.vn'],
+      ].forEach((values, i) => {
+        const row = sheet.getRow(headerRowNumber + 1 + i)
+        row.values = values
+        row.eachCell((cell) => {
+          cell.font = { name: 'Times New Roman', size: 10 }
+          cell.border = Object.fromEntries(['top', 'left', 'bottom', 'right'].map((side) => [side, { style: 'thin', color: { argb: 'FFE2E8F0' } }]))
+        })
+      })
 
       const buffer = await workbook.xlsx.writeBuffer()
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
