@@ -74,6 +74,8 @@ public class GioiThieuRepository : GenericRepository<GioiThieu>, IGioiThieuRepos
         return gioiThieu;
     }
 
+    public Task ChanSuaCongTyDungChungAsync(string maCongTy) => Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(Context, maCongTy);
+
     public async Task<CongTy?> GetCongTyByIdAsync(string maCongTy)
     {
         return await Context.CongTys.FirstOrDefaultAsync(c => c.MaCongTy == maCongTy);

@@ -13,4 +13,5 @@ public interface IGioiThieuRepository : IRepository<GioiThieu>
     Task<bool> ExistsGiangVienAsync(string maGV);
     Task<CongTy?> GetCongTyByIdAsync(string maCongTy);
     void UpdateCongTy(CongTy congTy);
+    Task ChanSuaCongTyDungChungAsync(string maCongTy);
 }

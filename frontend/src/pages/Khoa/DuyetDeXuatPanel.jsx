@@ -32,7 +32,9 @@ export default function DuyetDeXuatPanel({ onDataChanged }) {
 
   const handleUpdateStatus = async (id, newStatus) => {
     const actionName = newStatus === 'DaDuyet' ? 'Phê duyệt' : 'Từ chối'
-    if (!window.confirm(`Xác nhận ${actionName} đề xuất doanh nghiệp này?`)) return
+    if (!window.confirm(`Xác nhận ${actionName} đề xuất doanh nghiệp này?\n\n`
+      + 'Công ty mới do giảng viên đề xuất (đang chờ duyệt) sẽ được duyệt/từ chối theo. '
+      + 'Công ty đã là đối tác thì chỉ đổi trạng thái lời giới thiệu, không ảnh hưởng công ty.')) return
 
     try {
       setError(null)
