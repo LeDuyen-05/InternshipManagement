@@ -1,9 +1,10 @@
 import { requestReportAuthor } from './reportAuthor.js'
-import { formatNgayHanhChinh, taiFileExcel } from './exportHuitExcel.js'
+import { addHuitHeader, formatNgayHanhChinh, loadHuitLogo, taiFileExcel } from './exportHuitExcel.js'
 import { roundReportLabel } from './roundLock.js'
 
-// Giữ bố cục ba dòng tiêu chí/CLO/điểm tối đa của mẫu Khoa; ExcelJS chỉ tải khi xuất.
-export async function xuatBangDiemTheoMauKhoa(bangDiem, fileName, { preparedBy } = {}) {
+// Bảng điểm theo mẫu chấm thực tập của Khoa: khối tiêu đề (logo, đơn vị, tiêu đề, học phần/đợt/năm học),
+// rồi ba dòng tiêu chí/CLO/điểm tối đa và điểm từng sinh viên. ExcelJS chỉ tải khi xuất.
+export async function xuatBangDiemTheoMauKhoa(bangDiem, fileName, { preparedBy, logo } = {}) {
   const author = await requestReportAuthor(preparedBy)
   if (author === null) return false
   const { default: ExcelJS } = await import('exceljs')
@@ -24,31 +25,46 @@ export async function xuatBangDiemTheoMauKhoa(bangDiem, fileName, { preparedBy }
       ? 'Thực tập nghề nghiệp'
       : 'Thực tập tốt nghiệp')
 
-  const titleText =
-    officialType +
-    (bangDiem?.tenDot ? ' – ' + bangDiem.tenDot : '') +
-    (bangDiem?.maRubric ? ' [' + bangDiem.maRubric + ']' : '') +
-    '\n' +
-    roundReportLabel(bangDiem)
+  const widths = [5, 15, 18, 10, 12, ...criteria.map(() => 12), 12, 24, 38]
+  widths.forEach((width, i) => {
+    ws.getColumn(i + 1).width = width
+  })
+  const top = addHuitHeader(ws, {
+    title: 'BẢNG ĐIỂM ĐÁNH GIÁ CHUẨN ĐẦU RA (CLO) HỌC PHẦN THỰC TẬP',
+    infoLines: [
+      [`Học phần: ${officialType}`, bangDiem?.namHoc && `Năm học: ${bangDiem.namHoc}`].filter(Boolean).join(' — '),
+      [
+        bangDiem?.tenDot && `Đợt: ${bangDiem.tenDot}${bangDiem?.maDot ? ` (${bangDiem.maDot})` : ''}`,
+        bangDiem?.maRubric && `Bộ tiêu chí: ${bangDiem.maRubric}`,
+      ].filter(Boolean).join(' — '),
+      roundReportLabel(bangDiem),
+    ],
+    widths,
+    logo: logo === undefined ? await loadHuitLogo() : logo,
+    formCode: '03C_CĐR',
+  })
+  // Ba dòng tiêu đề bảng: tên tiêu chí, mã CLO, điểm tối đa (dòng thứ ba kèm STT/MSSV/Họ tên/Lớp).
+  const nameRow = top, cloRow = top + 1, maxRow = top + 2, firstStudent = top + 3
+  const lastRow = maxRow + rows.length
 
-  ws.getCell('A1').value = titleText
-  ws.mergeCells('A1:E2')
+  ws.getCell(nameRow, 1).value = 'THÔNG TIN SINH VIÊN'
+  ws.mergeCells(nameRow, 1, cloRow, 5)
   criteria.forEach((criterion, i) => {
-    ws.getCell(1, 6 + i).value = criterion.tenTieuChi
-    ws.getCell(2, 6 + i).value = criterion.maCLO || criterion.maTieuChi
-    ws.getCell(3, 6 + i).value = Number(criterion.diemToiDa)
+    ws.getCell(nameRow, 6 + i).value = criterion.tenTieuChi
+    ws.getCell(cloRow, 6 + i).value = criterion.maCLO || criterion.maTieuChi
+    ws.getCell(maxRow, 6 + i).value = Number(criterion.diemToiDa)
   })
   ;['STT', 'Mã số sinh viên', 'Họ và', 'Tên', 'Lớp'].forEach((value, i) => {
-    ws.getCell(3, i + 1).value = value
+    ws.getCell(maxRow, i + 1).value = value
   })
-  ws.getCell(1, totalColumn).value = 'Tổng điểm'
-  ws.getCell(1, teacherColumn).value = 'GVHD'
-  ws.getCell(1, companyColumn).value = 'Tên Công ty'
-  ws.mergeCells(1, totalColumn, 2, totalColumn)
-  ws.mergeCells(1, teacherColumn, 3, teacherColumn)
-  ws.mergeCells(1, companyColumn, 3, companyColumn)
+  ws.getCell(nameRow, totalColumn).value = 'Tổng điểm'
+  ws.getCell(nameRow, teacherColumn).value = 'GVHD'
+  ws.getCell(nameRow, companyColumn).value = 'Tên Công ty'
+  ws.mergeCells(nameRow, totalColumn, cloRow, totalColumn)
+  ws.mergeCells(nameRow, teacherColumn, maxRow, teacherColumn)
+  ws.mergeCells(nameRow, companyColumn, maxRow, companyColumn)
   rows.forEach((student, i) => {
-    const row = 4 + i
+    const row = firstStudent + i
     ;[student.stt, student.maSV, student.hoLot, student.ten, student.lop || ''].forEach((value, c) => {
       ws.getCell(row, c + 1).value = value ?? ''
     })
@@ -59,57 +75,65 @@ export async function xuatBangDiemTheoMauKhoa(bangDiem, fileName, { preparedBy }
     ws.getCell(row, teacherColumn).value = student.tenGVHD || ''
     ws.getCell(row, companyColumn).value = student.tenCongTy || ''
   })
-  for (let row = 3; row <= rows.length + 3; row++) {
+  for (let row = maxRow; row <= lastRow; row++) {
     const range = 'F' + row + ':' + letter(totalColumn - 1) + row
-    const status = rows[row - 4]?.ketQua
+    const status = rows[row - firstStudent]?.ketQua
     ws.getCell(row, totalColumn).value =
-      row === 3
+      row === maxRow
         ? { formula: criteria.length ? 'SUM(' + range + ')' : '0' }
         : !criteria.length || (status && !['Đạt', 'Không đạt'].includes(status))
         ? status || 'Chưa cấu hình rubric'
         : { formula: 'IF(COUNT(' + range + ')=' + criteria.length + ',SUM(' + range + '),"Chưa đủ điểm")' }
   }
-  ;[5, 15, 18, 10, 12, ...criteria.map(() => 12), 12, 24, 38].forEach((width, i) => {
-    ws.getColumn(i + 1).width = width
-  })
-  for (let row = 1; row <= rows.length + 3; row++) {
+  const navy = { argb: 'FF002060' }
+  for (let row = nameRow; row <= lastRow; row++) {
     for (let col = 1; col <= companyColumn; col++) {
       const cell = ws.getCell(row, col)
-      cell.font = { name: 'Times New Roman', size: 10, bold: row <= 3 }
+      const heading = row <= maxRow
+      cell.font = { name: 'Times New Roman', size: 10, bold: heading, ...(heading ? { color: navy } : {}) }
+      if (heading) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }
       cell.alignment = {
-        horizontal: row <= 3 || col === totalColumn ? 'center' : 'left',
+        horizontal: heading || col === totalColumn ? 'center' : 'left',
         vertical: 'middle',
         wrapText: true,
       }
       cell.border = Object.fromEntries(
-        ['top', 'bottom', 'left', 'right'].map((side) => [side, { style: 'thin' }])
+        ['top', 'bottom', 'left', 'right'].map((side) => [side, { style: 'thin', color: { argb: 'FF8EA9C1' } }])
       )
     }
   }
-  ws.getRow(1).height = 90
-  const dateRow = rows.length + 5,
+  ws.getRow(nameRow).height = 90
+  const dateRow = lastRow + 2,
     titleRow = dateRow + 1,
     noteRow = dateRow + 2,
     authorRow = noteRow + 5
   ws.mergeCells(dateRow, 1, dateRow, companyColumn)
   ws.getCell(dateRow, 1).value = formatNgayHanhChinh()
   ws.getCell(dateRow, 1).alignment = { horizontal: 'right' }
+  ws.getCell(dateRow, 1).font = { name: 'Times New Roman', size: 10, italic: true }
+  // Mỗi chữ ký gộp trên vài cột liền nhau để chức danh không bị gãy dòng trong cột hẹp.
+  const middle = Math.floor((totalColumn - 1) / 2) + 1
+  const left = [1, Math.max(1, Math.min(3, middle - 2))]
+  const center = [Math.max(left[1] + 1, middle - 1), Math.min(middle + 1, teacherColumn - 1)]
   const signatures = [
-    { col: 2, title: 'NGƯỜI LẬP BẢNG', note: '(Ký, ghi rõ họ tên)' },
-    { col: Math.floor((totalColumn - 1) / 2) + 1, title: 'TRƯỞNG BỘ MÔN', note: '(Ký, ghi rõ họ tên)' },
-    { col: Math.max(6, companyColumn - 1), title: 'TRƯỞNG KHOA', note: '(Ký, đóng dấu)' },
+    { span: left, title: 'NGƯỜI LẬP BẢNG', note: '(Ký, ghi rõ họ tên)' },
+    { span: center, title: 'TRƯỞNG BỘ MÔN', note: '(Ký, ghi rõ họ tên)' },
+    { span: [teacherColumn, companyColumn], title: 'TRƯỞNG KHOA', note: '(Ký, đóng dấu)' },
   ]
-  signatures.forEach(({ col, title, note }) => {
-    ws.getCell(titleRow, col).value = title
-    ws.getCell(noteRow, col).value = note
-    ws.getCell(titleRow, col).font = { name: 'Times New Roman', size: 10, bold: true }
-    ws.getCell(titleRow, col).alignment = { horizontal: 'center', wrapText: true }
-    ws.getCell(noteRow, col).alignment = { horizontal: 'center', wrapText: true }
+  const signatureCell = (row, [from, to], value, font) => {
+    if (to > from) ws.mergeCells(row, from, row, to)
+    const cell = ws.getCell(row, from)
+    cell.value = value
+    cell.font = { name: 'Times New Roman', size: 10, ...font }
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+  }
+  signatures.forEach(({ span, title, note }) => {
+    signatureCell(titleRow, span, title, { bold: true })
+    signatureCell(noteRow, span, note, { italic: true })
   })
-  ws.getRow(titleRow).height = 32
-  ws.getCell(authorRow, 2).value = author
-  ws.getCell(authorRow, 2).alignment = { horizontal: 'center', wrapText: true }
-  ws.getCell(authorRow, 2).font = { name: 'Times New Roman', size: 10, bold: true }
+  ws.getRow(titleRow).height = 22
+  signatureCell(authorRow, left, author, { bold: true })
+  ws.views = [{ state: 'frozen', ySplit: maxRow, xSplit: 5 }]
   ws.pageSetup = {
     // Keep wide CLO tables legible when printed; compact tables retain A4.
     paperSize: criteria.length > 8 ? 8 : 9,
@@ -117,7 +141,7 @@ export async function xuatBangDiemTheoMauKhoa(bangDiem, fileName, { preparedBy }
     fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 0,
-    printTitlesRow: '1:3',
+    printTitlesRow: `${nameRow}:${maxRow}`,
     printArea: 'A1:' + letter(companyColumn) + authorRow,
     margins: { left: 0.25, right: 0.25, top: 0.4, bottom: 0.4, header: 0.15, footer: 0.15 },
   }

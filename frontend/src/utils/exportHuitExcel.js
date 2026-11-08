@@ -1,12 +1,122 @@
 import { requestReportAuthor, resolveReportAuthor } from './reportAuthor.js'
 
+const NAVY = 'FF002060'
+const TEN_TRUONG = 'TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP. HỒ CHÍ MINH'
+const LOGO_SIZE = { width: 300, height: 62 }
+
 // Đơn vị ban hành trên file xuất: khoa của người đang đăng nhập (QTV không thuộc khoa nào).
-function donViBanHanh() {
+export function donViBanHanh() {
   try {
     return JSON.parse(localStorage.getItem('internship_user') || 'null')?.tenKhoa || 'HỆ THỐNG QUẢN LÝ THỰC TẬP'
   } catch {
     return 'HỆ THỐNG QUẢN LÝ THỰC TẬP'
   }
+}
+
+let logoRequest = null
+// Logo trường (src/assets/huit-logo.png) cho tiêu đề tệp Excel. Ngoài trình duyệt hoặc tải lỗi thì trả về null
+// và tiêu đề dùng tên trường dạng chữ, không làm hỏng việc xuất tệp.
+export function loadHuitLogo() {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') return Promise.resolve(null)
+  logoRequest ??= import('../assets/huit-logo.png')
+    .then((module) => fetch(module.default))
+    .then((response) => (response.ok ? response.arrayBuffer() : null))
+    .catch(() => null)
+  return logoRequest
+}
+
+// Mỗi workbook chỉ nhúng ảnh logo một lần, các sheet dùng chung.
+const logoIds = new WeakMap()
+function workbookLogo(workbook, logo) {
+  if (!logo || !workbook) return null
+  if (!logoIds.has(workbook)) logoIds.set(workbook, workbook.addImage({ buffer: logo, extension: 'png' }))
+  return logoIds.get(workbook)
+}
+
+const ngayXuat = () =>
+  new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())
+
+/**
+ * Khối tiêu đề theo mẫu của Khoa (phiếu chấm thực tập):
+ * - Dòng 1–3: logo trường; bên phải logo là mã mẫu (nếu có), đơn vị ban hành và ngày xuất
+ *   (bảng hẹp thì đơn vị và ngày xuất xuống dòng dưới logo).
+ * - Tiêu đề in hoa, Times New Roman 16 đậm, xanh đậm; các dòng thông tin (đợt, năm học, học phần...).
+ * Ghi từ `startRow`, trả về số dòng trống đầu tiên để vẽ bảng. `widths` là độ rộng các cột của bảng.
+ */
+export function addHuitHeader(ws, { title, infoLines = [], widths = [], logo = null, unit, formCode = '', startRow = 1 }) {
+  const nCols = Math.max(1, widths.length)
+  const font = (size, extra = {}) => ({ name: 'Times New Roman', size, color: { argb: NAVY }, ...extra })
+  const merge = (row, from, to) => {
+    if (to > from) ws.mergeCells(row, from, row, to)
+  }
+  const width = (i) => widths[i] || 12
+  const totalWidth = widths.reduce((sum, _, i) => sum + width(i), 0) || 12
+  // Bảng hẹp thì thu nhỏ logo cho vừa bề rộng in.
+  const logoWidth = Math.min(LOGO_SIZE.width, Math.max(110, totalWidth * 7 - 10))
+  const logoSize = { width: logoWidth, height: Math.round((logoWidth * LOGO_SIZE.height) / LOGO_SIZE.width) }
+  const lines = (text, charWidth, span = totalWidth) => Math.max(1, Math.ceil(String(text).length / Math.max(8, span / charWidth)))
+  let logoCols = 0
+  let covered = 0
+  while (logoCols < nCols && covered * 7 < logoSize.width + 12) covered += width(logoCols++)
+  const rightStart = logoCols + 1
+  const rightBlock = rightStart <= nCols && widths.slice(logoCols).reduce((sum, _, i) => sum + width(logoCols + i), 0) >= 26
+  const unitText = String(unit || donViBanHanh()).toUpperCase()
+  const exportedAt = `Ngày xuất: ${ngayXuat()}`
+
+  let row = startRow
+  for (let i = 0; i < 3; i++) ws.getRow(row + i).height = 18
+  const imageId = workbookLogo(ws.workbook, logo)
+  if (imageId != null) {
+    ws.addImage(imageId, { tl: { col: 0.1, row: startRow - 1 + 0.1 }, ext: logoSize, editAs: 'oneCell' })
+  } else {
+    const school = ws.getCell(row, 1)
+    school.value = TEN_TRUONG
+    school.font = font(12, { bold: true })
+    school.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true }
+    merge(row, 1, rightBlock ? logoCols : nCols)
+    const span = rightBlock ? widths.slice(0, logoCols).reduce((sum, _, i) => sum + width(i), 0) : totalWidth
+    ws.getRow(row).height = Math.max(18, lines(TEN_TRUONG, 1.25, span) * 16)
+  }
+  if (rightBlock) {
+    const lines = [formCode ? [`Mẫu: ${formCode}`, font(11, { bold: true })] : null, [unitText, font(11, { bold: true })],
+      [exportedAt, { name: 'Times New Roman', size: 10, italic: true, color: { argb: 'FF475569' } }]].filter(Boolean)
+    lines.forEach(([text, style], i) => {
+      const cell = ws.getCell(row + i, rightStart)
+      cell.value = text
+      cell.font = style
+      cell.alignment = { horizontal: 'right', vertical: 'middle' }
+      merge(row + i, rightStart, nCols)
+    })
+  }
+  row += 3
+  if (!rightBlock) {
+    const cell = ws.getCell(row, 1)
+    cell.value = [formCode && `Mẫu: ${formCode}`, unitText, exportedAt].filter(Boolean).join(' — ')
+    cell.font = font(11, { bold: true })
+    cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true }
+    merge(row, 1, nCols)
+    ws.getRow(row).height = lines(cell.value, 1.1) * 16 + 2
+    row++
+  }
+  ws.getRow(row++).height = 8
+  const titleCell = ws.getCell(row, 1)
+  titleCell.value = String(title || 'DANH SÁCH BÁO CÁO HỌC VỤ').toUpperCase()
+  titleCell.font = font(16, { bold: true })
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+  merge(row, 1, nCols)
+  ws.getRow(row).height = lines(titleCell.value, 1.7) * 24 + 4
+  row++
+  infoLines.filter(Boolean).forEach((text) => {
+    const cell = ws.getCell(row, 1)
+    cell.value = text
+    cell.font = font(11, { bold: true })
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
+    merge(row, 1, nCols)
+    ws.getRow(row).height = lines(text, 1.1) * 16 + 4
+    row++
+  })
+  ws.getRow(row++).height = 8
+  return row
 }
 
 /**
@@ -58,58 +168,33 @@ export function appendHuitSheet(ws, {
   freezeHeader = false,
   autoFilter = false,
   emptyMessage = '',
+  logo = null,
 }) {
   if (!['official', 'internal'].includes(reportType)) throw new Error('Loại báo cáo không hợp lệ.')
   const nCols = Math.max(1, columns.length)
 
-  // 1. Tiêu ngữ cơ quan ban hành (Dòng 1 & 2)
-  const r1 = ws.addRow(['TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG TP. HỒ CHÍ MINH'])
-  r1.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1E293B' } }
-  ws.mergeCells(1, 1, 1, Math.min(4, nCols))
-
-  const r2 = ws.addRow([donViBanHanh().toUpperCase()])
-  r2.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF1D4ED8' } }
-  ws.mergeCells(2, 1, 2, Math.min(4, nCols))
-
-  // Dòng trống
-  ws.addRow([])
-
-  // 2. Title chính trang trọng (Dòng 4)
-  const r4 = ws.addRow([title.toUpperCase()])
-  r4.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F172A' } }
-  r4.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-  r4.height = 28
-  ws.mergeCells(4, 1, 4, nCols)
-
-  // 3. Phụ đề Đợt thực tập / Năm học (Dòng 5)
-  if (subTitle || reportType === 'internal') {
-    const r5 = ws.addRow([[subTitle, reportType === 'internal' ? 'Danh sách nội bộ — phục vụ tra cứu' : ''].filter(Boolean).join(' — ')])
-    r5.font = { name: 'Times New Roman', size: 10, italic: true, color: { argb: 'FF475569' } }
-    r5.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
-    r5.height = 15 * Math.max(1, Math.ceil(String(r5.getCell(1).value).length / Math.max(20, columns.reduce((sum, c) => sum + (c.width || 16), 0))))
-    ws.mergeCells(5, 1, 5, nCols)
-    ws.addRow([]) // Dòng trống 6
-  } else {
-    ws.addRow([]) // Dòng trống 5
-  }
+  // 1–3. Khối tiêu đề theo mẫu của Khoa: logo trường, đơn vị, tiêu đề, thông tin đợt/năm học.
+  const infoLine = [subTitle, reportType === 'internal' ? 'Danh sách nội bộ — phục vụ tra cứu' : ''].filter(Boolean).join(' — ')
+  const tableStart = addHuitHeader(ws, { title, infoLines: [infoLine], widths: columns.map((c) => c.width || 16), logo })
 
   // 4. Header Bảng dữ liệu
   const headerValues = columns.map((c) => c.header)
-  const headerRow = ws.addRow(headerValues)
+  const headerRow = ws.getRow(tableStart)
+  headerRow.values = headerValues
   headerRow.height = 26
   headerRow.eachCell((cell) => {
-    cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF0F172A' } }
+    cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: NAVY } }
     cell.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'FFE2E8F0' }, // Xám xanh trang nhã
+      fgColor: { argb: 'FFDDEBF7' }, // Xanh nhạt, cùng tông với tiêu đề
     }
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
     cell.border = {
-      top: { style: 'thin', color: { argb: 'FF64748B' } },
-      left: { style: 'thin', color: { argb: 'FF64748B' } },
-      bottom: { style: 'medium', color: { argb: 'FF334155' } },
-      right: { style: 'thin', color: { argb: 'FF64748B' } },
+      top: { style: 'thin', color: { argb: 'FF8EA9C1' } },
+      left: { style: 'thin', color: { argb: 'FF8EA9C1' } },
+      bottom: { style: 'medium', color: { argb: 'FF1F3864' } },
+      right: { style: 'thin', color: { argb: 'FF8EA9C1' } },
     }
   })
 
@@ -170,7 +255,7 @@ export function appendHuitSheet(ws, {
     ws.mergeCells(dateRow.number, 1, dateRow.number, nCols)
     dateRow.getCell(1).value = formatNgayHanhChinh()
     dateRow.getCell(1).font = { name: 'Times New Roman', size: 10, italic: true, color: { argb: 'FF334155' } }
-    dateRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle' }
+    dateRow.getCell(1).alignment = { horizontal: 'right', vertical: 'middle', wrapText: true }
     setPrintArea()
     return
   }
@@ -192,6 +277,18 @@ export function appendHuitSheet(ws, {
     ...sig,
     col: validPositions ? sig.col : Math.floor(index * nCols / visibleSignatures.length) + 1,
   }))
+  // Mỗi chữ ký chiếm một nhóm cột liền nhau quanh vị trí yêu cầu, tránh dồn chữ vào cột hẹp (STT...).
+  sigs.sort((a, b) => a.col - b.col)
+  const spans = sigs.map((sig, index) => {
+    const lower = index === 0 ? 1 : Math.floor((sigs[index - 1].col + sig.col) / 2) + 1
+    const upper = index === sigs.length - 1 ? nCols : Math.floor((sig.col + sigs[index + 1].col) / 2)
+    return [Math.min(lower, sig.col), Math.max(upper, sig.col)]
+  })
+  const placeSignatureCell = (rowNumber, index) => {
+    const [from, to] = spans[index]
+    if (to > from) ws.mergeCells(rowNumber, from, rowNumber, to)
+    return ws.getRow(rowNumber).getCell(from)
+  }
 
   // Dòng ngày tháng đặt phía trên chức danh người ký bên phải
   const rightSig = sigs[sigs.length - 1]
@@ -211,8 +308,8 @@ export function appendHuitSheet(ws, {
   // Dòng chức danh
   const titleRow = ws.addRow([])
   titleRow.height = 32
-  sigs.forEach((sig) => {
-    const cell = titleRow.getCell(sig.col)
+  sigs.forEach((sig, index) => {
+    const cell = placeSignatureCell(titleRow.number, index)
     cell.value = sig.title
     cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF0F172A' } }
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
@@ -220,8 +317,8 @@ export function appendHuitSheet(ws, {
 
   // Dòng chú thích dưới chức danh
   const noteRow = ws.addRow([])
-  sigs.forEach((sig) => {
-    const cell = noteRow.getCell(sig.col)
+  sigs.forEach((sig, index) => {
+    const cell = placeSignatureCell(noteRow.number, index)
     cell.value = sig.note
     cell.font = { name: 'Times New Roman', size: 9, italic: true, color: { argb: 'FF64748B' } }
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
@@ -234,7 +331,7 @@ export function appendHuitSheet(ws, {
   ws.addRow([])
   const author = resolveReportAuthor(preparedBy)
   if (sigs.length && author) {
-    const cell = ws.addRow([]).getCell(sigs[0].col)
+    const cell = placeSignatureCell(ws.addRow([]).number, 0)
     cell.value = author
     cell.font = { name: 'Times New Roman', size: 10, bold: true }
     cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }
@@ -268,7 +365,8 @@ export async function xuatBangHuitExcel({
     views: [{ showGridLines: true }],
   })
 
-  appendHuitSheet(ws, { title, subTitle, columns, rows, signatures, preparedBy: author, reportType })
+  const logo = await loadHuitLogo()
+  appendHuitSheet(ws, { title, subTitle, columns, rows, signatures, preparedBy: author, reportType, logo })
 
   const buffer = await workbook.xlsx.writeBuffer()
   taiFileExcel(buffer, fileName)
@@ -294,11 +392,12 @@ export async function xuatMultiSheetHuitExcel({
   workbook.creator = author || 'FIT HUIT Portal'
   workbook.created = new Date()
 
+  const logo = await loadHuitLogo()
   sheets.forEach((sheetConfig) => {
     const ws = workbook.addWorksheet(sheetConfig.sheetName || 'Sheet', {
       views: [{ showGridLines: true }],
     })
-    appendHuitSheet(ws, { ...sheetConfig, reportType: sheetConfig.reportType || reportType, preparedBy: author })
+    appendHuitSheet(ws, { ...sheetConfig, reportType: sheetConfig.reportType || reportType, preparedBy: author, logo })
   })
 
   const buffer = await workbook.xlsx.writeBuffer()

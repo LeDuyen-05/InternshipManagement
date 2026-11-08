@@ -180,7 +180,7 @@ export default function ThongKeCLOPage() {
     try {
       const res = await phieuChamDiemService.getBangDiem(round)
       if (currentRound.current !== round) return
-      const exported = await xuatBangDiemTheoMauKhoa({ ...res.data?.data, trangThaiChotDot: roundLock.status, phienBanChotDot: roundLock.data?.phienBan }, `DiemTTTN_${round}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+      const exported = await xuatBangDiemTheoMauKhoa({ ...res.data?.data, namHoc: selectedDot?.namHoc, trangThaiChotDot: roundLock.status, phienBanChotDot: roundLock.data?.phienBan }, `DiemTTTN_${round}_${new Date().toISOString().slice(0, 10)}.xlsx`)
       if (exported === false) return
       showToast('Đã xuất file chấm điểm theo mẫu của Khoa!')
     } catch (e) {
