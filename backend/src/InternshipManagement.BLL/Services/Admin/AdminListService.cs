@@ -375,7 +375,7 @@ public sealed class AdminListService(AppDbContext db)
                     accounts.Select(x => new object?[] { x.MaTaiKhoan, x.TenDangNhap, x.TenVaiTro, x.TrangThai, x.MaSV, x.MaGV, x.MaDaiDien, x.TenChuSoHuu, x.TenDonVi }).ToList());
             case "students":
                 var students = await Bounded(StudentRows(Students(f)), ct);
-                return TabularExport.Xlsx(["Mã SV", "Họ tên", "Lớp", "Khóa học", "GPA", "Chuyên ngành", "Kỹ năng", "Công nghệ", "Dự án"],
+                return TabularExport.Xlsx(["Mã SV", "Họ tên", "Lớp", "Khóa học", "GPA", "Chuyên ngành", "Kỹ năng", "Công cụ, phần mềm", "Dự án, kinh nghiệm"],
                     students.Select(x => new object?[] { x.MaSV, x.HoTen, x.Lop, x.KhoaHoc, x.Gpa, x.ChuyenNganh, x.KyNang, x.CongNghe, x.DuAnDaThucHien }).ToList());
             case "registrations":
                 var apps = await Bounded(RegistrationRows(Registrations(f)), ct);

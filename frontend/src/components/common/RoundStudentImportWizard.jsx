@@ -194,8 +194,8 @@ export default function RoundStudentImportWizard({
       else if (name === 'gpa' || name.includes('điểm tb')) mapping.gpa = String(cIdx)
       else if (name.includes('chuyên ngành') || name === 'chuyennganh') mapping.chuyenNganh = String(cIdx)
       else if (name.includes('kỹ năng') || name === 'kynang') mapping.kyNang = String(cIdx)
-      else if (name.includes('công nghệ') || name === 'congnghe') mapping.congNghe = String(cIdx)
-      else if (name.includes('dự án') || name === 'duan') mapping.duAnDaThucHien = String(cIdx)
+      else if (name.includes('công nghệ') || name.includes('công cụ') || name.includes('phần mềm') || name === 'congnghe') mapping.congNghe = String(cIdx)
+      else if (name.includes('dự án') || name.includes('kinh nghiệm') || name === 'duan') mapping.duAnDaThucHien = String(cIdx)
     })
 
     setColumnMapping(mapping)

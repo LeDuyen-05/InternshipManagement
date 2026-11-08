@@ -385,7 +385,7 @@ export default function HoSoNangLucPage() {
             {/* Công nghệ */}
             <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                Công nghệ &amp; Framework thành thạo
+                Công cụ &amp; phần mềm thành thạo
               </span>
               <div className="flex flex-wrap gap-2">
                 {techList.length > 0 ? (
@@ -398,7 +398,7 @@ export default function HoSoNangLucPage() {
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-slate-400 italic">Chưa khai báo công nghệ</span>
+                  <span className="text-xs text-slate-400 italic">Chưa khai báo công cụ, phần mềm</span>
                 )}
               </div>
             </div>
@@ -408,11 +408,11 @@ export default function HoSoNangLucPage() {
           <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-6 flex flex-col gap-4">
             <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
               <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[20px]">terminal</span>
+                <span className="material-symbols-outlined text-[20px]">work_history</span>
               </div>
               <div>
                 <h3 className="font-bold text-slate-900 text-sm m-0">
-                  Dự án &amp; Sản phẩm tiêu biểu
+                  Dự án, đồ án &amp; kinh nghiệm tiêu biểu
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Minh chứng năng lực thực tế gửi tới doanh nghiệp tiếp nhận
@@ -423,7 +423,7 @@ export default function HoSoNangLucPage() {
             <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-xs text-slate-900">
-                  {profile.duAnDaThucHien ? 'Dự án đã thực hiện' : 'Chưa cập nhật'}
+                  {profile.duAnDaThucHien ? 'Dự án, đồ án, kinh nghiệm' : 'Chưa cập nhật'}
                 </span>
                 {profile.duAnDaThucHien && (
                   <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-100 text-emerald-800">
@@ -478,7 +478,7 @@ export default function HoSoNangLucPage() {
                 <input
                   type="text"
                   name="kyNang"
-                  placeholder="Lập trình Web, RESTful API, Database Design..."
+                  placeholder="VD: Hạch toán kế toán, Digital marketing, Lập trình web, Kiểm nghiệm vi sinh..."
                   value={formData.kyNang}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
@@ -487,12 +487,12 @@ export default function HoSoNangLucPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Công nghệ &amp; Framework (cách nhau bằng dấu phẩy)
+                  Công cụ &amp; phần mềm sử dụng thành thạo (cách nhau bằng dấu phẩy)
                 </label>
                 <input
                   type="text"
                   name="congNghe"
-                  placeholder="React, ASP.NET Core, Node.js, SQL Server..."
+                  placeholder="VD: Excel, MISA, Canva, Photoshop, SQL, ReactJS..."
                   value={formData.congNghe}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
@@ -501,13 +501,13 @@ export default function HoSoNangLucPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Dự án đã thực hiện
+                  Dự án, đồ án hoặc kinh nghiệm
                 </label>
                 <textarea
                   rows="3"
                   name="duAnDaThucHien"
                   maxLength={1000}
-                  placeholder="Mỗi dự án một dòng: tên dự án – vai trò – công nghệ sử dụng..."
+                  placeholder="Mỗi dòng một dự án, đồ án hoặc công việc: tên – vai trò – kết quả hoặc công cụ sử dụng..."
                   value={formData.duAnDaThucHien}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
@@ -521,7 +521,7 @@ export default function HoSoNangLucPage() {
                 <input
                   type="url"
                   name="fileCV"
-                  placeholder="https://portfolio.dev hoặc https://linkedin.com/in/..."
+                  placeholder="https://linkedin.com/in/... hoặc trang giới thiệu sản phẩm của bạn"
                   value={formData.fileCV}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"

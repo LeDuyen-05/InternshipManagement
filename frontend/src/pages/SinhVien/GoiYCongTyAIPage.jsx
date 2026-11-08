@@ -238,11 +238,11 @@ export default function GoiYCongTyAIPage() {
                   <p className="font-semibold text-slate-800">{sv.kyNang || 'Chưa cập nhật'}</p>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl space-y-1">
-                  <p className="text-[11px] font-bold uppercase text-slate-400">Công nghệ / Framework</p>
+                  <p className="text-[11px] font-bold uppercase text-slate-400">Công cụ / phần mềm</p>
                   <p className="font-semibold text-slate-800">{sv.congNghe || 'Chưa cập nhật'}</p>
                 </div>
                 <div className="p-3.5 bg-slate-50 rounded-xl space-y-1">
-                  <p className="text-[11px] font-bold uppercase text-slate-400">Dự án đã thực hiện</p>
+                  <p className="text-[11px] font-bold uppercase text-slate-400">Dự án, đồ án, kinh nghiệm</p>
                   <p className="font-semibold text-slate-800 truncate" title={sv.duAnDaThucHien}>
                     {sv.duAnDaThucHien || 'Chưa cập nhật'}
                   </p>
@@ -461,28 +461,28 @@ export default function GoiYCongTyAIPage() {
                   value={editKyNang}
                   maxLength={500}
                   onChange={(e) => setEditKyNang(e.target.value)}
-                  placeholder="Ví dụ: C#, SQL, OOP, RESTful API..."
+                  placeholder="VD: Hạch toán kế toán, Digital marketing, Lập trình web, Kiểm nghiệm vi sinh..."
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                  2. Công nghệ & Framework:
+                  2. Công cụ & phần mềm sử dụng thành thạo:
                 </label>
                 <input
                   type="text"
                   value={editCongNghe}
                   maxLength={500}
                   onChange={(e) => setEditCongNghe(e.target.value)}
-                  placeholder="Ví dụ: ASP.NET Core, ReactJS, Docker, AWS..."
+                  placeholder="VD: Excel, MISA, Canva, Photoshop, SQL, ReactJS..."
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">3. Dự án đã thực hiện:</label>
-                <textarea aria-label="Dự án đã thực hiện" maxLength={1000} rows={3} value={editDuAn} onChange={e => setEditDuAn(e.target.value)} className="w-full border rounded-xl p-2 text-xs" />
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">3. Dự án, đồ án hoặc kinh nghiệm:</label>
+                <textarea aria-label="Dự án, đồ án hoặc kinh nghiệm" maxLength={1000} rows={3} value={editDuAn} onChange={e => setEditDuAn(e.target.value)} placeholder="Mỗi dòng một dự án, đồ án hoặc công việc: tên – vai trò – kết quả..." className="w-full border rounded-xl p-2 text-xs" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase mb-1">

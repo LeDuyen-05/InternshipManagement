@@ -890,8 +890,8 @@ function CreateForm({ tab, reload, editItem, onCancel }) {
           ['Gpa', 'GPA'],
           ['ChuyenNganh', 'Chuyên ngành'],
           ['KyNang', 'Kỹ năng'],
-          ['CongNghe', 'Công nghệ'],
-          ['DuAnDaThucHien', 'Dự án'],
+          ['CongNghe', 'Công cụ, phần mềm'],
+          ['DuAnDaThucHien', 'Dự án, kinh nghiệm'],
         ]
       : tab === 'gv'
       ? [
