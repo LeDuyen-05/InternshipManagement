@@ -10,6 +10,7 @@ public record DatHanDieuChinhRequest(string MaDot, DateTimeOffset? HanCu, DateTi
 public record HuyNoiThucTapRequest(string MaDot, string TrangThaiHienTai, string LyDo, string CanCu, bool DaTiepNhanTrucTiep);
 public record PhanBoLaiRequest(string MaDot, string MaCongTy, string LyDo, string CanCu, bool DaTiepNhanTrucTiep, bool DaDuocDNTiepNhan, string? MaViTri = null);
 public record GhiNhanXuLyRiengRequest(string MaDot, string LyDo, string CanCu, bool DaTiepNhanTrucTiep);
+public record PhanBoLaiResult(string MaPhanBo, string? MaGVHuongDan, bool GVTiepTuc, string GhiChuGVHD);
 
 public class DieuChinhNoiThucTapService(AppDbContext db, TimeProvider? clock = null)
 {
@@ -137,29 +138,34 @@ public class DieuChinhNoiThucTapService(AppDbContext db, TimeProvider? clock = n
                 daTiepNhan = db.PhanBoThucTaps.Count(p => p.MaDot == maDot && p.MaCongTy == x.MaCongTy && p.TrangThai != "Huy") }).ToListAsync();
     }
 
-    public async Task CancelAsync(string id, HuyNoiThucTapRequest request, string actor)
+    public async Task<List<string>> CancelAsync(string id, HuyNoiThucTapRequest request, string actor)
     {
         actor = Actor(actor); Direct(request.DaTiepNhanTrucTiep);
         var reason = Text(request.LyDo, "Lý do hủy"); var reference = Text(request.CanCu, "Đơn/minh chứng đã tiếp nhận trực tiếp");
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         var round = await Round(request.MaDot);
         var pb = await Placement(id, request.MaDot);
-        if (pb.TrangThai == "Huy" && pb.NgayHuy.HasValue) return; // Không ghi đè audit khi gửi lặp.
+        if (pb.TrangThai == "Huy" && pb.NgayHuy.HasValue) return []; // Không ghi đè audit khi gửi lặp.
         RequireWindow(round);
         if (pb.TrangThai != request.TrangThaiHienTai) throw new DbUpdateConcurrencyException();
         if (pb.TrangThai is not ("ChuaNhanViec" or "ChoKhoaDuyet" or "DangThucTap"))
             throw new InvalidOperationException("Không hủy nơi đã hoàn thành hoặc trạng thái không hợp lệ; Khoa ghi nhận xử lý riêng.");
         if (await HasGrade(pb.MaSinhVien, pb.MaDot)) throw new InvalidOperationException("Đã có phiếu điểm trong đợt. Chỉ ghi nhận xử lý riêng; không hủy/chuyển điểm tự động.");
+        // GVHD tạm dừng, không chiếm chỉ tiêu GV khi SV chưa có nơi; khôi phục khi phân bổ lại.
+        var paused = await PhanCongGVHD.TamDungAsync(db, pb.MaSinhVien, pb.MaDot);
         Log(pb.MaDot, pb.MaSinhVien, id, "Huy", reason, reference,
-            $"Hủy nơi {pb.MaCongTy}, trạng thái trước {pb.TrangThai}; giữ GVHD, báo cáo và hồ sơ cũ.", actor);
+            $"Hủy nơi {pb.MaCongTy}, trạng thái trước {pb.TrangThai}; "
+            + (paused.Count > 0 ? $"tạm dừng GVHD {string.Join(", ", paused)} (không tính chỉ tiêu cho đến khi có nơi mới); " : "")
+            + "giữ báo cáo và hồ sơ cũ.", actor);
         pb.TrangThai = "Huy"; pb.LyDoHuy = reason; pb.CanCuHuy = reference; pb.NguoiHuy = actor;
         pb.NgayHuy = Now; pb.TrangThaiXuLyLai = "ChoPhanBoLai";
         await ArchiveReports(pb.MaSinhVien, pb.MaDot, id);
         await db.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
+        return paused;
     }
 
-    public async Task<string> ReallocateAsync(string oldId, PhanBoLaiRequest request, string actor)
+    public async Task<PhanBoLaiResult> ReallocateAsync(string oldId, PhanBoLaiRequest request, string actor)
     {
         actor = Actor(actor); Direct(request.DaTiepNhanTrucTiep);
         if (!request.DaDuocDNTiepNhan) throw new ArgumentException("Khoa cần xác nhận DN mới đã đồng ý tiếp nhận sinh viên.");
@@ -192,12 +198,14 @@ public class DieuChinhNoiThucTapService(AppDbContext db, TimeProvider? clock = n
             TrangThai = "DangThucTap", DaDuocKhoaDuyet = true, NgayKhoaDuyet = Now.ToOffset(TimeSpan.FromHours(7)).DateTime,
             NguoiKhoaDuyet = actor, MaPhanBoTruoc = oldId, NguonPhanBo = "KhoaPhanBoLai"
         });
+        var lecturer = await PhanCongGVHD.TiepTucAsync(db, old.MaSinhVien, old.MaDot);
+        var lecturerNote = PhanCongGVHD.MoTaTiepTuc(lecturer);
         Log(old.MaDot, old.MaSinhVien, id, "PhanBoLai", reason, reference,
-            $"Nơi cũ {oldId}/{old.MaCongTy} → nơi mới {id}/{companyId}. Khoa xác minh DN đã nhận; giữ GVHD và báo cáo cũ làm lịch sử, không xác nhận lại thay SV.", actor);
+            $"Nơi cũ {oldId}/{old.MaCongTy} → nơi mới {id}/{companyId}. Khoa xác minh DN đã nhận; {lecturerNote} Giữ báo cáo cũ làm lịch sử, không xác nhận lại thay SV.", actor);
         old.TrangThaiXuLyLai = "DaPhanBoLai";
         await db.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
-        return id;
+        return new(id, lecturer.MaGV, lecturer.TiepTuc, lecturerNote);
     }
 
     public async Task RecordSeparateReviewAsync(string id, GhiNhanXuLyRiengRequest request, string actor)

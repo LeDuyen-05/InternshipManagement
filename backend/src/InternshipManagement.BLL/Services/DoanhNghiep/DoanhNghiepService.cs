@@ -1536,13 +1536,14 @@ public partial class DoanhNghiepService
 
                 if (isCorrection) { phanBoHienTai.LyDoHuy = "Sửa kết quả PV nhập nhầm; hủy tiếp nhận tạm"; phanBoHienTai.CanCuHuy = lyDo?.Trim(); phanBoHienTai.NguoiHuy = actor; }
 
-                var conGVHD = await _db.GVHuongDans.AnyAsync(g => g.MaSinhVien == pv.MaSinhVien && g.TrangThai == "DangHuongDan");
+                // GVHD tạm dừng, không chiếm chỉ tiêu GV khi SV mất nơi; khôi phục khi SV có nơi chính thức mới.
+                var gvTamDung = await InternshipManagement.DAL.Common.PhanCongGVHD.TamDungAsync(_db, pv.MaSinhVien, phanBoHienTai.MaDot);
 
                 message = "Đã cập nhật kết quả và hủy quyết định tiếp nhận của sinh viên."
 
                           + (dangThucTap ? " Sinh viên đang thực tập nên cần thông báo cho sinh viên và Khoa." : "")
 
-                          + (conGVHD ? " Sinh viên vẫn còn GVHD, Khoa cần xem lại phân công." : "");
+                          + (gvTamDung.Count > 0 ? " GVHD của sinh viên được tạm dừng (không tính chỉ tiêu) cho đến khi sinh viên có nơi mới." : "");
 
             }
 

@@ -128,6 +128,7 @@ public class ThucTapTuTimService(AppDbContext db)
                 MaCongTy = company.MaCongTy, MaDot = item.MaDot, NgayPhanBo = DateTime.Today, TrangThai = "ChuaNhanViec",
                 DaDuocKhoaDuyet = true, NgayKhoaDuyet = DateTime.Now, NguoiKhoaDuyet = actor, NguonPhanBo = "TiepNhanBenNgoai" };
             db.PhanBoThucTaps.Add(placement);
+            await InternshipManagement.DAL.Common.PhanCongGVHD.TiepTucAsync(db, item.MaSV, item.MaDot);
             item.MaCongTy = company.MaCongTy;
             item.MaPhanBo = placement.MaPhanBo;
             var applications = await db.DangKyThucTaps.Where(x => x.MaSV == item.MaSV && x.MaDot == item.MaDot

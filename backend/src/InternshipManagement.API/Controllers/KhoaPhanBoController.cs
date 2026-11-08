@@ -43,15 +43,17 @@ public class KhoaPhanBoController(KhoaChotPhanBoService service, DieuChinhNoiThu
     [HttpPost("{id}/huy")]
     public async Task<IActionResult> Cancel(string id, HuyNoiThucTapRequest request)
     {
-        await dieuChinh.CancelAsync(id, request, User.MaTaiKhoan() ?? throw new UnauthorizedAccessException());
-        return Ok(new { message = "Đã hủy nơi thực tập, giữ lịch sử và đưa vào danh sách cần phân bổ lại." });
+        var paused = await dieuChinh.CancelAsync(id, request, User.MaTaiKhoan() ?? throw new UnauthorizedAccessException());
+        return Ok(new { message = "Đã hủy nơi thực tập, giữ lịch sử và đưa vào danh sách cần phân bổ lại."
+            + (paused.Count > 0 ? $" GVHD {string.Join(", ", paused)} tạm dừng, không tính vào chỉ tiêu cho đến khi sinh viên có nơi mới." : "") });
     }
 
     [HttpPost("{id}/phan-bo-lai")]
-    public async Task<IActionResult> Reallocate(string id, PhanBoLaiRequest request) => Ok(new
+    public async Task<IActionResult> Reallocate(string id, PhanBoLaiRequest request)
     {
-        maPhanBo = await dieuChinh.ReallocateAsync(id, request, User.MaTaiKhoan() ?? throw new UnauthorizedAccessException())
-    });
+        var result = await dieuChinh.ReallocateAsync(id, request, User.MaTaiKhoan() ?? throw new UnauthorizedAccessException());
+        return Ok(new { result.MaPhanBo, result.MaGVHuongDan, result.GVTiepTuc, message = $"Đã phân bổ lại nơi thực tập. {result.GhiChuGVHD}" });
+    }
 
     [HttpPost("{id}/xu-ly-rieng")]
     public async Task<IActionResult> Separate(string id, GhiNhanXuLyRiengRequest request)

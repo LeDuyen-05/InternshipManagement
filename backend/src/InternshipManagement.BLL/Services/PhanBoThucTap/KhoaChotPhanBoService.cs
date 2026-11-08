@@ -61,6 +61,7 @@ public class KhoaChotPhanBoService(AppDbContext db)
         placement.TrangThai = "DangThucTap";
         placement.NgayKhoaDuyet = DateTime.Now;
         placement.NguoiKhoaDuyet = actor;
+        await InternshipManagement.DAL.Common.PhanCongGVHD.TiepTucAsync(db, placement.MaSinhVien, maDot);
         await db.SaveChangesAsync();
         if (transaction != null) await transaction.CommitAsync();
     }

@@ -97,7 +97,7 @@ export const gvHuongDanService = {
         hoTenGV: item.hoTenGV,
         chuyenMonGV: item.chuyenMonGV || 'Chung',
         ngayPC: item.ngayPC ? new Date(item.ngayPC).toLocaleDateString('vi-VN') : '-',
-        trangThai: item.trangThai === 'DangHuongDan' ? 'Đang hướng dẫn' : item.trangThai,
+        trangThai: { DangHuongDan: 'Đang hướng dẫn', TamDung: 'Tạm dừng (chờ nơi mới)', HuyBo: 'Đã hủy' }[item.trangThai] || item.trangThai,
       }
     })
 

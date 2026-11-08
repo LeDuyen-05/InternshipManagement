@@ -212,13 +212,13 @@ export default function DieuChinhNoiThucTapPanel({ maDot, student, onClose, onCh
           maViTri: position || null,
           daDuocDNTiepNhan: accepted,
         })
-      await apiClient.post(path, payload)
+      const { data } = await apiClient.post(path, payload)
       if (current.current !== key || version.current !== request) return
       setAction(null)
       setNotice(
         kind === 'xu-ly-rieng'
           ? 'Đã ghi nhận cần xử lý riêng; chưa đổi nơi hoặc điểm.'
-          : 'Đã lưu kết quả xử lý và lịch sử.'
+          : data?.message || 'Đã lưu kết quả xử lý và lịch sử.'
       )
       await load()
       if (current.current === key) await onChanged?.()
@@ -382,8 +382,13 @@ export default function DieuChinhNoiThucTapPanel({ maDot, student, onClose, onCh
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium">
-                    GVHD đã phân công: <strong>{history.giangViens.length}</strong>
+                    GVHD đang hướng dẫn: <strong>{history.giangViens.filter((g) => g.trangThai === 'DangHuongDan').length}</strong>
                   </span>
+                  {history.giangViens.some((g) => g.trangThai === 'TamDung') && (
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-800 font-medium" title="Không tính vào chỉ tiêu GV; tự hướng dẫn tiếp khi SV có nơi mới nếu GV còn chỉ tiêu">
+                      GVHD tạm dừng: <strong>{history.giangViens.filter((g) => g.trangThai === 'TamDung').map((g) => g.maGiangVien).join(', ')}</strong>
+                    </span>
+                  )}
                   <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-medium">
                     Báo cáo tiến độ: <strong>{history.soBaoCao}</strong>
                   </span>

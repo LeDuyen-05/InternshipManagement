@@ -179,6 +179,7 @@ public partial class SinhVienTheoDotService(AppDbContext db, TimeProvider? clock
         });
         if (request.MaLanHoTro != null)
             await new LanHoTroService(db, this, _clock).AttachAllocationAsync(request.MaDot, request.MaLanHoTro, request.PhienBanHoTro!.Value, maSV, id, company.TenCongTy, actor);
+        await PhanCongGVHD.TiepTucAsync(db, maSV, request.MaDot);
         await db.SaveChangesAsync();
         if (tx != null) await tx.CommitAsync();
         return id;
