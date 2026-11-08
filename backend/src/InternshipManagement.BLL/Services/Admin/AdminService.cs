@@ -405,6 +405,7 @@ public class AdminService
             throw new ArgumentException("Thứ tự phải dương và CLO không được trùng trong cùng bộ.");
         var nhom = ValidateNhom(request.NhomDanhGia);
         if ((await _db.TieuChis.Where(x => x.NhomDanhGia != null && x.MaRubric == request.MaRubric).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
+        await ChanVuotDiemPhanAsync(request.MaRubric, nhom, (decimal)request.DiemToiDa, null);
         if (await _db.TieuChis.AnyAsync(x => x.MaTieuChi == request.MaTieuChi)) throw new InvalidOperationException("Mã tiêu chí đã tồn tại.");
         _db.TieuChis.Add(new TieuChi { MaTieuChi = request.MaTieuChi, TenTieuChi = request.TenTieuChi, DiemToiDa = (decimal)request.DiemToiDa, NhomDanhGia = nhom, ThuTu = request.ThuTu, MaCLO = string.IsNullOrWhiteSpace(request.MaCLO) ? request.MaTieuChi : request.MaCLO.Trim(), MaRubric = request.MaRubric });
         await _db.SaveChangesAsync();
@@ -427,11 +428,23 @@ public class AdminService
         if (request.MaTieuChi != id || request.ThuTu < 1 || await _db.TieuChis.AnyAsync(x => x.MaRubric == request.MaRubric && x.MaTieuChi != id && x.MaCLO == clo))
             throw new ArgumentException("Không đổi mã tiêu chí; thứ tự phải dương và CLO không trùng trong bộ.");
         if ((await _db.TieuChis.Where(x => x.MaTieuChi != id && x.NhomDanhGia != null && x.MaRubric == request.MaRubric).SumAsync(x => (decimal?)x.DiemToiDa) ?? 0) + (decimal)request.DiemToiDa > 10) throw new InvalidOperationException("Tổng điểm tối đa của các tiêu chí không được vượt quá 10.");
+        if (doiCauTruc) await ChanVuotDiemPhanAsync(request.MaRubric, nhom, (decimal)request.DiemToiDa, id);
         if ((item.DiemToiDa != (decimal)request.DiemToiDa || item.NhomDanhGia != nhom || item.MaRubric != request.MaRubric || item.MaCLO != (string.IsNullOrWhiteSpace(request.MaCLO) ? item.MaTieuChi : request.MaCLO.Trim()))
             && await _db.ChiTietChamDiems.AnyAsync(x => x.MaTieuChi == id))
             throw new InvalidOperationException("Tiêu chí đã có điểm: chỉ được sửa mô tả và thứ tự để bảo toàn lịch sử.");
         item.TenTieuChi = request.TenTieuChi; item.DiemToiDa = (decimal)request.DiemToiDa; item.NhomDanhGia = nhom; item.ThuTu = request.ThuTu; item.MaCLO = string.IsNullOrWhiteSpace(request.MaCLO) ? item.MaTieuChi : request.MaCLO.Trim(); item.MaRubric = request.MaRubric;
         await _db.SaveChangesAsync();
+    }
+
+    // Phần GV và phần DN mỗi phần tối đa 5.00: báo ngay khi soạn thay vì đợi tới lúc ban hành.
+    private async Task ChanVuotDiemPhanAsync(string maRubric, string nhom, decimal diemMoi, string? boQuaMaTieuChi)
+    {
+        var hienTai = await _db.TieuChis.Where(x => x.MaRubric == maRubric && x.NhomDanhGia == nhom && x.MaTieuChi != boQuaMaTieuChi)
+            .SumAsync(x => (decimal?)x.DiemToiDa) ?? 0;
+        var toiDa = RubricService.DiemToiDaPhan(nhom);
+        if (hienTai + diemMoi > toiDa)
+            throw new InvalidOperationException($"Phần {(nhom == "DN" ? "doanh nghiệp" : "giảng viên")} tối đa {RubricService.Diem(toiDa)} điểm: đang có {RubricService.Diem(hienTai)}, "
+                + $"thêm {RubricService.Diem(diemMoi)} sẽ thành {RubricService.Diem(hienTai + diemMoi)}. Còn lại tối đa {RubricService.Diem(Math.Max(0, toiDa - hienTai))} điểm.");
     }
 
     public async Task DeleteCriteriaAsync(string id)

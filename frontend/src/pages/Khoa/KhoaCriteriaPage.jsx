@@ -184,6 +184,15 @@ export default function KhoaCriteriaPage() {
       .reduce((sum, x) => sum + Number(x?.diemToiDa || 0), 0)
   }, [rubricItems])
 
+  // Mỗi phần (GV/DN) tối đa 5.00 điểm: số điểm còn lại cho tiêu chí đang thêm/sửa.
+  const conLaiPhan = useMemo(() => {
+    const daCo = rubricItems
+      .filter((x) => x.nhomDanhGia === form.nhomDanhGia && !(editing && x.maTieuChi === form.maTieuChi))
+      .reduce((sum, x) => sum + Number(x?.diemToiDa || 0), 0)
+    return Math.max(0, 5 - daCo)
+  }, [rubricItems, form.nhomDanhGia, form.maTieuChi, editing])
+  const tenPhan = form.nhomDanhGia === 'DN' ? 'doanh nghiệp' : 'giảng viên'
+
   const countGV = useMemo(
     () => rubricItems.filter((x) => x.nhomDanhGia === 'GV').length,
     [rubricItems]
@@ -260,6 +269,12 @@ export default function KhoaCriteriaPage() {
 
     if (!payload.diemToiDa || payload.diemToiDa <= 0) {
       setError('Điểm tối đa phải lớn hơn 0!')
+      setSubmitting(false)
+      return
+    }
+
+    if (!isPublished && payload.diemToiDa > conLaiPhan + 0.0001) {
+      setError(`Phần ${tenPhan} tối đa 5.00 điểm: chỉ còn ${conLaiPhan.toFixed(2)} điểm cho tiêu chí này.`)
       setSubmitting(false)
       return
     }
@@ -920,6 +935,11 @@ export default function KhoaCriteriaPage() {
             </div>
 
           <form onSubmit={handleSave} className="space-y-4 text-xs">
+            {error && (
+              <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-semibold">
+                {error}
+              </div>
+            )}
             {isPublished && (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
                 Bộ tiêu chí đã ban hành: chỉ sửa được tên/mô tả và thứ tự. Muốn đổi CLO, người chấm hoặc điểm tối đa,
@@ -1008,6 +1028,11 @@ export default function KhoaCriteriaPage() {
                   onChange={(e) => setForm({ ...form, diemToiDa: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-mono text-xs text-slate-800"
                 />
+                {!isPublished && (
+                  <p className={`text-[10px] mt-1 ${Number(form.diemToiDa) > conLaiPhan + 0.0001 ? 'text-rose-600 font-semibold' : 'text-slate-500'}`}>
+                    Phần {tenPhan} còn tối đa {conLaiPhan.toFixed(2)} / 5.00
+                  </p>
+                )}
               </div>
 
               <div>

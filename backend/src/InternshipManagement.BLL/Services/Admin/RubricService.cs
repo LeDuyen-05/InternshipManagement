@@ -83,18 +83,36 @@ public class RubricService(AppDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(); if (tx != null) await tx.CommitAsync();
     }
 
+    // Thang 10 điểm: GVHD chấm 5.00, đơn vị thực tập chấm 5.00 (CLO4.1 = 2.00, CLO4.2 = 3.00).
+    public const decimal DiemPhanGV = 5m, DiemPhanDN = 5m;
+
+    public static decimal DiemToiDaPhan(string nhom) => nhom == "DN" ? DiemPhanDN : DiemPhanGV;
+
+    /// <summary>Điểm dạng 0.00 cố định dấu chấm, không phụ thuộc ngôn ngữ của máy chủ.</summary>
+    public static string Diem(decimal value) => value.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Điều kiện ban hành. Báo đủ mọi điểm chưa đạt kèm số liệu hiện tại để Khoa sửa một lần.</summary>
     public static void Validate(IReadOnlyList<TieuChi> criteria)
     {
-        if (criteria.Count == 0 || criteria.Select(x => x.MaCLO.ToUpperInvariant()).Distinct().Count() != criteria.Count
-            || criteria.Any(x => string.IsNullOrWhiteSpace(x.MaCLO) || x.DiemToiDa <= 0 || decimal.Round(x.DiemToiDa, 2) != x.DiemToiDa
-                || x.ThuTu < 1 || x.NhomDanhGia is not ("GV" or "DN"))
-            || criteria.Select(x => x.ThuTu).Distinct().Count() != criteria.Count
-            || criteria.Where(x => x.NhomDanhGia == "GV").Sum(x => x.DiemToiDa) != 5
-            || criteria.Where(x => x.NhomDanhGia == "DN").Sum(x => x.DiemToiDa) != 5
-            || criteria.Count(x => x.NhomDanhGia == "DN") != 2
+        var loi = new List<string>();
+        var gv = criteria.Where(x => x.NhomDanhGia == "GV").Sum(x => x.DiemToiDa);
+        var dn = criteria.Where(x => x.NhomDanhGia == "DN").Sum(x => x.DiemToiDa);
+        if (criteria.Count == 0) loi.Add("bộ chưa có tiêu chí nào");
+        var trungClo = criteria.Where(x => !string.IsNullOrWhiteSpace(x.MaCLO)).GroupBy(x => x.MaCLO.ToUpperInvariant()).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (trungClo.Count > 0) loi.Add($"mã CLO bị trùng: {string.Join(", ", trungClo)}");
+        var trungThuTu = criteria.GroupBy(x => x.ThuTu).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+        if (trungThuTu.Count > 0) loi.Add($"thứ tự bị trùng: {string.Join(", ", trungThuTu)}");
+        var saiTieuChi = criteria.Where(x => string.IsNullOrWhiteSpace(x.MaCLO) || x.DiemToiDa <= 0 || decimal.Round(x.DiemToiDa, 2) != x.DiemToiDa
+            || x.ThuTu < 1 || x.NhomDanhGia is not ("GV" or "DN")).Select(x => x.MaTieuChi).ToList();
+        if (saiTieuChi.Count > 0) loi.Add($"tiêu chí thiếu CLO, sai điểm, sai thứ tự hoặc sai nhóm chấm: {string.Join(", ", saiTieuChi)}");
+        if (gv != DiemPhanGV) loi.Add($"phần giảng viên đang {Diem(gv)} điểm, cần đúng {Diem(DiemPhanGV)}");
+        if (dn != DiemPhanDN) loi.Add($"phần doanh nghiệp đang {Diem(dn)} điểm, cần đúng {Diem(DiemPhanDN)}");
+        if (criteria.Count(x => x.NhomDanhGia == "DN") != 2
             || !criteria.Any(x => x.NhomDanhGia == "DN" && x.MaCLO == "CLO4.1" && x.DiemToiDa == 2)
             || !criteria.Any(x => x.NhomDanhGia == "DN" && x.MaCLO == "CLO4.2" && x.DiemToiDa == 3))
-            throw new ArgumentException("Bộ phải có CLO/thứ tự duy nhất, điểm hợp lệ; GV 5 điểm, DN gồm CLO4.1=2 và CLO4.2=3.");
+            loi.Add("phần doanh nghiệp phải gồm đúng 2 tiêu chí CLO4.1 = 2.00 và CLO4.2 = 3.00");
+        if (loi.Count > 0)
+            throw new ArgumentException($"Chưa thể ban hành (tổng hiện tại {Diem(gv + dn)}/10.00): {string.Join("; ", loi)}.");
     }
 
     public static async Task ValidateRoundRubricAsync(AppDbContext db, string? type, string? rubric)
