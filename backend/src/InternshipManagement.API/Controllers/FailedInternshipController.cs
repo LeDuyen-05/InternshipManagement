@@ -19,7 +19,9 @@ public class FailedInternshipController(FailedInternshipService service) : Contr
         string[] headers = ["MSSV", "Họ tên", "Lớp", "Năm học", "Mã đợt", "Tên đợt", "Loại thực tập", "Bộ điểm", "Kết quả", "Tổng điểm", "Lý do", "Căn cứ", "Người xác nhận", "Ngày xác nhận (UTC+7)", "Công ty", "Nguồn", "Trạng thái chốt", "Phiên bản chốt"];
         var rows = data.Select(x => new object?[] { x.MaSV, x.HoTen, x.Lop, x.NamHoc, x.MaDot, x.TenDot, x.MaLoaiThucTap, x.MaRubric, x.KetQua, x.TongDiem, x.LyDo, x.CanCu,
             x.NguoiXacNhan, x.NgayXacNhan?.ToOffset(TimeSpan.FromHours(7)).ToString("yyyy-MM-dd HH:mm:ss"), x.TenCongTy, x.NguonDuLieu, x.TrangThaiChot, x.PhienBanChot }).ToList();
-        return format == "csv" ? File(TabularExport.Csv(headers, rows), "text/csv; charset=utf-8", "sinh-vien-rot-thuc-tap.csv")
-            : File(TabularExport.Xlsx(headers, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "sinh-vien-rot-thuc-tap.xlsx");
+        if (format == "csv") return File(TabularExport.Csv(headers, rows), "text/csv; charset=utf-8", "sinh-vien-rot-thuc-tap.csv");
+        var (unit, info) = await service.ExportHeadingAsync(query, rows.Count);
+        return File(TabularExport.Xlsx(headers, rows, "DANH SÁCH SINH VIÊN RỚT THỰC TẬP", info, unit, "SinhVienRot"),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "sinh-vien-rot-thuc-tap.xlsx");
     }
 }

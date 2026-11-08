@@ -166,6 +166,20 @@ public class FailedInternshipService(AppDbContext db, UngTuyenHoTroService track
         return rows;
     }
 
+    // Đơn vị và dòng thông tin (đợt, bộ lọc) in ở tiêu đề tệp Excel danh sách rớt.
+    public async Task<(string Unit, string Info)> ExportHeadingAsync(FailedInternshipQuery query, int total)
+    {
+        var filters = new List<string>();
+        if (!string.IsNullOrWhiteSpace(query.NamHoc)) filters.Add($"Năm học: {query.NamHoc}");
+        if (!string.IsNullOrWhiteSpace(query.MaLoaiThucTap)) filters.Add($"Loại thực tập: {DAL.Common.TenLoaiThucTap.Lay(query.MaLoaiThucTap)}");
+        if (!string.IsNullOrWhiteSpace(query.Lop)) filters.Add($"Lớp: {query.Lop}");
+        if (!string.IsNullOrWhiteSpace(query.NguyenNhan))
+            filters.Add("Nguyên nhân: " + query.NguyenNhan switch { "RotDiem" => "Rớt điểm", "KhongHoanTat" => "Không hoàn tất", "TuChoiHoTro" => "Từ chối hỗ trợ", _ => query.NguyenNhan });
+        filters.Add("Nguồn dữ liệu: " + query.Nguon switch { "BanChot" => "Bản đã chốt", "HienHanh" => "Dữ liệu hiện hành", _ => "Tự động (bản chốt nếu đợt đã chốt)" });
+        var info = $"{await ExportHeading.RoundAsync(db, query.MaDot)}\n{string.Join(" — ", filters)}\nTổng số sinh viên: {total}";
+        return (await ExportHeading.UnitAsync(db), info);
+    }
+
     public async Task<object> DetailAsync(string round, string student, string source = "TuDong")
     {
         var row = (db.Database.IsSqlServer()

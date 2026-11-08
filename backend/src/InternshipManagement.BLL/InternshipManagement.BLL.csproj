@@ -12,4 +12,8 @@
   <ItemGroup>
     <ProjectReference Include="..\InternshipManagement.DAL\InternshipManagement.DAL.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Logo trường in ở tiêu đề các tệp Excel xuất từ hệ thống. -->
+    <EmbeddedResource Include="Assets\huit-logo.png" LogicalName="InternshipManagement.BLL.Assets.huit-logo.png" />
+  </ItemGroup>
 </Project>

@@ -57,7 +57,9 @@ public class BackendCompletionTests
         using var zip = new ZipArchive(new MemoryStream(await service.ExportAsync("students", filter)));
         using var stream = zip.GetEntry("xl/worksheets/sheet1.xml")!.Open();
         var sheet = XDocument.Load(stream); XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var ids = sheet.Descendants(ns + "row").Skip(1).Select(row => row.Elements(ns + "c").First()).ToList();
+        // Phía trên bảng là khối tiêu đề (logo, tiêu đề, thông tin đợt); dữ liệu bắt đầu sau dòng tiêu đề cột.
+        var ids = sheet.Descendants(ns + "row").SkipWhile(row => row.Elements(ns + "c").FirstOrDefault()?.Value != "Mã SV").Skip(1)
+            .Select(row => row.Elements(ns + "c").First()).ToList();
         Assert.Equal(new[] { "0001", "0002" }, ids.Select(cell => cell.Value));
         Assert.All(ids, cell => Assert.Equal("inlineStr", (string?)cell.Attribute("t")));
     }

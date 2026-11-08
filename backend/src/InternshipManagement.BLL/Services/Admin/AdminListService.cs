@@ -366,22 +366,28 @@ public sealed class AdminListService(AppDbContext db)
     public async Task<byte[]> ExportAsync(string kind, AdminListQuery f, CancellationToken ct = default)
     {
         await ValidateAsync(f, ct);
+        // Tiêu đề tệp: khoa của người xuất và đợt đang lọc (theo mẫu tiêu đề của Khoa).
+        var unit = await ExportHeading.UnitAsync(db, ct);
+        var roundLine = await ExportHeading.RoundAsync(db, f.MaDot, ct);
         // Export uses the same filters and ordering, never the requested page offset.
         switch (kind)
         {
             case "accounts":
                 var accounts = await Bounded(AccountRows(Accounts(f)), ct);
                 return TabularExport.Xlsx(["Mã tài khoản", "Tên đăng nhập", "Vai trò", "Trạng thái", "Mã SV", "Mã GV", "Mã đại diện", "Họ tên", "Đơn vị"],
-                    accounts.Select(x => new object?[] { x.MaTaiKhoan, x.TenDangNhap, x.TenVaiTro, x.TrangThai, x.MaSV, x.MaGV, x.MaDaiDien, x.TenChuSoHuu, x.TenDonVi }).ToList());
+                    accounts.Select(x => new object?[] { x.MaTaiKhoan, x.TenDangNhap, x.TenVaiTro, x.TrangThai, x.MaSV, x.MaGV, x.MaDaiDien, x.TenChuSoHuu, x.TenDonVi }).ToList(),
+                    title: "DANH SÁCH TÀI KHOẢN NGƯỜI DÙNG", subtitle: $"Tổng số tài khoản: {accounts.Count}", unit: unit, sheetName: "TaiKhoan");
             case "students":
                 var students = await Bounded(StudentRows(Students(f)), ct);
                 return TabularExport.Xlsx(["Mã SV", "Họ tên", "Lớp", "Khóa học", "GPA", "Chuyên ngành", "Kỹ năng", "Công cụ, phần mềm", "Dự án, kinh nghiệm"],
-                    students.Select(x => new object?[] { x.MaSV, x.HoTen, x.Lop, x.KhoaHoc, x.Gpa, x.ChuyenNganh, x.KyNang, x.CongNghe, x.DuAnDaThucHien }).ToList());
+                    students.Select(x => new object?[] { x.MaSV, x.HoTen, x.Lop, x.KhoaHoc, x.Gpa, x.ChuyenNganh, x.KyNang, x.CongNghe, x.DuAnDaThucHien }).ToList(),
+                    title: "DANH SÁCH SINH VIÊN", subtitle: $"{roundLine}\nTổng số sinh viên: {students.Count}", unit: unit, sheetName: "SinhVien");
             case "registrations":
                 var apps = await Bounded(RegistrationRows(Registrations(f)), ct);
                 return TabularExport.Xlsx(["Mã đăng ký", "Mã SV", "Họ tên", "Lớp", "Mã đợt", "Đợt", "Công ty", "Vị trí", "Ngày đăng ký", "Ưu tiên", "Trạng thái", "Lần đăng ký", "Lần hỗ trợ", "Có nơi tiếp nhận", "Nơi tiếp nhận"],
                     apps.Select(x => new object?[] { x.MaDangKy, x.MaSinhVien, x.SinhVien, x.Lop, x.MaDot, x.Dot, x.CongTy, x.ViTriTuyen,
-                        x.NgayDangKy.ToString("yyyy-MM-dd HH:mm"), x.ThuTuUuTien, x.TrangThai, x.LanDangKy, x.MaLanHoTro, x.DaCoNoiThucTap ? "Có" : "Chưa", x.TenNoiThucTap }).ToList());
+                        x.NgayDangKy.ToString("yyyy-MM-dd HH:mm"), x.ThuTuUuTien, x.TrangThai, x.LanDangKy, x.MaLanHoTro, x.DaCoNoiThucTap ? "Có" : "Chưa", x.TenNoiThucTap }).ToList(),
+                    title: "DANH SÁCH ĐĂNG KÝ NGUYỆN VỌNG THỰC TẬP", subtitle: $"{roundLine}\nTổng số hồ sơ đăng ký: {apps.Count}", unit: unit, sheetName: "DangKy");
             case "student-progress-summary":
                 var studentRows = await GetStudentProgressRowsAsync(f.MaDot, f.PhamVi, ct);
                 if (!string.IsNullOrWhiteSpace(f.Lop))
@@ -398,8 +404,6 @@ public sealed class AdminListService(AppDbContext db)
                     else
                         studentRows = studentRows.Where(x => x.TinhTrang == f.TrangThai).ToList();
                 }
-                var roundInfo = await db.DotThucTaps.AsNoTracking().FirstOrDefaultAsync(x => x.MaSo == f.MaDot, ct);
-                var rName = roundInfo?.TenDot ?? f.MaDot ?? "Tất cả đợt";
                 return TabularExport.Xlsx(
                     ["STT", "Mã SV", "Họ và tên", "Lớp", "Nơi thực tập", "GVHD", "Đã nộp", "Tổng tuần", "Tỷ lệ", "Đã duyệt", "Chờ duyệt", "Cần sửa", "Tình trạng học vụ", "Lần nộp gần nhất"],
                     studentRows.Select((x, idx) => new object?[] {
@@ -425,10 +429,9 @@ public sealed class AdminListService(AppDbContext db)
                         x.NgayNopMoiNhat?.ToString("yyyy-MM-dd HH:mm") ?? "—"
                     }).ToList(),
                     title: "BẢNG TỔNG HỢP TIẾN ĐỘ THỰC TẬP SINH VIÊN",
-                    subtitle: $"Đợt thực tập: {rName}  |  Tổng sinh viên: {studentRows.Count}  |  Thời gian xuất: {DateTime.Now:dd/MM/yyyy HH:mm}");
+                    subtitle: $"{roundLine}\nTổng số sinh viên: {studentRows.Count}", unit: unit, sheetName: "TienDoSinhVien");
             case "progress":
                 var reports = await Bounded(ProgressRows(Progress(f)), ct);
-                var dotName = reports.FirstOrDefault(x => !string.IsNullOrEmpty(x.Dot))?.Dot ?? f.MaDot ?? "Tất cả đợt";
                 return TabularExport.Xlsx(
                     ["Mã báo cáo", "Mã SV", "Họ tên", "Lớp", "Hạn báo cáo", "Ngày nộp", "Trạng thái", "Nội dung"],
                     reports.Select(x => new object?[] {
@@ -448,7 +451,7 @@ public sealed class AdminListService(AppDbContext db)
                         x.NoiDungBaoCao ?? ""
                     }).ToList(),
                     title: "CHI TIẾT BÁO CÁO TIẾN ĐỘ THỰC TẬP",
-                    subtitle: $"Đợt thực tập: {dotName}  |  Thời gian xuất: {DateTime.Now:dd/MM/yyyy HH:mm}");
+                    subtitle: $"{roundLine}\nTổng số báo cáo: {reports.Count}", unit: unit, sheetName: "BaoCaoTienDo");
             default: throw new ArgumentException("Loại danh sách không hợp lệ.");
         }
     }
