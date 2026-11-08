@@ -119,7 +119,11 @@ export default function KhoaManagementPanel({ khoaList, onChanged }) {
                       <>
                         <button type="button" onClick={() => setEditing({ maKhoa: k.maKhoa, tenKhoa: k.tenKhoa })}
                           className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold cursor-pointer">Đổi tên</button>
-                        <button type="button" disabled={saving} onClick={() => save(k, { hoatDong: !k.hoatDong })}
+                        <button type="button" disabled={saving} onClick={() => {
+                          if (k.hoatDong && !window.confirm(`Ngừng hoạt động ${k.tenKhoa}?\n\nCán bộ Khoa của khoa này sẽ không đăng nhập được nữa và phiên đang mở bị đăng xuất. `
+                            + 'Giảng viên, sinh viên vẫn xem được dữ liệu của mình. Có thể mở lại khoa sau.')) return
+                          save(k, { hoatDong: !k.hoatDong })
+                        }}
                           className={`px-2.5 py-1 rounded-lg font-bold cursor-pointer disabled:opacity-50 ${k.hoatDong ? 'bg-amber-50 text-amber-700 hover:bg-amber-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'}`}>
                           {k.hoatDong ? 'Ngừng' : 'Mở lại'}
                         </button>

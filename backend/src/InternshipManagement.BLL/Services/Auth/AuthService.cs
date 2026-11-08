@@ -41,6 +41,8 @@ public class AuthService
         if (account.MaVaiTro == "VT05"
             && await EnterpriseAccountPolicy.HasOtherActiveAccountAsync(_db, account.MaDaiDien, account.MaTaiKhoan))
             throw new InvalidOperationException("Doanh nghiệp có nhiều tài khoản đại diện hoạt động hoặc liên kết không hợp lệ. Liên hệ QTV xác minh tài khoản được giữ quyền.");
+        if (await KhoaCuaTaiKhoan.KhoaDaNgungAsync(_db, account))
+            throw new InvalidOperationException(KhoaCuaTaiKhoan.ThongBaoKhoaDaNgung);
         if (check == PasswordCheck.SuccessNeedsRehash)
         {
             account.MatKhau = _passwords.Hash(password);

@@ -205,6 +205,11 @@ public partial class Program
                         context.Fail("Doanh nghiệp chưa có tài khoản đại diện duy nhất được xác minh. Liên hệ QTV.");
                         return;
                     }
+                    if (await InternshipManagement.DAL.Common.KhoaCuaTaiKhoan.KhoaDaNgungAsync(db, account))
+                    {
+                        context.Fail(InternshipManagement.DAL.Common.KhoaCuaTaiKhoan.ThongBaoKhoaDaNgung);
+                        return;
+                    }
                     // Khoa đọc lại từ CSDL ở mỗi request: đổi khoa của SV/GV/cán bộ có hiệu lực ngay, không tin giá trị trong token.
                     if (context.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity)
                     {

@@ -17,6 +17,15 @@ public static class KhoaCuaTaiKhoan
         _ => null
     };
 
+    public const string ThongBaoKhoaDaNgung = "Khoa của tài khoản đã ngừng hoạt động nên cán bộ Khoa không dùng được hệ thống. Liên hệ QTV nếu cần mở lại.";
+
+    /// <summary>Cán bộ Khoa thuộc khoa đã ngừng hoạt động: không đăng nhập được và token cũ hết hiệu lực.
+    /// GV/SV của khoa đó vẫn vào xem dữ liệu của mình.</summary>
+    public static Task<bool> KhoaDaNgungAsync(AppDbContext db, TaiKhoan account, CancellationToken ct = default) =>
+        account.MaVaiTro == "VT02" && !string.IsNullOrWhiteSpace(account.MaKhoa)
+            ? db.Khoas.AsNoTracking().AnyAsync(x => x.MaKhoa == account.MaKhoa && !x.HoatDong, ct)
+            : Task.FromResult(false);
+
     /// <summary>Giá trị phạm vi đưa vào phiên đăng nhập; null = vai trò không bị giới hạn theo khoa.</summary>
     public static async Task<string?> PhamViAsync(AppDbContext db, TaiKhoan account, CancellationToken ct = default)
     {
