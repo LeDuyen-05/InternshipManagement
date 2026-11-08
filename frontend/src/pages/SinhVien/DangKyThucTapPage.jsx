@@ -962,6 +962,8 @@ export default function DangKyThucTapPage() {
           key={`${currentMaSV}|${currentMaDot}`}
           maDot={currentMaDot}
           trangThaiDot={selectedDot?.trangThai}
+          minDate={selectedDot?.thoiGianBD?.slice(0, 10) || ''}
+          maxDate={selectedDot?.thoiGianKT?.slice(0, 10) || ''}
           onApprovedRefresh={fetchData}
           disabled={Boolean(lyDoDangKy) || roundLock.structureBlocked}
           disabledReason={lyDoDangKy}

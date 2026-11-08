@@ -1128,6 +1128,8 @@ export default function SinhVienTheoDotPage() {
             key={`${round}/${periodStudent.student.maPhanBo}`}
             maDot={round}
             student={periodStudent.student}
+            minDate={roundDates.startIso || ''}
+            maxDate={roundDates.endIso || ''}
             onClose={() => setPeriodStudent(null)}
             onChanged={load}
           />

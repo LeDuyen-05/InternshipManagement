@@ -9,11 +9,12 @@ namespace InternshipManagement.BLL.Services.ThucTapTuTim;
 
 public class ThucTapTuTimService(AppDbContext db)
 {
-    private async Task CheckRoundAsync(string maDot)
+    private async Task<DotThucTap> CheckRoundAsync(string maDot)
     {
         var round = await db.DotThucTaps.SingleOrDefaultAsync(x => x.MaSo == maDot)
             ?? throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
         if (round.TrangThai != "DangDienRa") throw new InvalidOperationException("Đợt này không mở tiếp nhận hồ sơ tự tìm.");
+        return round;
     }
 
     private async Task CheckPlacementAsync(string maSV, string maDot)
@@ -67,11 +68,12 @@ public class ThucTapTuTimService(AppDbContext db)
         await using var transaction = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         await db.LockRoundsAsync([item.MaDot]);
-        await CheckRoundAsync(item.MaDot);
+        var round = await CheckRoundAsync(item.MaDot);
         if (!await db.SinhViens.AnyAsync(x => x.MaSV == maSV)) throw new KeyNotFoundException("Tài khoản chưa liên kết sinh viên hợp lệ.");
-        var tenDot = await db.DotThucTaps.Where(x => x.MaSo == item.MaDot).Select(x => x.TenDot).FirstAsync();
-        if (DanhSachDot.LyDo(await DanhSachDot.ThamGiaAsync(db, maSV, item.MaDot), tenDot, "nộp hồ sơ nơi thực tập tự tìm") is { } ngoaiDanhSach)
+        if (DanhSachDot.LyDo(await DanhSachDot.ThamGiaAsync(db, maSV, item.MaDot), round.TenDot, "nộp hồ sơ nơi thực tập tự tìm") is { } ngoaiDanhSach)
             throw new InvalidOperationException(ngoaiDanhSach);
+        if (Common.PlacementPeriod.OutsideRound(item.NgayBatDau, item.NgayKetThuc, round) is { } outside)
+            throw new ArgumentException(outside);
         await CheckPlacementAsync(maSV, item.MaDot);
         if (await db.DeXuatThucTapTuTims.AnyAsync(x => x.MaSV == maSV && x.MaDot == item.MaDot && x.TrangThai == "ChoDuyet"))
             throw new InvalidOperationException("Bạn đã có hồ sơ tự tìm chờ Khoa duyệt trong đợt này.");
@@ -102,9 +104,12 @@ public class ThucTapTuTimService(AppDbContext db)
         if (item.MaDot != key.MaDot) throw new DbUpdateConcurrencyException();
         if (item.TrangThai == request.TrangThai) return item;
         if (item.TrangThai != "ChoDuyet") throw new InvalidOperationException("Hồ sơ đã xử lý, không được duyệt/từ chối lại theo hướng khác.");
-        await CheckRoundAsync(item.MaDot);
+        var round = await CheckRoundAsync(item.MaDot);
         if (request.TrangThai == "DaDuyet")
         {
+            // Ngày trong hồ sơ trở thành thời gian thực tập chính thức khi được công nhận.
+            if (Common.PlacementPeriod.OutsideRound(item.NgayBatDau, item.NgayKetThuc, round) is { } outside)
+                throw new InvalidOperationException($"{outside} Từ chối hồ sơ kèm lý do để sinh viên khai báo lại.");
             await CheckPlacementAsync(item.MaSV, item.MaDot);
             var companyId = string.IsNullOrWhiteSpace(request.MaCongTy) ? item.MaCongTy : request.MaCongTy.Trim();
             CongTy company;

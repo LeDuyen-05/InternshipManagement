@@ -16,6 +16,13 @@ public static class PlacementPeriod
         return (null, null, "ChuaXacMinh");
     }
 
+    // Thời gian tại DN phải nằm trong khung ngày của đợt: DN chấm điểm sau ngày kết thúc đợt, báo cáo và chốt đợt đều theo khung này.
+    public static string? OutsideRound(DateTime start, DateTime end, DotThucTap round) =>
+        round.ThoiGianBD == default || round.ThoiGianKT == default ? null
+        : start.Date < round.ThoiGianBD.Date || end.Date > round.ThoiGianKT.Date
+            ? $"Thời gian thực tập tại doanh nghiệp phải nằm trong khung của đợt ({round.ThoiGianBD:dd/MM/yyyy} – {round.ThoiGianKT:dd/MM/yyyy})."
+            : null;
+
     public static string Classify(DateTime? start, DateTime? end, DateTime today)
     {
         if (!start.HasValue || !end.HasValue) return "ChuaXacMinhThoiGian";

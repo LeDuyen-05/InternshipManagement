@@ -2,7 +2,10 @@ import { useState } from 'react'
 import apiClient from '../../services/api'
 import { interviewFormTimestamp } from '../../utils/interviewTime'
 
-export default function PlacementPeriodEditor({ maDot, student = {}, onClose, onChanged }) {
+const vnDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '')
+
+// minDate/maxDate: khung ngày của đợt (YYYY-MM-DD); thời gian tại DN phải nằm trong khung này.
+export default function PlacementPeriodEditor({ maDot, student = {}, minDate = '', maxDate = '', onClose, onChanged }) {
   const [start, setStart] = useState(student?.ngayBatDauThucTap?.slice(0, 10) || '')
   const [end, setEnd] = useState(student?.ngayKetThucThucTap?.slice(0, 10) || '')
   const [reason, setReason] = useState('')
@@ -24,6 +27,10 @@ export default function PlacementPeriodEditor({ maDot, student = {}, onClose, on
       setError(
         'Chọn ngày bắt đầu và kết thúc hợp lệ; ngày kết thúc không trước ngày bắt đầu.'
       )
+      return
+    }
+    if ((minDate && startDate < minDate) || (maxDate && endDate > maxDate)) {
+      setError(`Thời gian tại DN phải nằm trong khung của đợt (${vnDate(minDate)} – ${vnDate(maxDate)}).`)
       return
     }
     setBusy(true)
@@ -96,6 +103,8 @@ export default function PlacementPeriodEditor({ maDot, student = {}, onClose, on
                 name="ngayBatDau"
                 type="date"
                 required
+                min={minDate || undefined}
+                max={maxDate || undefined}
                 value={start}
                 disabled={busy}
                 onChange={(e) => setStart(e.target.value)}
@@ -111,7 +120,8 @@ export default function PlacementPeriodEditor({ maDot, student = {}, onClose, on
                 name="ngayKetThuc"
                 type="date"
                 required
-                min={start}
+                min={start || minDate || undefined}
+                max={maxDate || undefined}
                 value={end}
                 disabled={busy}
                 onChange={(e) => setEnd(e.target.value)}

@@ -1,4 +1,5 @@
 using System.Data;
+using InternshipManagement.BLL.Common;
 using InternshipManagement.DAL;
 using InternshipManagement.DAL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,8 @@ public class PlacementPeriodService(AppDbContext db, TimeProvider clock)
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         var round = await db.DotThucTaps.AsNoTracking().SingleOrDefaultAsync(x => x.MaSo == request.MaDot)
             ?? throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
+        if (PlacementPeriod.OutsideRound(request.NgayBatDau.Value, request.NgayKetThuc.Value, round) is { } outside)
+            throw new ArgumentException(outside);
         var today = clock.GetUtcNow().ToOffset(TimeSpan.FromHours(7)).Date;
         if (round.TrangThaiDanhSachNoi == "ChinhThuc" || await db.DanhSachThucTapChinhThucs.AnyAsync(x => x.MaDot == request.MaDot))
             throw new InvalidOperationException("Danh sách thực tập chính thức đã công bố/chốt; không chỉnh sửa thời gian thực tập.");

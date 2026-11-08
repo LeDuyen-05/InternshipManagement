@@ -34,9 +34,14 @@ const statusBadgeConfig = {
   },
 }
 
+const vnDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '')
+
+// minDate/maxDate: khung ngày của đợt (YYYY-MM-DD); thời gian thực tập khai báo phải nằm trong khung này.
 export default function ThucTapTuTimPanel({
   maDot,
   trangThaiDot,
+  minDate = '',
+  maxDate = '',
   onApprovedRefresh,
   disabled = false,
   disabledReason = '',
@@ -104,6 +109,8 @@ export default function ThucTapTuTimPanel({
     if (!canSubmit || busy || loading) return
     if (form.ngayKetThuc < form.ngayBatDau)
       return setError('Ngày kết thúc phải từ ngày bắt đầu trở đi.')
+    if ((minDate && form.ngayBatDau < minDate) || (maxDate && form.ngayKetThuc > maxDate))
+      return setError(`Thời gian thực tập phải nằm trong khung của đợt (${vnDate(minDate)} – ${vnDate(maxDate)}).`)
     setBusy(true)
     setError('')
     setMessage('')
@@ -284,6 +291,8 @@ export default function ThucTapTuTimPanel({
               <input
                 type="date"
                 required
+                min={minDate || undefined}
+                max={maxDate || undefined}
                 value={form.ngayBatDau}
                 onChange={(event) => setForm((prev) => ({ ...prev, ngayBatDau: event.target.value }))}
                 className="block w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
@@ -295,6 +304,8 @@ export default function ThucTapTuTimPanel({
               <input
                 type="date"
                 required
+                min={form.ngayBatDau || minDate || undefined}
+                max={maxDate || undefined}
                 value={form.ngayKetThuc}
                 onChange={(event) => setForm((prev) => ({ ...prev, ngayKetThuc: event.target.value }))}
                 className="block w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
