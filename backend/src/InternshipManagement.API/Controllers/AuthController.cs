@@ -24,16 +24,29 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login(LoginRequest request)
     {
-        if (_limiter.ConBiKhoa(request.TenDangNhap) is { } conLai)
+        // Giữ lượt thử trước khi so mật khẩu để các yêu cầu gửi cùng lúc không vượt giới hạn số lần sai.
+        if (_limiter.GiuLuotThu(request.TenDangNhap) is { } conLai)
         {
             Response.Headers.RetryAfter = ((int)Math.Ceiling(conLai.TotalSeconds)).ToString();
+            var cho = conLai.TotalMinutes >= 1 ? $"{Math.Ceiling(conLai.TotalMinutes)} phút" : $"{Math.Ceiling(conLai.TotalSeconds)} giây";
             return StatusCode(StatusCodes.Status429TooManyRequests, new
             {
-                message = $"Đăng nhập sai quá {LoginAttemptLimiter.SoLanSaiToiDa} lần. Tài khoản tạm khóa đăng nhập, vui lòng thử lại sau {Math.Ceiling(conLai.TotalMinutes)} phút."
+                message = _limiter.ConBiKhoa(request.TenDangNhap) is null
+                    ? $"Tài khoản đang có nhiều yêu cầu đăng nhập cùng lúc, vui lòng thử lại sau {cho}."
+                    : $"Đăng nhập sai quá {LoginAttemptLimiter.SoLanSaiToiDa} lần. Tài khoản tạm khóa đăng nhập, vui lòng thử lại sau {cho}."
             });
         }
 
-        var account = await _service.AuthenticateAsync(request.TenDangNhap, request.MatKhau);
+        InternshipManagement.DAL.Entities.TaiKhoan? account;
+        try
+        {
+            account = await _service.AuthenticateAsync(request.TenDangNhap, request.MatKhau);
+        }
+        catch
+        {
+            _limiter.TraLuotThu(request.TenDangNhap);
+            throw;
+        }
         if (account is null)
         {
             _limiter.GhiNhanThatBai(request.TenDangNhap);
