@@ -21,7 +21,7 @@ const NHOM = {
   },
 }
 
-const createInitialForm = (rubric = 'TTKS_V1') => ({
+const createInitialForm = (rubric = '') => ({
   maTieuChi: '',
   maCLO: '',
   maRubric: rubric,
@@ -33,17 +33,18 @@ const createInitialForm = (rubric = 'TTKS_V1') => ({
 
 export default function KhoaCriteriaPage() {
   const { selectedDot } = useDotThucTap()
-  const activeDotRubric = selectedDot?.maRubric || 'TTKS_V1'
+  // Không mặc định bộ của CNTT: chờ danh sách bộ tiêu chí của khoa rồi chọn bộ của đợt đang chọn.
+  const activeDotRubric = selectedDot?.maRubric || ''
 
   const [loaiList, setLoaiList] = useState([])
   const [selectedLoai, setSelectedLoai] = useState('ALL')
   const [rubricList, setRubricList] = useState([])
-  const [selectedRubric, setSelectedRubric] = useState('TTKS_V1')
+  const [selectedRubric, setSelectedRubric] = useState('')
   const [rubricDetail, setRubricDetail] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const [form, setForm] = useState(() => createInitialForm('TTKS_V1'))
+  const [form, setForm] = useState(() => createInitialForm())
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [submitting, setSubmitting] = useState(false)
