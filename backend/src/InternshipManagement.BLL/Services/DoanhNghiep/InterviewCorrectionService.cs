@@ -49,8 +49,10 @@ public partial class DoanhNghiepService
             throw new DAL.RoundLockedException("Đợt đã chốt/khóa; mở lại điểm không mở sửa PV hoặc tiếp nhận mới.");
         if (app.TrangThai == "TuChoi" && app.MaPVKetThuc != pv.MaPV)
             throw new InvalidOperationException("Hồ sơ đã kết thúc do rút/từ chối/chọn nơi khác hoặc chưa xác định rõ nguồn kết thúc; Khoa cần đối chiếu, không mở lại từ PV cũ.");
+        // Mỗi SV chỉ có một hồ sơ hiệu lực trong đợt. LanDangKy là số "lần" (chính/hỗ trợ), không phải thứ tự lượt,
+        // nên không dùng để nhận ra lượt sau: có bất kỳ hồ sơ khác đang xử lý thì không mở lại hồ sơ cũ.
         if (await _db.DangKyThucTaps.AnyAsync(x => x.MaSV == app.MaSV && x.MaDot == app.MaDot && x.MaDK != app.MaDK
-            && (x.TrangThai == "ChoDuyet" || x.TrangThai == "DaDuyet") && (x.LanDangKy > app.LanDangKy || x.MaCongTy == app.MaCongTy)))
+            && (x.TrangThai == "ChoDuyet" || x.TrangThai == "DaDuyet")))
             throw new InvalidOperationException("SV đã có lượt ứng tuyển tiếp đang xử lý; Khoa cần rà lượt mới trước khi sửa/mở lại lịch sử phỏng vấn.");
         var placements = await _db.PhanBoThucTaps.Where(x => x.MaSinhVien == app.MaSV && x.MaDot == app.MaDot).ToListAsync();
         if (placements.Any(x => x.NgayHuy != null || (x.TrangThai != "Huy" && (x.MaCongTy != app.MaCongTy
