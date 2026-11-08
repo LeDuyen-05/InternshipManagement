@@ -12,6 +12,18 @@ public static class InternshipDeadlinePolicy
     public static bool SubmissionClosed(TienDoThucTap report, DateTimeOffset now) =>
         now >= StartOfDay(report.MocThoiGian.AddDays(1))
         && (!report.HanNopBoSung.HasValue || now > report.HanNopBoSung.Value);
+
+    public const int NhanXetToiDa = 500;
+
+    // Yêu cầu sửa phải nêu rõ nội dung cần sửa để sinh viên biết phải làm gì.
+    public static string? ReviewComment(string trangThai, string? nhanXet)
+    {
+        var text = nhanXet?.Trim();
+        if (text?.Length > NhanXetToiDa) throw new ArgumentException($"Nhận xét tối đa {NhanXetToiDa} ký tự.");
+        if (trangThai == "YeuCauSua" && string.IsNullOrEmpty(text))
+            throw new ArgumentException("Nhập nhận xét nêu rõ nội dung sinh viên cần sửa/bổ sung trước khi yêu cầu sửa.");
+        return text;
+    }
     public static string? GradeBlock(DotThucTap dot, bool enterprise, DateTimeOffset now)
     {
         var opening = enterprise ? EnterpriseOpening(dot) : dot.MoChamGV;

@@ -728,11 +728,12 @@ public class AdminService
         if (report.TrangThaiDuyet != "DaNop")
             throw new InvalidOperationException("Chỉ có thể duyệt hoặc yêu cầu sửa báo cáo khi ở trạng thái Đã nộp.");
 
+        var nhanXet = Common.InternshipDeadlinePolicy.ReviewComment(request.TrangThai, request.NhanXet);
         report.TrangThaiDuyet = request.TrangThai;
-        if (!string.IsNullOrWhiteSpace(request.NhanXet))
+        if (!string.IsNullOrWhiteSpace(nhanXet))
         {
-            report.NhanXet = request.NhanXet;
-            report.NhanXetGV = request.NhanXet;
+            report.NhanXet = nhanXet;
+            report.NhanXetGV = nhanXet;
         }
         await _db.SaveChangesAsync();
     }

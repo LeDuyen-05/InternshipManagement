@@ -189,9 +189,13 @@ function ProgressStudentPage() {
   const handleSaveDuyet = async () => {
     if (roundLock.blocked || submitting || !mounted.current) return
     if (!selectedTienDo || selectedTienDo.maPhanBoLuuTru || selectedTienDo.trangThaiDuyet !== 'DaNop') return
+    if (duyetStatus === 'YeuCauSua' && !nhanXetGV.trim()) {
+      toast.error('Nhập nhận xét nêu rõ nội dung sinh viên cần sửa/bổ sung trước khi yêu cầu sửa.')
+      return
+    }
     try {
       setSubmitting(true)
-      await tienDoThucTapService.duyetTienDo(selectedTienDo.maTienDo, duyetStatus, nhanXetGV)
+      await tienDoThucTapService.duyetTienDo(selectedTienDo.maTienDo, duyetStatus, nhanXetGV.trim())
       if (!mounted.current) return
 
       // Cập nhật lại danh sách trực tiếp từ DB
@@ -808,6 +812,11 @@ function ProgressStudentPage() {
                     <option value="DaDuyet">Đã duyệt đạt</option>
                     <option value="YeuCauSua">Yêu cầu sửa / bổ sung</option>
                   </select>
+                  {duyetStatus === 'YeuCauSua' && (
+                    <p className="mt-1 text-[11px] text-rose-700">
+                      Bắt buộc ghi rõ nội dung sinh viên cần sửa/bổ sung.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
@@ -835,13 +844,14 @@ function ProgressStudentPage() {
               {/* Nhận xét của GV */}
               <div>
                 <label className="font-bold text-slate-700 block mb-1">
-                  {modalMode === 'duyet' ? 'Nhận xét & Góp ý của GV:' : 'Nhận xét của GV đã ghi nhận:'}
+                  {modalMode === 'duyet' ? (duyetStatus === 'YeuCauSua' ? 'Nội dung cần sửa (bắt buộc):' : 'Nhận xét & Góp ý của GV:') : 'Nhận xét của GV đã ghi nhận:'}
                 </label>
                 {modalMode === 'duyet' ? (
                   <textarea
                     rows={3}
                     value={nhanXetGV}
                     onChange={(e) => setNhanXetGV(e.target.value)}
+                    maxLength={500}
                     placeholder="Nhập nhận xét, đánh giá kết quả công việc hoặc yêu cầu chỉnh sửa..."
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 resize-none font-sans"
                   />
@@ -865,7 +875,7 @@ function ProgressStudentPage() {
                 <button
                   type="button"
                   onClick={handleSaveDuyet}
-                  disabled={submitting || roundLock.blocked}
+                  disabled={submitting || roundLock.blocked || (duyetStatus === 'YeuCauSua' && !nhanXetGV.trim())}
                   className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-xl flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
                 >
                   {submitting && <span className="material-symbols-outlined text-sm animate-spin">sync</span>}

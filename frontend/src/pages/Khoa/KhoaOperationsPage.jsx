@@ -183,14 +183,23 @@ export default function KhoaOperationsPage({ mode }) {
 
   const _reviewReport = async (id, status) => {
     if (roundLock.blocked || loading || busy) return
-    const actionText = status === 'DaDuyet' ? 'Phê duyệt' : 'Yêu cầu sửa'
-    if (!window.confirm(`Xác nhận ${actionText} báo cáo này?`)) return
+    let nhanXet
+    if (status === 'YeuCauSua') {
+      // Yêu cầu sửa bắt buộc nêu nội dung cần sửa để SV biết phải làm gì.
+      nhanXet = window.prompt('Nhập nội dung sinh viên cần sửa/bổ sung (bắt buộc):', '')
+      if (nhanXet === null) return
+      nhanXet = nhanXet.trim()
+      if (!nhanXet) {
+        setError('Cần nhập nội dung sinh viên phải sửa trước khi yêu cầu sửa.')
+        return
+      }
+    } else if (!window.confirm('Xác nhận Phê duyệt báo cáo này?')) return
 
     setBusy(id)
     setError('')
     setSuccessMsg('')
     try {
-      await apiClient.put(`/khoa/theo-doi/${encodeURIComponent(id)}/duyet`, { trangThai: status })
+      await apiClient.put(`/khoa/theo-doi/${encodeURIComponent(id)}/duyet`, { trangThai: status, nhanXet })
       if (currentScope.current !== scope) return
       setSuccessMsg(`Đã cập nhật trạng thái báo cáo thành: ${statusLabel[status] || status}`)
       await load()

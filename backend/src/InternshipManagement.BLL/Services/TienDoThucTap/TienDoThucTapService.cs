@@ -130,9 +130,9 @@ public class TienDoThucTapService : ITienDoThucTapService
             }
         }
 
-        var nhanXet = request.NhanXet ?? request.NhanXetGV;
         if (entity.MaPhanBoLuuTru != null)
             throw new InvalidOperationException("Báo cáo đã lưu trữ khi đổi nơi thực tập; chỉ xem lịch sử, không duyệt lại thành báo cáo của nơi mới.");
+        var nhanXet = InternshipDeadlinePolicy.ReviewComment(request.TrangThaiDuyet, request.NhanXet ?? request.NhanXetGV);
         return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet, nhanXet);
     }
 
