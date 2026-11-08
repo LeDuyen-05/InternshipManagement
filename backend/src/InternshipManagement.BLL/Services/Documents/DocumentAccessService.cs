@@ -67,7 +67,9 @@ public class DocumentAccessService(AppDbContext db, TimeProvider clock)
             case "Notification":
                 var notice = await db.ThongBaos.AsNoTracking().SingleOrDefaultAsync(x => x.MaThongBao == id)
                     ?? throw new KeyNotFoundException($"Không tìm thấy thông báo có mã '{id}'.");
-                label = notice.TieuDe; read = NotificationAudience.CanRead(a.Role, notice.DoiTuong); edit = Faculty(a); break;
+                label = notice.TieuDe; read = NotificationAudience.CanRead(a.Role, notice.DoiTuong)
+                    && (a.Role != "DaiDienDN" || notice.MaKhoa == null || await TemplateKhoaOfCompany(a).ContainsAsync(notice.MaKhoa));
+                edit = Faculty(a); break;
             default:
                 (label, read, edit) = await TemplateAccessAsync(id, a); break;
         }
@@ -101,15 +103,8 @@ public class DocumentAccessService(AppDbContext db, TimeProvider clock)
         return ($"Biểu mẫu thực tập — {khoa.TenKhoa}", read, Faculty(a) && scope == id);
     }
 
-    // Đợt mà công ty được đưa vào, có đăng ký hoặc có SV thực tập (giống danh sách đợt của doanh nghiệp).
-    private IQueryable<string> TemplateKhoaOfCompany(DocumentActor a)
-    {
-        var company = db.DaiDienDoanhNghieps.Where(d => d.MaSo == a.Representative).Select(d => d.MaCongTy);
-        var rounds = db.CongTyTheoDots.Where(c => company.Contains(c.MaCongTy)).Select(c => c.MaDot)
-            .Union(db.DangKyThucTaps.Where(x => company.Contains(x.MaCongTy)).Select(x => x.MaDot))
-            .Union(db.PhanBoThucTaps.Where(x => company.Contains(x.MaCongTy)).Select(x => x.MaDot));
-        return db.DotThucTaps.Where(d => rounds.Contains(d.MaSo) && d.MaKhoa != null).Select(d => d.MaKhoa!).Distinct();
-    }
+    // Các khoa có đợt mà công ty được đưa vào, có đăng ký hoặc có SV thực tập.
+    private IQueryable<string> TemplateKhoaOfCompany(DocumentActor a) => DAL.Common.CongTyTheoKhoa.KhoaCuaDaiDien(db, a.Representative);
 
     private async Task<List<string>> TemplateIdsAsync(DocumentActor a)
     {
@@ -144,7 +139,8 @@ public class DocumentAccessService(AppDbContext db, TimeProvider clock)
             "CV" => db.SinhViens.Where(x => students.Contains(x.MaSV)).Select(x => new { Id = x.MaSV, Label = x.HoTen, RoundId = (string?)null }),
             "Progress" => db.TienDoThucTaps.Where(x => x.MaDot == round && a.Role != "DaiDienDN" && students.Contains(x.MaSV)).Select(x => new { Id = x.MaTienDo, Label = x.MaSV + " · " + x.MaTienDo, RoundId = (string?)x.MaDot }),
             "SelfPlacement" => db.DeXuatThucTapTuTims.Where(x => x.MaDot == round && a.Role != "DaiDienDN" && students.Contains(x.MaSV)).Select(x => new { Id = x.MaHoSo, Label = x.MaSV + " · " + x.TenCongTy, RoundId = (string?)x.MaDot }),
-            "Notification" => db.ThongBaos.Where(x => audience == "STAFF" || (audience != "NONE" && (x.DoiTuong == null || x.DoiTuong == "ALL" || x.DoiTuong == audience))).Select(x => new { Id = x.MaThongBao, Label = x.TieuDe, RoundId = (string?)null }),
+            "Notification" => db.ThongBaos.Where(x => audience == "STAFF" || (audience != "NONE" && (x.DoiTuong == null || x.DoiTuong == "ALL" || x.DoiTuong == audience)))
+                .Where(x => a.Role != "DaiDienDN" || x.MaKhoa == null || TemplateKhoaOfCompany(a).Contains(x.MaKhoa)).Select(x => new { Id = x.MaThongBao, Label = x.TieuDe, RoundId = (string?)null }),
             _ => db.PhanBoThucTaps.Where(x => x.MaDot == round && ((a.Role == "DaiDienDN" && kind == "EnterpriseForm" && x.MaCongTy == company) || (a.Role != "DaiDienDN" && students.Contains(x.MaSinhVien))))
                 .Select(x => new { Id = x.MaPhanBo, Label = x.MaSinhVien + " · " + x.MaCongTy + " · " + x.TrangThai, RoundId = (string?)x.MaDot })
         };

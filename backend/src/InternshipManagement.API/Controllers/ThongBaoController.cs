@@ -1,5 +1,6 @@
 using InternshipManagement.BLL.DTOs.Admin;
 using InternshipManagement.BLL.Services.Admin;
+using InternshipManagement.API.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -14,7 +15,7 @@ public class ThongBaoController(AdminService service) : ControllerBase
         var userRole = User.FindFirst("role")?.Value
             ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value
             ?? role;
-        return Ok(await service.NotificationsAsync(userRole));
+        return Ok(await service.NotificationsAsync(userRole, User.MaDaiDien()));
     }
 
     [HttpPost, Authorize(Roles = "Khoa")]

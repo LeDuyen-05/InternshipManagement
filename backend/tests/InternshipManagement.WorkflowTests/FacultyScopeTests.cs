@@ -144,6 +144,45 @@ public class FacultyScopeTests
         Assert.False(await cntt.TieuChis.AnyAsync(x => x.MaRubric.StartsWith("KTKT_")));
     }
 
+    // Công ty dùng chung: một khoa không đổi trạng thái/thông tin của công ty mà khoa khác đang hợp tác.
+    [Fact]
+    public async Task SharedCompanyCannotBeChangedByOneFaculty()
+    {
+        var name = await SeedTwoFacultiesAsync();
+        await using (var admin = Db(name))
+        {
+            admin.CongTyTheoDots.Add(new CongTyTheoDot { MaCongTy = "CTX", MaDot = "DA", ViTriTuyen = "TTS", YeuCau = "x", SoLuongNhan = 1,
+                MoDangKy = DateTimeOffset.UtcNow, HanDangKy = DateTimeOffset.UtcNow.AddDays(1) });
+            await admin.SaveChangesAsync();
+        }
+        await using (var cntt = Db(name, "CNTT"))
+            await InternshipManagement.DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(cntt, "CTX"); // chỉ CNTT dùng: được sửa
+        await using (var qtkd = Db(name, "QTKD"))
+            await Assert.ThrowsAsync<InvalidOperationException>(() => InternshipManagement.DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(qtkd, "CTX"));
+        // "CT" có đăng ký ở cả đợt CNTT và QTKD: không khoa nào tự đổi được.
+        await using (var cntt = Db(name, "CNTT"))
+            await Assert.ThrowsAsync<InvalidOperationException>(() => InternshipManagement.DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(cntt, "CT"));
+        await using (var admin = Db(name))
+            await InternshipManagement.DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(admin, "CT"); // QTV không bị giới hạn
+    }
+
+    [Fact]
+    public async Task EnterprisesOnlyGetFacultiesTheyWorkWith()
+    {
+        var name = await SeedTwoFacultiesAsync();
+        await using (var admin = Db(name))
+        {
+            admin.DaiDienDoanhNghieps.AddRange(new DaiDienDoanhNghiep { MaSo = "DDCT", MaCongTy = "CT", HoTen = "Đại diện CT" },
+                new DaiDienDoanhNghiep { MaSo = "DDY", MaCongTy = "CTY", HoTen = "Đại diện CTY" });
+            admin.CongTyTheoDots.Add(new CongTyTheoDot { MaCongTy = "CTY", MaDot = "DA", ViTriTuyen = "TTS", YeuCau = "x", SoLuongNhan = 1,
+                MoDangKy = DateTimeOffset.UtcNow, HanDangKy = DateTimeOffset.UtcNow.AddDays(1) });
+            await admin.SaveChangesAsync();
+        }
+        await using var db = Db(name);
+        Assert.Equal(["CNTT", "QTKD"], await InternshipManagement.DAL.Common.CongTyTheoKhoa.KhoaCuaDaiDien(db, "DDCT").OrderBy(x => x).ToListAsync());
+        Assert.Equal(["CNTT"], await InternshipManagement.DAL.Common.CongTyTheoKhoa.KhoaCuaDaiDien(db, "DDY").ToListAsync());
+    }
+
     [Fact]
     public async Task UnscopedWritesNeedAnExplicitFacultyOnlyWhenSeveralExist()
     {

@@ -331,12 +331,18 @@ public class AdminService
         "DN" => "DN",
         _ => throw new InvalidOperationException("Nhóm đánh giá chỉ nhận GV (giảng viên chấm) hoặc DN (đơn vị thực tập chấm).")
     };
-    public Task<List<ThongBao>> NotificationsAsync(string? targetRole = null)
+    public Task<List<ThongBao>> NotificationsAsync(string? targetRole = null, string? maDaiDien = null)
     {
         var q = _db.ThongBaos.AsNoTracking();
         var code = InternshipManagement.BLL.Common.NotificationAudience.Code(targetRole);
         if (code != "STAFF") q = code == "NONE" ? q.Where(x => false)
             : q.Where(x => x.DoiTuong == null || x.DoiTuong == "ALL" || x.DoiTuong == code);
+        // Doanh nghiệp không thuộc khoa nào: chỉ nhận thông báo toàn trường và của các khoa mà công ty đang hợp tác.
+        if (code == "DN")
+        {
+            var khoa = DAL.Common.CongTyTheoKhoa.KhoaCuaDaiDien(_db, maDaiDien);
+            q = q.Where(x => x.MaKhoa == null || khoa.Contains(x.MaKhoa));
+        }
         return q.OrderByDescending(x => x.Ghim == true).ThenByDescending(x => x.NgayTao).Take(50).ToListAsync();
     }
 
@@ -846,6 +852,7 @@ public class AdminService
     }
     public async Task UpdateCompanyAsync(string id, CreateCompanyRequest r)
     {
+        await DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(_db, id);
         var x = await _db.CongTys.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy doanh nghiệp.");
         x.TenCongTy=r.TenCongTy; x.ViTriTuyen=r.ViTriTuyen ?? ""; x.ThoiGian=r.ThoiGian ?? ""; x.SoLuongNhan=r.SoLuongNhan; x.YeuCau=r.YeuCau ?? "";
         await _db.SaveChangesAsync();
@@ -853,6 +860,7 @@ public class AdminService
     public async Task ApproveCompanyAsync(string id, ApprovalRequest r)
     {
         if (r.TrangThai is not ("DaDuyet" or "TuChoi" or "DongBang" or "ChoDuyet")) throw new InvalidOperationException("Trạng thái công ty không hợp lệ.");
+        await DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(_db, id);
         var c = await _db.CongTys.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy công ty.");
         c.TrangThai = r.TrangThai; await _db.SaveChangesAsync();
     }
