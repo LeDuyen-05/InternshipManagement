@@ -452,7 +452,7 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
               <div className="p-3 bg-white/70 rounded-xl border border-amber-200/60 text-[11px] text-slate-600 flex items-start gap-2">
                 <span className="material-symbols-outlined text-amber-600 text-base shrink-0 mt-0.5">info</span>
                 <div>
-                  <strong>Lưu ý quy chế học vụ:</strong> Quyết định xác nhận không hoàn tất chỉ áp dụng đối với sinh viên thực tế đã có đơn hoặc biên bản xác nhận dừng thực tập, thôi học hoặc chuyển đợt được Khoa phê duyệt. Tuyệt đối không áp dụng đối với sinh viên đang trong quá trình chờ Giảng viên hoặc Doanh nghiệp hoàn thành đánh giá.
+                  <strong>Lưu ý quy chế học vụ:</strong> Quyết định xác nhận không hoàn tất chỉ áp dụng đối với sinh viên thực tế đã có đơn hoặc biên bản xác nhận dừng thực tập, thôi học hoặc chuyển đợt được Khoa phê duyệt. Tuyệt đối không áp dụng đối với sinh viên đang trong quá trình chờ Giảng viên hoặc Doanh nghiệp hoàn thành đánh giá. Sinh viên chưa từng có nơi thực tập mà chưa được rà trước ngày bắt đầu được ghi nhận "chưa có nơi" tại đây, kèm căn cứ (lịch sử hỗ trợ, biên bản làm việc).
                 </div>
               </div>
             </div>
@@ -652,7 +652,7 @@ export default function ChotDotPanel({ maDot, onChanged, onViewScoreDetail }) {
                                   title="Chỉ áp dụng khi sinh viên thực tế đã thôi học hoặc dừng thực tập có biên bản xác nhận của Khoa"
                                 >
                                   <span className="material-symbols-outlined text-[13px]">person_off</span>
-                                  <span>{x.khongHoanTat ? 'Xem xác nhận dừng' : 'Dừng thực tập'}</span>
+                                  <span>{x.khongHoanTat ? 'Xem xác nhận dừng' : x.chuaTungCoNoi ? 'Ghi nhận chưa có nơi' : 'Dừng thực tập'}</span>
                                 </button>
                               )}
                             </div>

@@ -14,7 +14,7 @@ public record KhongHoanTatRequest(int PhienBan, string LyDo, string CanCu, bool 
 public record TrangThaiChotDotDto(string MaDot, string TrangThai, int PhienBan, DateTimeOffset? HanMoLai);
 public record SinhVienChotDotDto(string MaSV, string HoTen, string? Lop, string KetQua, bool DuDiem, bool ThieuDN,
     bool ThieuGV, bool KhongHoanTat, bool CoTheXacNhanKhongHoanTat, decimal? TongDiem, List<string> Loi,
-    string? LyDoKhongHoanTat, string? CanCuKhongHoanTat, bool TruocChotDanhSach = false);
+    string? LyDoKhongHoanTat, string? CanCuKhongHoanTat, bool TruocChotDanhSach = false, bool ChuaTungCoNoi = false);
 public record RaSoatChotDotDto(string MaDot, string TenDot, TrangThaiChotDotDto Khoa, List<string> Loi,
     List<SinhVienChotDotDto> SinhViens, bool CoTheChot);
 
@@ -62,8 +62,10 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
             var settledPlacement = active.Count == 0 || (active.Count == 1 && active[0].DaDuocKhoaDuyet
                 && active[0].TrangThai is ("DangThucTap" or "HoanThanh") && actual.Start.HasValue && actual.End.HasValue
                 && actual.Start.Value != default && actual.End >= actual.Start && Today > actual.End.Value.Date);
-            var canConfirm = Today > round.ThoiGianKT.Date && settledPlacement && !pending && !result.Complete
-                && placements.Any(p => p.MaSinhVien == student.MaSV);
+            var everPlaced = placements.Any(p => p.MaSinhVien == student.MaSV);
+            // SV chưa từng có nơi mà Khoa chưa rà trước ngày bắt đầu vẫn ghi nhận được khi kết thúc đợt,
+            // nếu không đợt sẽ không bao giờ chốt được (bước rà soát đã khóa sau ngày bắt đầu).
+            var canConfirm = Today > round.ThoiGianKT.Date && settledPlacement && !pending && !result.Complete;
             if (exception?.TruocChotDanhSach == true) canConfirm = false;
             var issues = new List<string>();
             if (ownForms.Count > 1) issues.Add("Tồn tại nhiều hơn một phiếu điểm trong cùng một đợt.");
@@ -75,7 +77,9 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
             }
             else
             {
-                if (active.Count != 1 || !active[0].DaDuocKhoaDuyet || active[0].TrangThai is not ("DangThucTap" or "HoanThanh"))
+                if (!everPlaced && !pending)
+                    issues.Add("Chưa từng có nơi thực tập trong đợt: Khoa ghi nhận chưa có nơi/không hoàn tất (kèm lý do và căn cứ) để chốt đợt.");
+                else if (active.Count != 1 || !active[0].DaDuocKhoaDuyet || active[0].TrangThai is not ("DangThucTap" or "HoanThanh"))
                     issues.Add("Chưa có phân bổ tiếp nhận thực tập chính thức.");
                 else
                 {
@@ -84,13 +88,16 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
                         issues.Add("Thời gian thực tập tại doanh nghiệp chưa được xác nhận hợp lệ.");
                     else if (Today <= period.End.Value.Date) issues.Add("Chưa kết thúc thời gian thực tập thực tế tại doanh nghiệp.");
                 }
-                if (!result.EnterpriseComplete) issues.Add("Chưa có kết quả đánh giá từ Doanh nghiệp (CLO4).");
-                if (!result.LecturerComplete) issues.Add("Chưa có điểm đánh giá từ Giảng viên hướng dẫn (CLO1–3).");
-                if (!result.Complete && result.EnterpriseComplete && result.LecturerComplete) issues.Add("Phiếu đánh giá chưa đủ các tiêu chí theo rubric của đợt.");
+                if (everPlaced)
+                {
+                    if (!result.EnterpriseComplete) issues.Add("Chưa có kết quả đánh giá từ Doanh nghiệp (CLO4).");
+                    if (!result.LecturerComplete) issues.Add("Chưa có điểm đánh giá từ Giảng viên hướng dẫn (CLO1–3).");
+                    if (!result.Complete && result.EnterpriseComplete && result.LecturerComplete) issues.Add("Phiếu đánh giá chưa đủ các tiêu chí theo rubric của đợt.");
+                }
             }
             rows.Add(new(student.MaSV, student.HoTen, student.Lop, exception is not null ? "Không hoàn tất đợt" : result.Outcome,
                 result.Complete, !result.EnterpriseComplete, !result.LecturerComplete, exception is not null,
-                canConfirm, exception is null ? result.Total : null, issues, exception?.LyDo, exception?.CanCu, exception?.TruocChotDanhSach == true));
+                canConfirm, exception is null ? result.Total : null, issues, exception?.LyDo, exception?.CanCu, exception?.TruocChotDanhSach == true, !everPlaced));
         }
         if (exceptions.Any(x => rows.All(r => r.MaSV != x.MaSV))) errors.Add("Xác nhận không hoàn tất nằm ngoài danh sách tham gia; cần rà dữ liệu.");
         return new(id, round.TenDot, status, errors, rows,
@@ -129,15 +136,15 @@ public class ChotDotService(AppDbContext db, SinhVienTheoDotService roster, Time
         var item = await db.KhongHoanTatDots.SingleOrDefaultAsync(x => x.MaDot == id && x.MaSV == student);
         if (item?.TruocChotDanhSach == true)
             throw new InvalidOperationException("Xác nhận chưa có nơi thuộc bước rà trước chốt danh sách; không sửa/thu hồi từ luồng chốt điểm cuối đợt.");
-        if (!await db.PhanBoThucTaps.AnyAsync(p => p.MaDot == id && p.MaSinhVien == student))
-            throw new InvalidOperationException("SV chưa từng có nơi trong đợt phải được rà trước chốt danh sách và trước ngày bắt đầu; không xử lý muộn qua luồng chốt điểm.");
         if (!request.ThuHoi && !row.CoTheXacNhanKhongHoanTat)
             throw new InvalidOperationException("Chỉ xác nhận không hoàn tất sau khi hết thời gian thực tập, không còn hồ sơ chờ/mâu thuẫn và chưa có kết quả điểm đầy đủ. Phải xác minh ngày tại DN nếu vẫn còn phân bổ; không dùng xác nhận này để bỏ qua thiếu điểm đang chờ.");
         if (request.ThuHoi && item is not { HieuLuc: true }) throw new InvalidOperationException("Không có xác nhận hiệu lực để thu hồi.");
         if (item is null) { item = new() { MaDot = id, MaSV = student }; db.KhongHoanTatDots.Add(item); }
         var before = item.HieuLuc && item.NgayXacNhan != default ? new { item.LyDo, item.CanCu, item.NguoiXacNhan, item.NgayXacNhan } : null;
         item.HieuLuc = !request.ThuHoi; item.LyDo = reason; item.CanCu = evidence; item.NguoiXacNhan = actor; item.NgayXacNhan = Now;
-        Stamp(state, actor, reason, request.ThuHoi ? "ThuHoiKhongHoanTat" : "KhongHoanTat", new { MaSV = student, Truoc = before, Sau = item });
+        if (!request.ThuHoi && row.ChuaTungCoNoi) item.MaLyDo ??= "ChuaCoNoi";
+        Stamp(state, actor, reason, request.ThuHoi ? "ThuHoiKhongHoanTat" : "KhongHoanTat",
+            new { MaSV = student, Truoc = before, Sau = item, GhiNhanSauNgayBatDau = row.ChuaTungCoNoi });
         await db.SaveRoundControlAsync();
         if (tx is not null) await tx.CommitAsync();
     }
