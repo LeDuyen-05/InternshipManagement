@@ -1,4 +1,5 @@
 using InternshipManagement.BLL.Services.PhanBo;
+using InternshipManagement.BLL.Services.SinhVienTheoDot;
 using InternshipManagement.DAL;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -6,7 +7,7 @@ using Xunit;
 namespace InternshipManagement.UnitTests;
 
 // Hủy nơi thực tập không được giữ chỗ trong chỉ tiêu GVHD; khi phân bổ lại, GV cũ hướng dẫn tiếp nếu còn chỉ tiêu.
-// Nguyện vọng đã duyệt ở nơi bị hủy kết thúc cùng quyết định hủy.
+// Thông báo chặn công bố/chốt danh sách phải nêu đích danh sinh viên cần xử lý.
 public class PlacementLecturerQuotaTests
 {
     private sealed class Clock : TimeProvider
@@ -76,5 +77,40 @@ public class PlacementLecturerQuotaTests
         Assert.Contains("đủ chỉ tiêu", result.GhiChuGVHD);
         Assert.Equal("HuyBo", (await db.GVHuongDans.FindAsync("HD1"))!.TrangThai);
         Assert.Equal(1, await AssignedAsync(db));
+    }
+
+    [Fact]
+    public async Task PublicationBlockNamesTheStudentsStillInProgress()
+    {
+        await using var db = new AppDbContext(new DbContextOptionsBuilder<AppDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options) { RoundClock = Now };
+        db.DotThucTaps.Add(new() { MaSo = "R", TenDot = "Đợt sắp bắt đầu", NamHoc = "2026-2027", TrangThai = "ChuaBatDau", MaRubric = "RB",
+            ThoiGianBD = new(2027, 4, 1), ThoiGianKT = new(2027, 7, 1) });
+        db.CongTys.Add(new() { MaCongTy = "CT1", TenCongTy = "Công ty", TrangThai = "DaDuyet", SoLuongNhan = 5 });
+        foreach (var (id, name) in new[] { ("SV1", "Đã có nơi"), ("SV2", "Đang ứng tuyển") })
+        {
+            db.SinhViens.Add(new() { MaSV = id, HoTen = name });
+            db.SinhVienThamGiaDots.Add(new() { MaDot = "R", MaSV = id, NgayThem = Now.GetUtcNow(), NguoiThem = "K", NgayCapNhat = Now.GetUtcNow(), NguoiCapNhat = "K" });
+        }
+        db.PhanBoThucTaps.Add(new() { MaPhanBo = "PB1", MaSinhVien = "SV1", MaCongTy = "CT1", MaDot = "R", NgayPhanBo = new(2027, 3, 1), TrangThai = "DangThucTap", DaDuocKhoaDuyet = true });
+        db.DangKyThucTaps.Add(new() { MaDK = "DK2", MaSV = "SV2", MaCongTy = "CT1", MaDot = "R", NgayDangKy = new(2027, 3, 1), TrangThai = "ChoDuyet" });
+        await db.SaveChangesAsync();
+        var roster = new SinhVienTheoDotService(db, Now);
+
+        var review = await new RaSoatNoiService(db, roster, Now).GetAsync("R");
+        Assert.Equal(1, review.ChoXuLy);
+        Assert.StartsWith("SV2 Đang ứng tuyển (", review.MoTa("ChoXuLy"));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new CongBoDanhSachService(db, roster, Now)
+            .PublishAsync("R", new("Danh sách dự kiến", "Kiểm tra thông tin", new DateTimeOffset(2027, 3, 20, 0, 0, 0, TimeSpan.Zero)), "K"));
+        Assert.Contains("SV2 Đang ứng tuyển", error.Message);
+        Assert.DoesNotContain("SV1", error.Message);
+    }
+
+    [Fact]
+    public void LongListsAreShortenedWithACount()
+    {
+        var text = LietKeSV.MoTa(Enumerable.Range(1, 8).Select(i => $"SV{i}"));
+
+        Assert.Equal("SV1; SV2; SV3; SV4; SV5; và 3 SV khác", text);
     }
 }

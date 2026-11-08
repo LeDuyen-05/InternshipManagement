@@ -9,11 +9,28 @@ namespace InternshipManagement.BLL.Services.SinhVienTheoDot;
 public record GhiNhanChuaCoNoiRequest(int PhienBan, string LyDo, string CanCu, bool DaXacMinh, bool ThuHoi = false,
     string? MaLyDo = null, string? MaLanHoTro = null, int? PhienBanHoTro = null);
 public record DongRaSoatNoi(string MaSV, string HoTen, string? Lop, string Nhom, string TinhTrang,
-    bool CoTheXacNhan, bool DaGhiNhan, bool CoTheThuHoi, string? LyDo, string? CanCu);
+    bool CoTheXacNhan, bool DaGhiNhan, bool CoTheThuHoi, string? LyDo, string? CanCu)
+{
+    public string? TrangThaiNgan { get; init; }
+}
 public record RaSoatNoiDto(string MaDot, int PhienBan, bool CoTheSua, int TongSV, int DaCoNoi,
     int ChoXuLy, int ChuaCoNoi, int DaGhiNhanKhongHoanTat, List<DongRaSoatNoi> SinhViens)
 {
     public bool DaRaSoatHet => TongSV > 0 && SinhViens.All(x => x.Nhom is "DaCoNoi" or "DaGhiNhan");
+    // Nêu đích danh SV thuộc các nhóm cần xử lý để Khoa biết mở hồ sơ nào.
+    public string MoTa(params string[] nhom) => LietKeSV.MoTa(SinhViens.Where(x => nhom.Contains(x.Nhom))
+        .Select(x => $"{x.MaSV} {x.HoTen} ({x.TrangThaiNgan ?? x.TinhTrang})"));
+}
+
+public static class LietKeSV
+{
+    public const int ToiDa = 5;
+    public static string MoTa(IEnumerable<string> items)
+    {
+        var list = items.ToList();
+        var shown = string.Join("; ", list.Take(ToiDa));
+        return list.Count > ToiDa ? $"{shown}; và {list.Count - ToiDa} SV khác" : shown;
+    }
 }
 
 // Rà trước chốt danh sách: đọc nguồn thực, không suy thiếu nơi từ nhãn hiển thị hoặc thiếu ngày tại DN.
@@ -47,7 +64,8 @@ public class RaSoatNoiService(AppDbContext db, SinhVienTheoDotService roster, Ti
             var group = decision != null ? settled ? "DaGhiNhan" : "ChoXuLy" : official && !pending ? "DaCoNoi" : missing ? "ChuaCoNoi" : "ChoXuLy";
             return new DongRaSoatNoi(s.MaSV, s.HoTen, s.Lop, group,
                 group switch { "DaCoNoi" => "Đã có nơi được Khoa công nhận", "ChuaCoNoi" => "Chưa có nơi; cần hỗ trợ hoặc xác nhận có căn cứ. " + s.LyDo, "DaGhiNhan" => "Đã xác nhận Không hoàn tất vì chưa có nơi", _ => "Còn hồ sơ chờ/mâu thuẫn cần xử lý: " + s.TenTrangThai + ". " + s.LyDo },
-                editable && missing && decision == null, settled, editable && decision?.TruocChotDanhSach == true, decision?.LyDo, decision?.CanCu);
+                editable && missing && decision == null, settled, editable && decision?.TruocChotDanhSach == true, decision?.LyDo, decision?.CanCu)
+            { TrangThaiNgan = group switch { "ChuaCoNoi" => "chưa có nơi", "ChoXuLy" => s.TenTrangThai, _ => null } };
         }).ToList();
         return new(maDot, state?.PhienBan ?? 0, editable, rows.Count, rows.Count(x => x.Nhom == "DaCoNoi"), rows.Count(x => x.Nhom == "ChoXuLy"),
             rows.Count(x => x.Nhom == "ChuaCoNoi"), rows.Count(x => x.Nhom == "DaGhiNhan"), rows);

@@ -93,15 +93,21 @@ public class CongBoDanhSachService(AppDbContext db, SinhVienTheoDotService roste
             throw new ArgumentException("Thông tin mới chưa khác thông tin hiện tại.");
         return new(name, address, tax);
     }
+    private static string ChuaCongBo(RaSoatNoiDto review)
+        => $"Còn {review.ChoXuLy} SV có hồ sơ đang ứng tuyển/chờ xác minh hoặc dữ liệu mâu thuẫn: {review.MoTa("ChoXuLy")}. Giải quyết trước khi công bố dự kiến.";
+    private static string ChuaRaSoatHet(RaSoatNoiDto review)
+        => $"Còn {review.ChoXuLy + review.ChuaCoNoi} SV chưa có nơi hoặc có hồ sơ chờ xác minh chưa xử lý: {review.MoTa("ChuaCoNoi", "ChoXuLy")}.";
     private string? FinalizationBlock(DotThucTap round, CongBoDanhSachThucTap publication, ReviewData data)
     {
         if (round.TrangThaiDanhSachNoi != "DuKien" || data.Official != null) return "Danh sách không ở trạng thái dự kiến hoặc đã chốt chính thức.";
         if (Today >= round.ThoiGianBD.Date || round.TrangThai is not ("ChuaBatDau" or "DangDienRa")) return "Đã đến ngày bắt đầu thực tập hoặc đợt đã đóng.";
-        if (data.Pending()) return "Còn yêu cầu báo sai/chỉnh sửa chưa được Khoa xử lý.";
-        if (time.GetUtcNow() < publication.HanPhanHoi && data.Rows.Any(r => !data.Feedback.Any(f => f.MaSV == r.MaSV)))
-            return "Chưa hết hạn phản hồi và vẫn còn SV chưa phản hồi.";
+        if (data.Pending()) return $"Còn yêu cầu báo sai/chỉnh sửa chưa được Khoa xử lý: {Names(data.Rows.Where(r => data.Pending(r.MaSV)))}.";
+        var silent = data.Rows.Where(r => !data.Feedback.Any(f => f.MaSV == r.MaSV)).ToList();
+        if (time.GetUtcNow() < publication.HanPhanHoi && silent.Count > 0)
+            return $"Chưa hết hạn phản hồi ({publication.HanPhanHoi.ToOffset(TimeSpan.FromHours(7)):dd/MM/yyyy HH:mm}) và còn {silent.Count} SV chưa phản hồi: {Names(silent)}.";
         return null;
     }
+    private static string Names(IEnumerable<DongDanhSachDuKien> rows) => LietKeSV.MoTa(rows.Select(r => $"{r.MaSV} {r.HoTen}"));
     private async Task<List<DongDanhSachDuKien>> BuildRows(string maDot)
     {
         var students = (await roster.GetAsync(maDot)).SinhViens;
@@ -127,10 +133,10 @@ public class CongBoDanhSachService(AppDbContext db, SinhVienTheoDotService roste
             XemTruoc = (await roster.GetAsync(maDot)).SinhViens,
             CoTheCongBo = round.TrangThaiDanhSachNoi == "ChuaCongBo" && Today < round.ThoiGianBD.Date && round.TrangThai is "ChuaBatDau" or "DangDienRa"
                 && AppDbContext.LockStatus(state, time.GetUtcNow()) == "ChuaChot" && review.ChoXuLy == 0,
-            LyDoChuaCongBo = review.ChoXuLy > 0 ? "Còn hồ sơ đang ứng tuyển/chờ xác minh hoặc dữ liệu mâu thuẫn; giải quyết trước khi công bố dự kiến." : null };
+            LyDoChuaCongBo = review.ChoXuLy > 0 ? ChuaCongBo(review) : null };
         var data = await Review(publication); var feedback = data.Feedback.OrderByDescending(f => f.LanPhanHoi).ToList();
         var blocked = FinalizationBlock(round, publication, data);
-        if (blocked == null && !review.DaRaSoatHet) blocked = "Còn SV chưa có nơi hoặc hồ sơ chờ xác minh chưa xử lý. Hoàn tất rà soát trước khi chốt.";
+        if (blocked == null && !review.DaRaSoatHet) blocked = $"{ChuaRaSoatHet(review)} Hoàn tất rà soát trước khi chốt.";
         if (AppDbContext.LockStatus(state, time.GetUtcNow()) != "ChuaChot") blocked = "Đợt đã chốt kết quả.";
         return new { MaDot = maDot, TrangThai = round.TrangThaiDanhSachNoi, CoTheCongBo = false,
             PhienBanRaSoat = data.Revision, PhienBanRaSoatNoi = review.PhienBan, CoTheXuLy = round.TrangThaiDanhSachNoi == "DuKien" && Today < round.ThoiGianBD.Date
@@ -152,8 +158,8 @@ public class CongBoDanhSachService(AppDbContext db, SinhVienTheoDotService roste
         var start = new DateTimeOffset(DateTime.SpecifyKind(round.ThoiGianBD.Date, DateTimeKind.Unspecified), TimeSpan.FromHours(7));
         if (request.HanPhanHoi <= time.GetUtcNow() || request.HanPhanHoi > start)
             throw new ArgumentException("Hạn phản hồi phải sau thời điểm hiện tại và không sau thời điểm bắt đầu thực tập (giờ VN).");
-        if ((await new RaSoatNoiService(db, roster, time).GetAsync(maDot)).ChoXuLy > 0)
-            throw new InvalidOperationException("Còn hồ sơ đang ứng tuyển/chờ xác minh hoặc dữ liệu mâu thuẫn. Giải quyết trước khi công bố dự kiến để tránh khóa hồ sơ đang xử lý.");
+        var pending = await new RaSoatNoiService(db, roster, time).GetAsync(maDot);
+        if (pending.ChoXuLy > 0) throw new InvalidOperationException(ChuaCongBo(pending) + " Việc này tránh khóa hồ sơ đang xử lý.");
         var rows = await BuildRows(maDot);
         var publication = new CongBoDanhSachThucTap { MaDot = maDot, TieuDe = title, NoiDung = content, HanPhanHoi = request.HanPhanHoi,
             NgayCongBo = time.GetUtcNow(), NguoiCongBo = actor, DanhSachJson = JsonSerializer.Serialize(rows) };
@@ -243,7 +249,7 @@ public class CongBoDanhSachService(AppDbContext db, SinhVienTheoDotService roste
         if (blocked != null) throw new InvalidOperationException(blocked);
         var review = await new RaSoatNoiService(db, roster, time).GetAsync(maDot);
         if (!review.DaRaSoatHet)
-            throw new InvalidOperationException("Còn SV chưa có nơi hoặc hồ sơ chờ xác minh chưa xử lý; chưa được chốt danh sách chính thức.");
+            throw new InvalidOperationException($"{ChuaRaSoatHet(review)} Chưa được chốt danh sách chính thức.");
         if (request.PhienBanRaSoatNoi != review.PhienBan) throw new InvalidOperationException("Kết quả rà soát nơi đã thay đổi. Tải lại trước khi chốt.");
         if (request.MaCongBo != publication.MaCongBo || request.PhienBanRaSoat != data.Revision) throw new InvalidOperationException("Danh sách đã có phản hồi/xử lý mới. Tải lại để rà soát trước khi chốt.");
         var actual = (await roster.GetAsync(maDot)).SinhViens.Where(s => s.CoPhanBoChinhThuc).ToList();
