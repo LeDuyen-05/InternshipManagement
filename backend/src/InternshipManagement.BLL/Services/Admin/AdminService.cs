@@ -350,7 +350,8 @@ public class AdminService
     {
         if (string.IsNullOrWhiteSpace(request.TieuDe) || string.IsNullOrWhiteSpace(request.NoiDung)) throw new InvalidOperationException("Tiêu đề và nội dung thông báo không được để trống.");
         if (request.TieuDe.Trim().Length > 200) throw new InvalidOperationException("Tiêu đề không được vượt quá 200 ký tự.");
-        var doiTuong = string.IsNullOrWhiteSpace(request.DoiTuong) ? "ALL" : request.DoiTuong.Trim();
+        var doiTuong = Common.NotificationAudience.Target(request.DoiTuong)
+            ?? throw new InvalidOperationException("Đối tượng nhận thông báo chỉ gồm tất cả (ALL), sinh viên (SV), giảng viên (GV) hoặc doanh nghiệp (DN).");
         var loaiThongBao = string.IsNullOrWhiteSpace(request.LoaiThongBao) ? "Chung" : request.LoaiThongBao.Trim();
         var tepDinhKem = string.IsNullOrWhiteSpace(request.TepDinhKem) ? null : request.TepDinhKem.Trim();
 
