@@ -11,7 +11,7 @@ public interface ITienDoThucTapRepository : IRepository<TienDoThucTap>
     // Dành cho Giảng viên duyệt báo cáo
     Task<IReadOnlyList<TienDoThucTap>> GetBaoCaoChoDuyetByGiangVienAsync(string maGV);
     Task<TienDoThucTap?> GetChiTietAsync(string maTienDo);
-    Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXet = null);
+    Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXet = null, DateTimeOffset? hanNopLai = null);
     Task<bool> IsSupervisorAsync(string maGV, string maSV, string maDot);
     /// <summary>Trạng thái quyết định tiếp nhận còn hiệu lực của SV trong đợt (null nếu chưa có).</summary>
     Task<string?> GetTrangThaiPhanBoAsync(string maSV, string maDot);

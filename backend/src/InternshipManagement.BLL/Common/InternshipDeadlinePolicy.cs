@@ -11,9 +11,17 @@ public static class InternshipDeadlinePolicy
     public static bool IsLate(DateTime submittedVietnamTime, DateTime dueDate) => submittedVietnamTime.Date > dueDate.Date;
     public static bool SubmissionClosed(TienDoThucTap report, DateTimeOffset now) =>
         now >= StartOfDay(report.MocThoiGian.AddDays(1))
-        && (!report.HanNopBoSung.HasValue || now > report.HanNopBoSung.Value);
+        && (!report.HanNopBoSung.HasValue || now > report.HanNopBoSung.Value)
+        && !InRevisionWindow(report, now);
 
+    // Báo cáo bị yêu cầu sửa được nộp lại trong SoNgayNopLai ngày (tính hết ngày, giờ Việt Nam) kể từ lúc yêu cầu,
+    // kể cả khi mốc gốc đã qua; không cần Khoa mở hạn bổ sung.
+    public const int SoNgayNopLai = 3;
     public const int NhanXetToiDa = 500;
+    public static DateTimeOffset RevisionDeadline(DateTimeOffset now) =>
+        StartOfDay(now.ToOffset(VietnamOffset).Date.AddDays(SoNgayNopLai + 1)).AddSeconds(-1);
+    public static bool InRevisionWindow(TienDoThucTap report, DateTimeOffset now) =>
+        report.TrangThaiDuyet == "YeuCauSua" && report.HanNopLai.HasValue && now <= report.HanNopLai.Value;
 
     // Yêu cầu sửa phải nêu rõ nội dung cần sửa để sinh viên biết phải làm gì.
     public static string? ReviewComment(string trangThai, string? nhanXet)

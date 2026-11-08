@@ -8,7 +8,7 @@ import tienDoThucTapService from '../../services/tienDoThucTapService'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
-import { submissionBlock } from '../../utils/reportDeadline'
+import { submissionBlock, revisionDeadline, SO_NGAY_NOP_LAI } from '../../utils/reportDeadline'
 
 // Định dạng ngày chuẩn Việt Nam DD/MM/YYYY
 const formatDateVN = (dateStr) => {
@@ -234,6 +234,9 @@ function ProgressStudentPage() {
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
             <span className="material-symbols-outlined text-xs">edit</span>
             Yêu cầu sửa
+            {revisionDeadline(report)
+              ? ` · nộp lại đến ${new Date(report.hanNopLai).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
+              : report?.hanNopLai && submissionBlock(report) ? ' · quá hạn nộp lại' : ''}
           </span>
         )
       case 'ChuaNop':
@@ -814,7 +817,7 @@ function ProgressStudentPage() {
                   </select>
                   {duyetStatus === 'YeuCauSua' && (
                     <p className="mt-1 text-[11px] text-rose-700">
-                      Bắt buộc ghi rõ nội dung sinh viên cần sửa/bổ sung.
+                      Bắt buộc ghi nội dung cần sửa. Sinh viên được nộp lại trong {SO_NGAY_NOP_LAI} ngày (tính hết ngày, giờ Việt Nam), kể cả khi mốc gốc đã qua.
                     </p>
                   )}
                 </div>

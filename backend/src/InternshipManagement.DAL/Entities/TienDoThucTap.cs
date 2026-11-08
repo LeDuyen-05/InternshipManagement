@@ -5,6 +5,8 @@ public class TienDoThucTap
     // Nullable để không tự xác nhận thời điểm nộp của dữ liệu lịch sử chỉ lưu DATE.
     public bool? NopTre { get; set; }
     public DateTimeOffset? HanNopBoSung { get; set; }
+    // Hạn nộp lại do GVHD/Khoa yêu cầu sửa; chỉ có hiệu lực khi báo cáo đang ở trạng thái YeuCauSua.
+    public DateTimeOffset? HanNopLai { get; set; }
     public string MaTienDo { get; set; } = default!;
     public string MaDot { get; set; } = default!;
     public string MaSV { get; set; } = default!;

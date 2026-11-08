@@ -24,6 +24,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             MaTienDo = e.MaTienDo,
             NopTre = e.NopTre,
             HanNopBoSung = e.HanNopBoSung,
+            HanNopLai = e.HanNopLai,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
@@ -46,6 +47,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             MaTienDo = e.MaTienDo,
             NopTre = e.NopTre,
             HanNopBoSung = e.HanNopBoSung,
+            HanNopLai = e.HanNopLai,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
@@ -68,6 +70,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             MaTienDo = e.MaTienDo,
             NopTre = e.NopTre,
             HanNopBoSung = e.HanNopBoSung,
+            HanNopLai = e.HanNopLai,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
@@ -92,6 +95,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             MaTienDo = e.MaTienDo,
             NopTre = e.NopTre,
             HanNopBoSung = e.HanNopBoSung,
+            HanNopLai = e.HanNopLai,
             MocThoiGian = e.MocThoiGian,
             NoiDungBaoCao = e.NoiDungBaoCao,
             NgayNop = e.NgayNop,
@@ -133,7 +137,8 @@ public class TienDoThucTapService : ITienDoThucTapService
         if (entity.MaPhanBoLuuTru != null)
             throw new InvalidOperationException("Báo cáo đã lưu trữ khi đổi nơi thực tập; chỉ xem lịch sử, không duyệt lại thành báo cáo của nơi mới.");
         var nhanXet = InternshipDeadlinePolicy.ReviewComment(request.TrangThaiDuyet, request.NhanXet ?? request.NhanXetGV);
-        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet, nhanXet);
+        var hanNopLai = request.TrangThaiDuyet == "YeuCauSua" ? InternshipDeadlinePolicy.RevisionDeadline(_clock.GetUtcNow()) : (DateTimeOffset?)null;
+        return await _tienDoThucTapRepository.CapNhatTrangThaiDuyetAsync(maTienDo, request.TrangThaiDuyet, nhanXet, hanNopLai);
     }
 
     public async Task<TienDoThucTapDto> NopBaoCaoTienDoAsync(NopBaoCaoRequest request, string? userMaSV = null)
@@ -181,10 +186,16 @@ public class TienDoThucTapService : ITienDoThucTapService
             throw new InvalidOperationException("Chưa đến ngày bắt đầu thực tập của đợt, chưa được nộp tiến độ.");
 
         if (InternshipDeadlinePolicy.SubmissionClosed(existing, _clock.GetUtcNow()))
-            throw new InvalidOperationException("Đã hết hạn nộp báo cáo. Sinh viên phải lên Khoa trình bày lý do; chỉ được nộp khi Khoa chấp thuận và mở hạn bổ sung.");
+            throw new InvalidOperationException(existing.TrangThaiDuyet == "YeuCauSua" && existing.HanNopLai.HasValue
+                ? "Đã hết hạn nộp lại theo yêu cầu sửa của GVHD. Sinh viên phải lên Khoa trình bày lý do; chỉ được nộp khi Khoa chấp thuận và mở hạn bổ sung."
+                : "Đã hết hạn nộp báo cáo. Sinh viên phải lên Khoa trình bày lý do; chỉ được nộp khi Khoa chấp thuận và mở hạn bổ sung.");
+        // Nộp lại theo yêu cầu sửa giữ nguyên đánh giá đúng hạn/trễ của lần nộp đầu (dữ liệu cũ chưa có cờ thì tính theo ngày nộp đầu).
+        var lanNopDau = existing.TrangThaiDuyet == "YeuCauSua" ? existing.NgayNop : null;
         existing.NoiDungBaoCao = request.NoiDungBaoCao.Trim();
         existing.NgayNop = _clock.GetUtcNow().ToOffset(InternshipDeadlinePolicy.VietnamOffset).DateTime;
-        existing.NopTre = InternshipDeadlinePolicy.IsLate(existing.NgayNop.Value, existing.MocThoiGian);
+        existing.NopTre = lanNopDau.HasValue
+            ? existing.NopTre ?? InternshipDeadlinePolicy.IsLate(lanNopDau.Value, existing.MocThoiGian)
+            : InternshipDeadlinePolicy.IsLate(existing.NgayNop.Value, existing.MocThoiGian);
         existing.TrangThaiDuyet = "DaNop";
 
         var entity = await _tienDoThucTapRepository.UpdateAsync(existing);
@@ -194,6 +205,7 @@ public class TienDoThucTapService : ITienDoThucTapService
             MaTienDo = entity.MaTienDo,
             NopTre = entity.NopTre,
             HanNopBoSung = entity.HanNopBoSung,
+            HanNopLai = entity.HanNopLai,
             MaDot = entity.MaDot,
             TenDot = entity.DotThucTap?.TenDot,
             MaSV = entity.MaSV,

@@ -375,6 +375,7 @@ CREATE TABLE TIENDOTHUCTAP (
     ngayNop         DATETIME2       NULL,
     NopTre          BIT             NULL,
     HanNopBoSung    DATETIMEOFFSET  NULL,
+    HanNopLai       DATETIMEOFFSET  NULL,
     trangThaiDuyet  NVARCHAR(50)    NOT NULL DEFAULT N'ChuaNop',
     nhanXet         NVARCHAR(1000)  NULL,
     nhanXetGV       NVARCHAR(500)   NULL,  

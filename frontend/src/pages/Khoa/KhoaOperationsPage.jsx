@@ -9,6 +9,7 @@ import KhoaPhongVanPanel from '../../components/khoa/KhoaPhongVanPanel'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import DocumentAttachments from '../../components/common/DocumentAttachments'
 import { downloadExcelResponse, parseBlobError } from '../../utils/exportHuitExcel'
+import { SO_NGAY_NOP_LAI } from '../../utils/reportDeadline'
 
 const statusLabel = {
   ChoDuyet: 'Chờ duyệt',
@@ -185,8 +186,8 @@ export default function KhoaOperationsPage({ mode }) {
     if (roundLock.blocked || loading || busy) return
     let nhanXet
     if (status === 'YeuCauSua') {
-      // Yêu cầu sửa bắt buộc nêu nội dung cần sửa để SV biết phải làm gì.
-      nhanXet = window.prompt('Nhập nội dung sinh viên cần sửa/bổ sung (bắt buộc):', '')
+      // Yêu cầu sửa bắt buộc nêu nội dung cần sửa; SV được nộp lại trong SO_NGAY_NOP_LAI ngày.
+      nhanXet = window.prompt(`Nhập nội dung sinh viên cần sửa/bổ sung (bắt buộc). Sinh viên được nộp lại trong ${SO_NGAY_NOP_LAI} ngày.`, '')
       if (nhanXet === null) return
       nhanXet = nhanXet.trim()
       if (!nhanXet) {

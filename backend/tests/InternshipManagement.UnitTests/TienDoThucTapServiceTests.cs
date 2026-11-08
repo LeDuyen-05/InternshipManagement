@@ -163,7 +163,7 @@ public class TienDoThucTapServiceTests
         };
         _repoMock.Setup(r => r.GetByIdAsync("TD001")).ReturnsAsync(existing);
         _repoMock.Setup(r => r.IsSupervisorAsync("GV001", "SV001", "DOT1")).ReturnsAsync(true);
-        _repoMock.Setup(r => r.CapNhatTrangThaiDuyetAsync("TD001", "DaDuyet", "Đạt yêu cầu"))
+        _repoMock.Setup(r => r.CapNhatTrangThaiDuyetAsync("TD001", "DaDuyet", "Đạt yêu cầu", null))
             .ReturnsAsync(true);
 
         var request = new DuyetTienDoRequest
@@ -175,6 +175,6 @@ public class TienDoThucTapServiceTests
         var result = await service.DuyetTienDoAsync("TD001", request, actorMaGV: "GV001", isStaff: false);
 
         Assert.True(result);
-        _repoMock.Verify(r => r.CapNhatTrangThaiDuyetAsync("TD001", "DaDuyet", "Đạt yêu cầu"), Times.Once);
+        _repoMock.Verify(r => r.CapNhatTrangThaiDuyetAsync("TD001", "DaDuyet", "Đạt yêu cầu", null), Times.Once);
     }
 }

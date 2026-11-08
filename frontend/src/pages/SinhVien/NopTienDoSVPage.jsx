@@ -11,7 +11,7 @@ import NoLinkedAccount from '../../components/common/NoLinkedAccount'
 import { BAO_CAO, PHAN_BO } from '../../utils/trangThai'
 import { Link } from 'react-router-dom'
 import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
-import { submissionBlock } from '../../utils/reportDeadline'
+import { submissionBlock, revisionDeadline } from '../../utils/reportDeadline'
 
 // Khung báo cáo tuần theo kế hoạch: công việc – kết quả – khó khăn – minh chứng
 const MAU_BAO_CAO = `1. Công việc đã thực hiện trong tuần:
@@ -405,6 +405,7 @@ export default function NopTienDoSVPage() {
                         <p className="text-xs text-slate-500 mt-0.5">
                           Hạn chót: {new Date(rep.mocThoiGian).toLocaleDateString('vi-VN')}
                           {rep.hanNopBoSung && <span> · Khoa mở bổ sung đến {new Date(rep.hanNopBoSung).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam)</span>}
+                          {revisionDeadline(rep) && <span className="text-rose-700 font-medium"> · Nộp lại theo yêu cầu sửa đến {new Date(rep.hanNopLai).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam)</span>}
                           {rep.ngayNop && (
                             <span className="text-slate-600 font-medium">
                               {' '}

@@ -4,6 +4,7 @@ public class TienDoThucTapDto
 {
     public bool? NopTre { get; set; }
     public DateTimeOffset? HanNopBoSung { get; set; }
+    public DateTimeOffset? HanNopLai { get; set; }
     public string MaTienDo { get; set; } = default!;
     public string MaDot { get; set; } = default!;
     public string? TenDot { get; set; }

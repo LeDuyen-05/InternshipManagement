@@ -730,6 +730,7 @@ public class AdminService
 
         var nhanXet = Common.InternshipDeadlinePolicy.ReviewComment(request.TrangThai, request.NhanXet);
         report.TrangThaiDuyet = request.TrangThai;
+        if (request.TrangThai == "YeuCauSua") report.HanNopLai = Common.InternshipDeadlinePolicy.RevisionDeadline(_clock.GetUtcNow());
         if (!string.IsNullOrWhiteSpace(nhanXet))
         {
             report.NhanXet = nhanXet;

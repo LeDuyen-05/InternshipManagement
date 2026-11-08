@@ -51,13 +51,14 @@ public class TienDoThucTapRepository : GenericRepository<TienDoThucTap>, ITienDo
             .FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
     }
 
-    public async Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXet = null)
+    public async Task<bool> CapNhatTrangThaiDuyetAsync(string maTienDo, string trangThaiDuyet, string? nhanXet = null, DateTimeOffset? hanNopLai = null)
     {
         var record = await DbSet.FirstOrDefaultAsync(t => t.MaTienDo == maTienDo);
         if (record == null) return false;
         if (record.MaPhanBoLuuTru != null) throw new InvalidOperationException("Báo cáo đã lưu trữ khi điều chỉnh nơi thực tập.");
 
         record.TrangThaiDuyet = trangThaiDuyet;
+        if (hanNopLai.HasValue) record.HanNopLai = hanNopLai;
         if (nhanXet != null)
         {
             record.NhanXet = nhanXet;
