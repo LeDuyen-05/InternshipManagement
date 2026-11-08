@@ -8,15 +8,22 @@ namespace InternshipManagement.BLL.Common;
 /// <summary>Small value-only workbook export: no formulas, external links or macros.</summary>
 public static class TabularExport
 {
+    // Ô CSV an toàn khi mở bằng Excel: chữ bắt đầu bằng = + - @ tab hoặc CR được thêm ' để không chạy như công thức.
+    public static string CsvCell(object? value)
+    {
+        var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
+        if (IsFormulaStart(text)) text = "'" + text;
+        return "\"" + text.Replace("\"", "\"\"") + "\"";
+    }
+
+    // Bỏ dấu ' do CsvCell thêm khi nhập lại tệp đã xuất.
+    public static string FromCsvCell(string text) => text.Length > 1 && text[0] == '\'' && IsFormulaStart(text[1..]) ? text[1..] : text;
+
+    private static bool IsFormulaStart(string text) => text.TrimStart().FirstOrDefault() is '=' or '+' or '-' or '@' or '\t' or '\r';
+
     public static byte[] Csv(IReadOnlyList<string> headers, IReadOnlyList<object?[]> rows)
     {
-        static string Cell(object? value)
-        {
-            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
-            if (text.TrimStart().FirstOrDefault() is '=' or '+' or '-' or '@' or '\t' or '\r') text = "'" + text;
-            return "\"" + text.Replace("\"", "\"\"") + "\"";
-        }
-        var lines = new[] { string.Join(',', headers.Select(Cell)) }.Concat(rows.Select(r => string.Join(',', r.Select(Cell))));
+        var lines = new[] { string.Join(',', headers.Select(CsvCell)) }.Concat(rows.Select(r => string.Join(',', r.Select(CsvCell))));
         return Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(string.Join("\r\n", lines) + "\r\n")).ToArray();
     }
 

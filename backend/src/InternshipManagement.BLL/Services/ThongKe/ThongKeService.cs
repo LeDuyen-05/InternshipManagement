@@ -212,7 +212,7 @@ public class ThongKeService : IThongKeService
 
         // Header thông tin đợt
         sb.AppendLine($"BÁO CÁO KẾT QUẢ ĐÁNH GIÁ CLO THỰC TẬP DOANH NGHIỆP");
-        sb.AppendLine($"Đợt thực tập: {data.TenDot} (Mã: {data.MaDot})");
+        sb.AppendLine(EscapeCsv($"Đợt thực tập: {data.TenDot} (Mã: {data.MaDot})"));
         sb.AppendLine($"Trạng thái chốt: {data.TrangThaiChotDot}; phiên bản: {data.PhienBanChotDot}. Báo cáo dữ liệu hiện hành; đối chiếu bản lưu tại quyết định chốt.");
         sb.AppendLine($"Thời gian xuất báo cáo: {DateTime.Now:dd/MM/yyyy HH:mm}");
         sb.AppendLine();
@@ -231,7 +231,7 @@ public class ThongKeService : IThongKeService
             var gv = EscapeCsv(sv.TenGVHD ?? "");
 
             var criterionValues = string.Join(",", data.DiemTheoCLO.Select(c => sv.DiemTheoTieuChi.FirstOrDefault(d => d.MaTieuChi == c.MaTieuChi)?.DiemCham.ToString("F2", System.Globalization.CultureInfo.InvariantCulture) ?? ""));
-            sb.AppendLine($"{index++},{sv.MaSV},{hoTen},{sv.Lop},{congTy},{gv},{criterionValues},{sv.DiemTamTinh?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? ""},{tong},{sv.XepLoai},{sv.KetQua}");
+            sb.AppendLine($"{index++},{EscapeCsv(sv.MaSV)},{hoTen},{EscapeCsv(sv.Lop ?? "")},{congTy},{gv},{criterionValues},{sv.DiemTamTinh?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? ""},{tong},{sv.XepLoai},{sv.KetQua}");
         }
 
         sb.AppendLine();
@@ -254,14 +254,8 @@ public class ThongKeService : IThongKeService
         return maTieuChi.StartsWith("CLO", StringComparison.OrdinalIgnoreCase) && dot > 0 ? maTieuChi[..dot].ToUpperInvariant() : null;
     }
 
-    private static string EscapeCsv(string value)
-    {
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
-        {
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        }
-        return value;
-    }
+    // Dữ liệu người dùng nhập (tên SV, tên công ty tự tìm do SV khai...) không được chạy như công thức khi mở bằng Excel.
+    private static string EscapeCsv(string value) => Common.TabularExport.CsvCell(value);
 
     public async Task<IReadOnlyList<DotThucTapItemDto>> GetDanhSachDotThucTapAsync()
     {

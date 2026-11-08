@@ -150,11 +150,8 @@ public sealed class CatalogImportService(AppDbContext db, SinhVienValidator stud
         return string.Join("\r\n", lines) + "\r\n";
     }
 
-    private static string Csv(IEnumerable<string?> values) => string.Join(',', values.Select(value =>
-    {
-        var text = value ?? "";
-        return text.IndexOfAny([',','"','\r','\n']) >= 0 ? "\"" + text.Replace("\"", "\"\"") + "\"" : text;
-    }));
+    // Tên công ty (gồm công ty tự tìm do SV khai) không được chạy như công thức khi mở tệp bằng Excel.
+    private static string Csv(IEnumerable<string?> values) => string.Join(',', values.Select(Common.TabularExport.CsvCell));
 
     private StudentEntity ParseStudent(IReadOnlyList<string> r)
     {
@@ -197,13 +194,13 @@ public sealed class CatalogImportService(AppDbContext db, SinhVienValidator stud
         {
             var ch=csv[i];
             if (ch=='"') { if (quoted && i+1<csv.Length && csv[i+1]=='"') { cell.Append('"'); i++; } else quoted=!quoted; }
-            else if (ch==',' && !quoted) { row.Add(cell.ToString()); cell.Clear(); }
-            else if (ch=='\r' && !quoted) { if (i+1<csv.Length && csv[i+1]=='\n') i++; row.Add(cell.ToString()); cell.Clear(); rows.Add(row); row=new List<string>(); }
-            else if (ch=='\n' && !quoted) { row.Add(cell.ToString()); cell.Clear(); rows.Add(row); row=new List<string>(); }
+            else if (ch==',' && !quoted) { row.Add(Common.TabularExport.FromCsvCell(cell.ToString())); cell.Clear(); }
+            else if (ch=='\r' && !quoted) { if (i+1<csv.Length && csv[i+1]=='\n') i++; row.Add(Common.TabularExport.FromCsvCell(cell.ToString())); cell.Clear(); rows.Add(row); row=new List<string>(); }
+            else if (ch=='\n' && !quoted) { row.Add(Common.TabularExport.FromCsvCell(cell.ToString())); cell.Clear(); rows.Add(row); row=new List<string>(); }
             else cell.Append(ch);
         }
         if (quoted) throw new ArgumentException($"Dòng {rows.Count+1}: dấu ngoặc kép CSV chưa được đóng.");
-        if (cell.Length>0 || row.Count>0) { row.Add(cell.ToString()); rows.Add(row); }
+        if (cell.Length>0 || row.Count>0) { row.Add(Common.TabularExport.FromCsvCell(cell.ToString())); rows.Add(row); }
         return rows;
     }
 }
