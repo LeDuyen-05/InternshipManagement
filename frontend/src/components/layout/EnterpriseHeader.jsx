@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext.jsx'
 import doanhNghiepService from '../../services/doanhNghiepService.js'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import apiClient from '../../services/api.js'
+import { signInAgainAfterPasswordChange } from '../../utils/passwordChanged'
 import ModalOverlay from '../common/ModalOverlay.jsx'
 
 export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
@@ -144,8 +145,8 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
         MatKhauCu: passwordForm.oldPass,
         MatKhauMoi: passwordForm.newPass,
       })
-      setPasswordStatus('success')
-      setPasswordForm({ oldPass: '', newPass: '', confirmPass: '' })
+      setShowPasswordModal(false)
+      signInAgainAfterPasswordChange(logout, navigate)
     } catch (err) {
       setPasswordStatus(
         err.response?.data?.message || err.message || 'Đổi mật khẩu thất bại. Vui lòng kiểm tra lại mật khẩu cũ.'
@@ -529,87 +530,68 @@ export default function EnterpriseHeader({ activeCompany, onSelectCompany }) {
               </button>
             </div>
 
-            {passwordStatus === 'success' ? (
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-center space-y-2">
-                <span className="material-symbols-outlined text-4xl text-emerald-600">check_circle</span>
-                <p className="text-xs font-bold text-emerald-800">Đổi mật khẩu thành công!</p>
-                <p className="text-[11px] text-emerald-600">
-                  Mật khẩu mới đã được cập nhật cho tài khoản {userCode}.
-                </p>
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordModal(false)}
-                    className="px-4 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 rounded-xl transition cursor-pointer"
-                  >
-                    Hoàn tất
-                  </button>
+            <form onSubmit={handleChangePassword} className="space-y-3">
+              {passwordStatus && (
+                <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200 text-xs font-semibold text-rose-700 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">error</span>
+                  <span>{passwordStatus}</span>
                 </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Mật khẩu hiện tại *</label>
+                <input
+                  type="password"
+                  required
+                  value={passwordForm.oldPass}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, oldPass: e.target.value })}
+                  placeholder="Nhập mật khẩu hiện tại"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
               </div>
-            ) : (
-              <form onSubmit={handleChangePassword} className="space-y-3">
-                {passwordStatus && passwordStatus !== 'success' && (
-                  <div className="p-2.5 bg-rose-50 rounded-xl border border-rose-200 text-xs font-semibold text-rose-700 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-base">error</span>
-                    <span>{passwordStatus}</span>
-                  </div>
-                )}
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Mật khẩu hiện tại *</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.oldPass}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, oldPass: e.target.value })}
-                    placeholder="Nhập mật khẩu hiện tại"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                  />
-                </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Mật khẩu mới *</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={passwordForm.newPass}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPass: e.target.value })}
+                  placeholder="Tối thiểu 6 ký tự"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Mật khẩu mới *</label>
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={passwordForm.newPass}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, newPass: e.target.value })}
-                    placeholder="Tối thiểu 6 ký tự"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                  />
-                </div>
+              <div>
+                <label className="block text-[11px] font-bold text-slate-700 mb-1">Xác nhận mật khẩu mới *</label>
+                <input
+                  type="password"
+                  required
+                  value={passwordForm.confirmPass}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPass: e.target.value })}
+                  placeholder="Nhập lại mật khẩu mới"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
+                />
+              </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Xác nhận mật khẩu mới *</label>
-                  <input
-                    type="password"
-                    required
-                    value={passwordForm.confirmPass}
-                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPass: e.target.value })}
-                    placeholder="Nhập lại mật khẩu mới"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-600"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswordModal(false)}
-                    className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
-                  >
-                    Hủy
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingPassword}
-                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl transition disabled:opacity-60 cursor-pointer"
-                  >
-                    {submittingPassword ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
-                  </button>
-                </div>
-              </form>
-            )}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingPassword}
+                  className="px-4 py-2 text-xs font-bold text-white bg-indigo-700 hover:bg-indigo-800 rounded-xl transition disabled:opacity-60 cursor-pointer"
+                >
+                  {submittingPassword ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+                </button>
+              </div>
+            </form>
           </div>
         </ModalOverlay>
       )}

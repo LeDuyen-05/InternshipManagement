@@ -109,6 +109,10 @@ a { text-decoration: none; }
   background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c;
   border-radius: 8px; padding: 10px 12px; font-size: 13px;
 }
+.fit-auth-notice {
+  background: #ecfdf5; border: 1px solid #a7f3d0; color: #047857;
+  border-radius: 8px; padding: 10px 12px; font-size: 13px;
+}
 .fit-field-group { display: flex; flex-direction: column; gap: 6px; }
 .fit-field-label-row {
   display: flex; justify-content: space-between; align-items: center;

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
 export default function AuthPage() {
@@ -10,6 +10,8 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
+  // Thông báo do trang khác gửi sang khi chuyển về đăng nhập (ví dụ vừa đổi mật khẩu).
+  const notice = useLocation().state?.message
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -59,6 +61,7 @@ export default function AuthPage() {
         {/* Form */}
         <form onSubmit={handleSubmit} className="fit-auth-form">
           {error && <div className="fit-auth-error">{error}</div>}
+          {!error && notice && <div className="fit-auth-notice" role="status">{notice}</div>}
 
           <div className="fit-field-group">
             <div className="fit-field-label-row">
