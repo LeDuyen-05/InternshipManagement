@@ -11,8 +11,9 @@ import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 export default function Header({ currentRole }) {
   const navigate = useNavigate()
   const { user: authUser, logout, updateUser } = useAuth()
-  const { selectedDot } = useDotThucTap()
+  const { selectedDot, loading: roundsLoading, error: roundError } = useDotThucTap()
   const isAdmin = currentRole === 'Admin' || currentRole === 'QuanTriVien' || authUser?.maVaiTro === 'VT01'
+  const isStudent = currentRole === 'SinhVien' || authUser?.maVaiTro === 'VT04'
 
   // State thông báo & menu người dùng
   const [isNotifOpen, setIsNotifOpen] = useState(false)
@@ -206,14 +207,14 @@ export default function Header({ currentRole }) {
         {/* Semester Tag */}
         {!isAdmin && (
         <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full text-xs font-medium text-blue-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span className="font-semibold">{formatTenDot(selectedDot)}</span>
+          <span className={`w-2 h-2 rounded-full ${selectedDot?.trangThai === 'DangDienRa' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`}></span>
+          <span className="font-semibold">{selectedDot ? formatTenDot(selectedDot) : roundsLoading ? 'Đang tải đợt thực tập…' : roundError ? 'Không tải được đợt thực tập' : isStudent ? 'Chưa được Khoa thêm vào đợt thực tập' : 'Chưa có đợt thực tập'}</span>
           {selectedDot?.namHoc && (
             <span className="text-slate-500 font-normal">· {selectedDot.namHoc}</span>
           )}
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
+          {selectedDot && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getLoaiThucTapInfo(selectedDot).badgeClass}`}>
             {getLoaiThucTapInfo(selectedDot).shortLabel}
-          </span>
+          </span>}
         </div>
         )}
 

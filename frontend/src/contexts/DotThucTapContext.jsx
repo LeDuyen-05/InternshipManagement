@@ -78,6 +78,12 @@ export function DotThucTapProvider({ children }) {
           const matched = dots.find((d) => d.maDot === savedMaDot) || dots.find((d) => d.trangThai === 'DangDienRa') || dots[0]
           if (matched) {
             currentSelection.current = matched.maDot
+            // Ghi đè lựa chọn cũ nếu SV không còn thuộc đợt đã lưu.
+            try {
+              localStorage.setItem(selectionKey, matched.maDot)
+            } catch {
+              // Vẫn cho xem đợt hợp lệ khi trình duyệt không cho ghi bộ nhớ.
+            }
             setSelectedDot({
               maDot: matched.maDot,
               tenDot: formatTenDot(matched),

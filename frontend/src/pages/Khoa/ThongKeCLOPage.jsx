@@ -331,6 +331,16 @@ export default function ThongKeCLOPage() {
             Thử lại
           </button>
         </div>
+      ) : !selectedDot?.maDot ? (
+        <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-3">
+          <span className="material-symbols-outlined text-slate-400 text-4xl">event_busy</span>
+          <p className="text-sm font-semibold text-slate-600">Vui lòng chọn đợt thực tập ở thanh menu trên cùng để xem thống kê CLO.</p>
+        </div>
+      ) : !data ? (
+        <div className="bg-white p-12 rounded-2xl border border-slate-200 text-center space-y-3">
+          <span className="material-symbols-outlined text-slate-400 text-4xl">inbox</span>
+          <p className="text-sm font-semibold text-slate-600">Chưa có dữ liệu thống kê cho đợt này.</p>
+        </div>
       ) : (
         <>
           {/* 2. Hàng Thẻ KPI Tổng Quan */}
@@ -427,11 +437,11 @@ export default function ThongKeCLOPage() {
               </div>
 
               <div className="h-64 w-full">
-                {data.phanBoDiem && data.phanBoDiem.some((d) => d.soLuong > 0) ? (
+                {data?.phanBoDiem && data.phanBoDiem.some((d) => d.soLuong > 0) ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={data.phanBoDiem}
+                        data={data?.phanBoDiem || []}
                         cx="50%"
                         cy="50%"
                         innerRadius={55}
@@ -440,7 +450,7 @@ export default function ThongKeCLOPage() {
                         dataKey="soLuong"
                         nameKey="xepLoai"
                       >
-                        {data.phanBoDiem.map((entry, index) => (
+                        {data?.phanBoDiem?.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                         ))}
                       </Pie>
@@ -491,9 +501,9 @@ export default function ThongKeCLOPage() {
               </div>
 
               <div className="h-64 w-full">
-                {data.diemTheoCLO && data.diemTheoCLO.length > 0 && data.diemTheoCLO.some((d) => d.diemTrungBinh > 0) ? (
+                {data?.diemTheoCLO && data.diemTheoCLO.length > 0 && data.diemTheoCLO.some((d) => d.diemTrungBinh > 0) ? (
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={data.diemTheoCLO} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={data?.diemTheoCLO || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                       <XAxis dataKey="maCLO" tick={{ fontSize: 11, fill: '#64748b' }} />
                       <YAxis domain={[0, 10]} tick={{ fontSize: 11, fill: '#64748b' }} />
@@ -515,9 +525,9 @@ export default function ThongKeCLOPage() {
               </div>
 
               {/* Danh sách tiêu chí CLO giải thích */}
-              {data.diemTheoCLO && data.diemTheoCLO.length > 0 ? (
+              {data?.diemTheoCLO && data.diemTheoCLO.length > 0 ? (
                 <div className="space-y-1.5 pt-2 border-t border-slate-100 max-h-48 overflow-y-auto">
-                  {data.diemTheoCLO.map((clo) => (
+                  {data?.diemTheoCLO?.map((clo) => (
                     <div key={clo.maCLO} className="flex items-center justify-between text-xs">
                       <span className="text-slate-600 font-medium">
                         <strong>{clo.maCLO}:</strong> {clo.tenCLO} ({Math.round(clo.trongSo * 100)}%)
@@ -543,7 +553,7 @@ export default function ThongKeCLOPage() {
                 <span className="material-symbols-outlined text-blue-700">supervisor_account</span>
                 <h3 className="text-sm font-bold text-slate-900">Giám Sát Tải Hướng Dẫn Giảng Viên Trong Đợt</h3>
               </div>
-              <span className="text-xs text-slate-400">Tổng số: {data.taiGiangVien?.length || 0} Giảng viên</span>
+              <span className="text-xs text-slate-400">Tổng số: {data?.taiGiangVien?.length || 0} Giảng viên</span>
             </div>
 
 
@@ -722,7 +732,7 @@ export default function ThongKeCLOPage() {
                               <span className="material-symbols-outlined text-[14px]">visibility</span>
                               <span>Xem chi tiết điểm</span>
                             </button>
-                            <StudentEnterpriseDocuments key={`${data.maDot}|${sv.maSV}`} maSV={sv.maSV} maDot={data.maDot} />
+                            <StudentEnterpriseDocuments key={`${data?.maDot || ''}|${sv.maSV}`} maSV={sv.maSV} maDot={data?.maDot} />
                           </div>
                         </td>
                       </tr>

@@ -8,6 +8,26 @@ import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 
 import { formatInterviewDate, formatInterviewTime, hasInterviewStarted, interviewFormTimestamp, isFutureInterview, vietnamDateTimeParts } from '../../utils/interviewTime'
 
+function formatHinhThucDisplay(val) {
+  if (!val) return 'Trực tuyến qua Google Meet'
+  let s = String(val).trim()
+  if (s.includes('Trá»±c tiáº¿p') || s.includes('Tr?c ti?p') || s.toLowerCase().includes('trực tiếp')) {
+    if (s.includes('FPT')) return 'Trực tiếp tại văn phòng FPT Software'
+    if (s.includes('VNG')) return 'Trực tiếp tại trụ sở VNG Campus'
+    if (s.includes('Viettel')) return 'Trực tiếp tại tòa nhà Viettel'
+    if (s.toLowerCase().includes('công ty')) return 'Trực tiếp tại văn phòng công ty'
+    return 'Trực tiếp tại văn phòng'
+  }
+  if (s.includes('Trá»±c tuyáº¿n') || s.includes('Tr?c tuy?n') || s.toLowerCase().includes('trực tuyến')) {
+    if (s.toLowerCase().includes('meet')) return 'Trực tuyến qua Google Meet'
+    if (s.toLowerCase().includes('zoom')) return 'Trực tuyến qua Zoom'
+    if (s.toLowerCase().includes('teams')) return 'Trực tuyến qua Microsoft Teams'
+    return 'Trực tuyến qua Google Meet'
+  }
+  return s
+}
+
+
 export default function LichPhongVanDNPage() {
   const { activeCompany, maDot } = useEnterprise()
   return <InterviewRoundPage key={`${activeCompany?.maCongTy || ''}|${maDot || ''}`} />
@@ -340,12 +360,22 @@ function InterviewRoundPage() {
 
                     {/* Mode */}
                     <td className="py-3.5 px-3">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-medium text-[11px] border border-blue-100">
-                        <span className="material-symbols-outlined text-[14px]">
-                          {item.hinhThuc?.includes('tuyến') ? 'videocam' : 'location_on'}
-                        </span>
-                        <span>{item.hinhThuc || 'Trực tuyến Meet'}</span>
-                      </span>
+                      {(() => {
+                        const hinhThucDisplay = formatHinhThucDisplay(item.hinhThuc)
+                        const isOnline = hinhThucDisplay.toLowerCase().includes('tuyến') || hinhThucDisplay.toLowerCase().includes('online') || hinhThucDisplay.toLowerCase().includes('meet') || hinhThucDisplay.toLowerCase().includes('zoom') || hinhThucDisplay.toLowerCase().includes('teams')
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg font-medium text-[11px] border ${
+                            isOnline
+                              ? 'bg-blue-50 text-blue-700 border-blue-100'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          }`}>
+                            <span className="material-symbols-outlined text-[14px]">
+                              {isOnline ? 'videocam' : 'location_on'}
+                            </span>
+                            <span>{hinhThucDisplay}</span>
+                          </span>
+                        )
+                      })()}
                     </td>
 
                     {/* Result */}
@@ -374,7 +404,15 @@ function InterviewRoundPage() {
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap"><button type="button" disabled={loading || submitting} className="mr-2" onClick={() => setCorrection(item)}>Điều chỉnh / lịch sử</button>
+                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        disabled={loading || submitting}
+                        onClick={() => setCorrection(item)}
+                        className="mr-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-[11px] transition-colors shadow-xs"
+                      >
+                        Điều chỉnh / lịch sử
+                      </button>
                       {(!item.ketQua || item.ketQua === 'ChuaCoKetQua') && isFutureInterview(item.ngayPV, now) && (
                         <button
                           type="button"

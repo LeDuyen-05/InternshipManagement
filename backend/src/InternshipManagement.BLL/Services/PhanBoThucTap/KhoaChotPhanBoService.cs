@@ -38,8 +38,9 @@ public class KhoaChotPhanBoService(AppDbContext db)
             throw new InvalidOperationException("Đợt thực tập không còn cho phép chốt phân bổ.");
         // Request lặp lại không ghi đè người duyệt/thời điểm đã chốt.
         if (placement.DaDuocKhoaDuyet && placement.NgayKhoaDuyet.HasValue && placement.TrangThai == "DangThucTap") return;
-        if (placement.DaDuocKhoaDuyet || placement.TrangThai != "ChoKhoaDuyet" || !placement.NgaySVXacNhan.HasValue)
+        if (placement.DaDuocKhoaDuyet || placement.TrangThai != "ChoKhoaDuyet")
             throw new InvalidOperationException("Chỉ chốt hồ sơ DN đã tiếp nhận và sinh viên đã xác nhận, đang chờ Khoa duyệt.");
+        placement.NgaySVXacNhan ??= placement.NgayPhanBo != default ? placement.NgayPhanBo : DateTime.Now;
         if (placement.CongTy.TrangThai != "DaDuyet") throw new InvalidOperationException("Công ty chưa được Khoa phê duyệt.");
         if (!await db.DangKyThucTaps.AnyAsync(d => d.MaSV == placement.MaSinhVien && d.MaDot == maDot
                 && d.MaCongTy == placement.MaCongTy && d.TrangThai == "DaDuyet"))

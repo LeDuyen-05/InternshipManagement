@@ -47,6 +47,15 @@ public class ThongKeController : ControllerBase
         {
             // SV/GV/cán bộ Khoa chỉ nhận đợt của khoa mình nhờ bộ lọc khoa của CSDL.
             IEnumerable<InternshipManagement.BLL.DTOs.ThongKe.DotThucTapItemDto> result = await _thongKeService.GetDanhSachDotThucTapAsync();
+            if (User.IsInRole(Roles.SinhVien))
+            {
+                // Không lọc trạng thái đợt: SV vẫn được xem lịch sử những đợt mình tham gia.
+                var student = User.MaSV();
+                var rounds = await db.SinhVienThamGiaDots.AsNoTracking()
+                    .Where(x => student != null && x.MaSV == student && x.DangThamGia)
+                    .Select(x => x.MaDot).ToListAsync();
+                result = result.Where(x => rounds.Contains(x.MaDot));
+            }
             if (User.IsInRole(Roles.DaiDienDN))
             {
                 // Doanh nghiệp hợp tác với nhiều khoa: chỉ hiện đợt mà công ty được đưa vào, có đăng ký hoặc có SV thực tập.

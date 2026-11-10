@@ -10,7 +10,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout } = useAuth()
-  const { selectedDot, changeDot, resetToCurrentDot, danhSachNamHoc, error: roundError, refreshRounds } = useDotThucTap()
+  const { selectedDot, changeDot, resetToCurrentDot, danhSachNamHoc, loading: roundsLoading, error: roundError, refreshRounds } = useDotThucTap()
   const [showDotModal, setShowDotModal] = useState(false)
   const [activeYearTab, setActiveYearTab] = useState('')
 
@@ -22,6 +22,11 @@ export default function Sidebar({ currentRole, onRoleChange }) {
 
   const isStudent = currentRole === 'SinhVien' || user?.maVaiTro === 'VT04'
   const isAdmin = currentRole === 'Admin' || currentRole === 'QuanTriVien' || user?.maVaiTro === 'VT01'
+  const allDots = danhSachNamHoc.flatMap((year) => year.dots)
+  const canChangeDot = !roundsLoading && (!isStudent || allDots.length > 1)
+  const hasCurrentDot = allDots.some((dot) => dot.trangThai === 'DangDienRa')
+  const roundMessage = roundsLoading ? 'Đang tải đợt thực tập…' : roundError
+    || (isStudent ? 'Bạn chưa được Khoa thêm vào đợt thực tập nào.' : 'Chưa có đợt thực tập.')
 
   // Danh mục menu phân nhóm theo từng Role
   const roleMenuGroups = {
@@ -188,13 +193,13 @@ export default function Sidebar({ currentRole, onRoleChange }) {
         {!isAdmin && (
         <div
           onClick={() => {
-            setShowDotModal(true)
+            if (canChangeDot) setShowDotModal(true)
           }}
-          className="p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs transition-all cursor-pointer hover:border-blue-400 hover:shadow-sm group"
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setShowDotModal(true) } }}
-          title="Chọn năm học / đợt thực tập"
+          className={`p-2.5 rounded-xl bg-white border border-slate-200/80 shadow-xs transition-all group ${canChangeDot ? 'cursor-pointer hover:border-blue-400 hover:shadow-sm' : ''}`}
+          role={canChangeDot ? 'button' : undefined}
+          tabIndex={canChangeDot ? 0 : undefined}
+          onKeyDown={(event) => { if (canChangeDot && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setShowDotModal(true) } }}
+          title={canChangeDot ? 'Chọn năm học / đợt thực tập' : undefined}
         >
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-1.5">
@@ -211,7 +216,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                 {isStudent ? 'Đợt thực tập của bạn' : 'Học vụ tác nghiệp'}
               </span>
             </div>
-            {(
+            {canChangeDot && (
               <span className="text-[10px] text-blue-600 font-semibold group-hover:underline flex items-center gap-0.5">
                 <span>Đổi</span>
                 <span className="material-symbols-outlined text-[13px]">swap_horiz</span>
@@ -220,10 +225,11 @@ export default function Sidebar({ currentRole, onRoleChange }) {
           </div>
 
           <p className="text-xs text-slate-900 font-bold leading-tight group-hover:text-blue-700 transition-colors">
-            {formatTenDot(selectedDot)}
+            {selectedDot ? formatTenDot(selectedDot) : roundMessage}
           </p>
+          {roundError && <button type="button" onClick={(event) => { event.stopPropagation(); refreshRounds() }} className="text-xs text-blue-700 underline mt-1">Tải lại</button>}
 
-          <div className="flex items-center justify-between mt-1 gap-1 flex-wrap">
+          {selectedDot && <div className="flex items-center justify-between mt-1 gap-1 flex-wrap">
             <span
               className={`text-[10px] font-medium ${
                 selectedDot?.trangThai === 'DangDienRa'
@@ -243,10 +249,10 @@ export default function Sidebar({ currentRole, onRoleChange }) {
                 Chỉ xem
               </span>
             )}
-          </div>
+          </div>}
 
           {/* Nút quay lại đợt đang diễn ra nếu đang ở đợt cũ */}
-          {selectedDot?.trangThai === 'DaKetThuc' && (
+          {selectedDot?.trangThai === 'DaKetThuc' && hasCurrentDot && (
             <button
               type="button"
               onClick={(e) => {
@@ -317,7 +323,7 @@ export default function Sidebar({ currentRole, onRoleChange }) {
       </div>
 
       {/* Modal 2 tầng: Chọn Năm học -> Đợt thực tập */}
-      {showDotModal && (
+      {showDotModal && canChangeDot && (
         <ModalOverlay onClose={() => setShowDotModal(false)}>
           <div className="bg-white rounded-3xl max-w-lg w-full max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
