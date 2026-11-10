@@ -868,15 +868,23 @@ public class AdminService
         }
         await _db.SaveChangesAsync();
     }
+    private static string? NormalizeCompanyAddress(string? address)
+    {
+        var value = address?.Trim();
+        if (value?.Length > 500) throw new ArgumentException("Địa chỉ công ty không được vượt quá 500 ký tự.");
+        return string.IsNullOrEmpty(value) ? null : value;
+    }
+
     public async Task CreateCompanyAsync(CreateCompanyRequest r)
     {
-        _db.CongTys.Add(new CongTy { MaCongTy=r.MaCongTy, TenCongTy=r.TenCongTy, ViTriTuyen=r.ViTriTuyen ?? "", ThoiGian=r.ThoiGian ?? "", SoLuongNhan=r.SoLuongNhan, YeuCau=r.YeuCau ?? "", TrangThai="ChoDuyet" });
+        _db.CongTys.Add(new CongTy { MaCongTy=r.MaCongTy, TenCongTy=r.TenCongTy, DiaChi=NormalizeCompanyAddress(r.DiaChi), ViTriTuyen=r.ViTriTuyen ?? "", ThoiGian=r.ThoiGian ?? "", SoLuongNhan=r.SoLuongNhan, YeuCau=r.YeuCau ?? "", TrangThai="ChoDuyet" });
         await _db.SaveChangesAsync();
     }
     public async Task UpdateCompanyAsync(string id, CreateCompanyRequest r)
     {
         await DAL.Common.CongTyTheoKhoa.ChanSuaCongTyDungChungAsync(_db, id);
         var x = await _db.CongTys.FindAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy doanh nghiệp.");
+        if (r.DiaChi != null) x.DiaChi = NormalizeCompanyAddress(r.DiaChi);
         x.TenCongTy=r.TenCongTy; x.ViTriTuyen=r.ViTriTuyen ?? ""; x.ThoiGian=r.ThoiGian ?? ""; x.SoLuongNhan=r.SoLuongNhan; x.YeuCau=r.YeuCau ?? "";
         await _db.SaveChangesAsync();
     }

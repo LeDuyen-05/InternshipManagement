@@ -166,6 +166,7 @@ public partial class AppDbContext : DbContext
         {
             e.ToTable("CONGTY");
             e.HasKey(x => x.MaCongTy);
+            e.Property(x => x.DiaChi).HasMaxLength(500);
             e.Property(x => x.ThoiGian).HasMaxLength(100);
             e.Property(x => x.MaSVDeXuat).HasColumnName("maSVDeXuat").HasMaxLength(20);
             e.Property(x => x.ChiTiepNhanTuTim).HasColumnName("chiTiepNhanTuTim");

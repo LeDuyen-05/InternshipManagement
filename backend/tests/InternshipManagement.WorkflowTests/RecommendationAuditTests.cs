@@ -6,7 +6,7 @@ using Xunit;
 
 namespace InternshipManagement.WorkflowTests;
 
-// 03/11/2026: phạm vi JD/đợt, baseline và dữ liệu đổi trong lúc đối sánh; không gọi mô hình thật.
+// Kiểm tra gợi ý theo đợt, kể cả khi JD thay đổi trong lúc tính điểm.
 public class RecommendationAuditTests
 {
     private sealed class Clock : TimeProvider
@@ -23,7 +23,7 @@ public class RecommendationAuditTests
         db.SinhViens.Add(new() { MaSV = "SV", HoTen = "Sinh viên", KyNang = "C# SQL backend" });
         foreach (var (company, round) in new[] { ("CT", "A"), ("OTHER", "B") })
         {
-            db.CongTys.Add(new() { MaCongTy = company, TenCongTy = company, TrangThai = "DaDuyet" });
+            db.CongTys.Add(new() { MaCongTy = company, TenCongTy = company, TrangThai = "DaDuyet", DiaChi = "123 Nguyễn Văn A, TP.HCM" });
             db.CongTyTheoDots.Add(new() { MaCongTy = company, MaDot = round, ViTriTuyen = "Backend", YeuCau = "C# SQL backend", SoLuongNhan = 2,
                 MoDangKy = Time.GetUtcNow().AddDays(-1), HanDangKy = Time.GetUtcNow().AddDays(1) });
         }
@@ -43,7 +43,10 @@ public class RecommendationAuditTests
         var result = await service.RecommendAsync("SV", maDot: "A");
         var item = Assert.Single(result.Items);
         Assert.Equal("CT", item.MaCongTy); Assert.Equal("A", item.MaDot);
+        Assert.Equal("123 Nguyễn Văn A, TP.HCM", item.DiaChi);
         Assert.False(result.DaSuDungModelTrain); Assert.Null(item.RankingScore);
+        Assert.Equal(0, item.DaTiepNhan); Assert.Equal(2, item.ConLai);
+        Assert.Equal(Time.GetUtcNow().AddDays(1), item.HanDangKy);
         Assert.Contains("TF-IDF", result.ThuatToan);
         Assert.Empty(await db.HoSoNangLucs.ToListAsync());
         Assert.Null((await service.EvaluateAsync("SV", maDot: "A")).Ndcg);
@@ -82,7 +85,7 @@ public class RecommendationAuditTests
         Assert.Empty((await new RecommendationService(db, Time, scorer.Object).RecommendAsync("SV", maDot: "A")).Items);
     }
 
-    // 04/11/2026: SQL aggregates count temporary holds and preserve company/position caps.
+    // Phân bổ chưa hủy chiếm chỉ tiêu của cả công ty và vị trí.
     [Fact]
     public async Task AvailableOffersCountHoldsAndExcludeCancelledAndOtherRoundPlacements()
     {
@@ -101,6 +104,15 @@ public class RecommendationAuditTests
         db.PhanBoThucTaps.Add(new() { MaPhanBo = "LEGACY", MaSinhVien = "S4", MaCongTy = "CT", MaDot = "A" });
         await db.SaveChangesAsync();
         Assert.Equal(1, Assert.Single(await new InternshipManagement.BLL.Services.Admin.CompanyRoundService(db, Time).AvailableAsync("A")).ConLai);
+        var suggestions = await new InternshipManagement.BLL.Services.GoiYCongTy.GoiYCongTyService(
+            new InternshipManagement.DAL.Repositories.GoiYCongTyRepository(db), new RecommendationService(db, Time), Time)
+            .GetTopKGoiYAsync("SV", maDot: "A");
+        var suggestion = Assert.Single(suggestions.TopKGoiY);
+        Assert.Equal("P2", suggestion.MaViTri);
+        Assert.Equal("123 Nguyễn Văn A, TP.HCM", suggestion.DiaChi);
+        Assert.Equal(2, suggestion.SoLuongNhan); Assert.Equal(0, suggestion.DaTiepNhan);
+        Assert.Equal(1, suggestion.ConLai); // Tổng công ty còn 1 dù riêng vị trí còn 2.
+        Assert.Equal(Time.GetUtcNow().AddDays(1), suggestion.HanDangKy);
     }
 
     [Fact]

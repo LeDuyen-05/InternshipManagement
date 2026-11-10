@@ -54,7 +54,7 @@ public class CompanyRoundService(AppDbContext db, TimeProvider clock)
         var now = clock.GetUtcNow();
         if (!await db.DotThucTaps.AnyAsync(x => x.MaSo == maDot)) throw new KeyNotFoundException("Không tìm thấy đợt.");
         return await db.CongTyTheoDots.AsNoTracking().Where(x => x.MaDot == maDot).OrderBy(x => x.CongTy.TenCongTy)
-            .Select(x => new { x.MaDot, x.MaCongTy, x.CongTy.TenCongTy, x.ViTriTuyen, x.YeuCau, x.SoLuongNhan,
+            .Select(x => new { x.MaDot, x.MaCongTy, x.CongTy.TenCongTy, x.CongTy.DiaChi, x.ViTriTuyen, x.YeuCau, x.SoLuongNhan,
                 x.MoDangKy, x.HanDangKy, x.HoatDong, x.PhienBan, x.CongTy.TrangThai,
                 ViTris = x.ViTris.OrderBy(v => v.TenViTri).Select(v => new { v.MaViTri, v.TenViTri, v.YeuCau, v.SoLuongNhan, v.HoatDong,
                     daTiepNhan = db.PhanBoThucTaps.Count(p => p.MaDot == x.MaDot && p.MaCongTy == x.MaCongTy && p.MaViTri == v.MaViTri && p.TrangThai != "Huy") }).ToList(),
@@ -90,7 +90,7 @@ public class CompanyRoundService(AppDbContext db, TimeProvider clock)
                     : positionCounts.GetValueOrDefault((plan.MaCongTy, position.MaViTri));
                 if (count >= position.SoLuongNhan) continue;
                 result.Add(new CongTyDto { MaCongTy = plan.MaCongTy, MaDot = maDot, MaViTri = position.MaViTri,
-                    TenCongTy = plan.CongTy.TenCongTy, ViTriTuyen = position.TenViTri, YeuCau = position.YeuCau,
+                    TenCongTy = plan.CongTy.TenCongTy, DiaChi = plan.CongTy.DiaChi, ViTriTuyen = position.TenViTri, YeuCau = position.YeuCau,
                     SoLuongNhan = position.SoLuongNhan, DaTiepNhan = count, ConLai = Math.Min(totalRemaining, position.SoLuongNhan - count),
                     TrangThai = plan.CongTy.TrangThai, ThoiGian = plan.CongTy.ThoiGian, MoDangKy = plan.MoDangKy, HanDangKy = plan.HanDangKy });
             }

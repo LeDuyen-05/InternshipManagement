@@ -2,7 +2,7 @@ namespace InternshipManagement.BLL.DTOs.Admin;
 
 public record AccountDto(string MaTaiKhoan, string TenDangNhap, string TrangThai, string MaVaiTro, string? TenVaiTro, string? MaSV, string? MaGV, string? MaDaiDien, string? TenChuSoHuu = null, string? TenDonVi = null, string? MaKhoa = null);
 public record UpdateAccountRequest(string TrangThai, string MaVaiTro, string? MaSV = null, string? MaGV = null, string? MaDaiDien = null, string? MaKhoa = null);
-public record CreateCompanyRequest(string MaCongTy, string TenCongTy, string? ViTriTuyen, string? ThoiGian, int SoLuongNhan, string? YeuCau);
+public record CreateCompanyRequest(string MaCongTy, string TenCongTy, string? ViTriTuyen, string? ThoiGian, int SoLuongNhan, string? YeuCau, string? DiaChi = null);
 public record ApprovalRequest(string TrangThai);
 public record CreateStudentRequest(string MaSV, string HoTen, string? Lop, string? KhoaHoc, double? Gpa, string? KyNang, string? ChuyenNganh, string? CongNghe, string? DuAnDaThucHien);
 public record CreateLecturerRequest(string MaGV, string HoTen, string? ChuyenMon, int ChiTieuHD = 10);

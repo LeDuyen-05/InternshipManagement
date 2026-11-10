@@ -1,7 +1,8 @@
 namespace InternshipManagement.BLL.DTOs.Recommendation;
 
 public record RecommendationItem(string MaCongTy, string TenCongTy, double CosineScore, double? TiLeTuongThich, int Rank, string YeuCau,
-    string MaDot, string ViTriTuyen, int SoLuongNhan, IReadOnlyList<string> TuKhoaTrungKhop, string? MaViTri = null, double? RankingScore = null);
+    string MaDot, string ViTriTuyen, int SoLuongNhan, IReadOnlyList<string> TuKhoaTrungKhop, string? MaViTri = null, double? RankingScore = null,
+    int DaTiepNhan = 0, int? ConLai = null, DateTimeOffset? HanDangKy = null, string? DiaChi = null);
 public record RecommendationResponse(string MaSV, string HoTen, string MaHoSo, int K, IReadOnlyList<RecommendationItem> Items,
     string MaDot, int TongCongTyHopLe, string ThongBao,
     string ThuatToan = "TF-IDF + cosine (baseline tham khảo)", string ModelStatus = "NotApplicable",

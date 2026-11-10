@@ -40,6 +40,7 @@ const blankPlan = {
 const blankCompany = {
   maCongTy: '',
   tenCongTy: '',
+  diaChi: '',
   viTriTuyen: '',
   yeuCau: '',
   thoiGian: '3 tháng',
@@ -366,6 +367,7 @@ export default function KhoaDoanhNghiepPage() {
     setCompanyForm({
       maCongTy: item.maCongTy,
       tenCongTy: item.tenCongTy,
+      diaChi: item.diaChi || '',
       viTriTuyen: item.viTriTuyen || '',
       yeuCau: item.yeuCau || '',
       thoiGian: item.thoiGian || '3 tháng',
@@ -1018,6 +1020,7 @@ export default function KhoaDoanhNghiepPage() {
                           <td className="py-3 px-4">
                             <div className="font-bold text-slate-900 text-sm">{x.tenCongTy}</div>
                             <div className="font-mono text-[11px] text-slate-400">{x.maCongTy}</div>
+                            <div className="text-xs text-slate-500 whitespace-pre-line">{x.diaChi || 'Chưa cập nhật địa chỉ'}</div>
                             {/* Chi tiết các vị trí JD */}
                             <div className="mt-2 space-y-1">
                               {(x.viTris || []).map((v, idx) => (
@@ -1276,6 +1279,7 @@ export default function KhoaDoanhNghiepPage() {
                           </td>
                           <td className="py-3.5 px-4 font-bold text-slate-900">
                             {x.tenCongTy}
+                            <div className="text-xs font-normal text-slate-500 whitespace-pre-line">{x.diaChi || 'Chưa cập nhật địa chỉ'}</div>
                           </td>
                           <td className="py-3.5 px-4 text-slate-700">
                             {x.viTriTuyen || '—'}
@@ -1951,6 +1955,16 @@ export default function KhoaDoanhNghiepPage() {
                     />
                   </div>
 
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1.5">
+                      Địa chỉ công ty
+                    </label>
+                    <textarea maxLength={500} rows={2}
+                      placeholder="Số nhà, đường, phường/xã, tỉnh/thành phố"
+                      value={companyForm.diaChi}
+                      onChange={(e) => setCompanyForm({ ...companyForm, diaChi: e.target.value })}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300" />
+                  </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1.5">
                       Vị trí tuyển dụng mẫu

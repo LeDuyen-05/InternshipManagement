@@ -35,6 +35,7 @@ public class DangKyThucTapService : IDangKyThucTapService
             {
                 MaCongTy = c.MaCongTy,
                 TenCongTy = c.TenCongTy,
+                DiaChi = c.DiaChi,
                 ViTriTuyen = c.ViTriTuyen,
                 ThoiGian = c.ThoiGian,
                 SoLuongNhan = c.SoLuongNhan,
@@ -87,6 +88,7 @@ public class DangKyThucTapService : IDangKyThucTapService
         {
             MaCongTy = congTy.MaCongTy,
             TenCongTy = congTy.TenCongTy,
+            DiaChi = congTy.DiaChi,
             ViTriTuyen = congTy.ViTriTuyen,
             ThoiGian = congTy.ThoiGian,
             SoLuongNhan = congTy.SoLuongNhan,
@@ -102,6 +104,7 @@ public class DangKyThucTapService : IDangKyThucTapService
         {
             MaCongTy = c.MaCongTy,
             TenCongTy = c.TenCongTy,
+            DiaChi = c.DiaChi,
             ViTriTuyen = c.ViTriTuyen,
             ThoiGian = c.ThoiGian,
             SoLuongNhan = c.SoLuongNhan,

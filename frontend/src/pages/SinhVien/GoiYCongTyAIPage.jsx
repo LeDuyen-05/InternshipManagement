@@ -7,6 +7,16 @@ import { useIdentity } from '../../hooks/useIdentity'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
 import RecommendationScore from '../../components/common/RecommendationScore'
+import { useRecruitmentAvailability } from '../../hooks/useRecruitmentAvailability'
+import { currentOffer, refreshRecommendedOffers, closedOfferMessage } from '../../utils/recommendationAvailability'
+
+function RecruitmentDetails({ item }) {
+  return <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+    <span className="font-semibold text-emerald-700">Còn {item.conLai ?? '—'} chỗ · Chỉ tiêu: {item.soLuongNhan ?? '—'}</span>
+    <span>Đã tiếp nhận: {item.daTiepNhan ?? '—'}</span>
+    <span>Hạn đăng ký: {item.hanDangKy ? new Date(item.hanDangKy).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : 'Chưa cập nhật'}</span>
+  </div>
+}
 
 export default function GoiYCongTyAIPage() {
   const { maSV: selectedMaSV } = useIdentity()
@@ -24,8 +34,11 @@ export default function GoiYCongTyAIPage() {
   const [editNdHoSo, setEditNdHoSo] = useState(''), [editKyNang, setEditKyNang] = useState('')
   const [editCongNghe, setEditCongNghe] = useState(''), [editDuAn, setEditDuAn] = useState('')
   const [submitting, setSubmitting] = useState(false), [selectedCompany, setSelectedCompany] = useState(null)
-  // Điều kiện đăng ký do backend quyết định (một nguồn duy nhất với trang Đăng ký):
-  // đã trúng tuyển/đang thực tập/đã hoàn thành đạt thì AI chỉ còn là tham khảo, không mở đăng ký.
+  const availability = useRecruitmentAvailability(selectedMaSV, maDot)
+  const refreshAvailability = availability.refresh
+  const [checkingRegistration, setCheckingRegistration] = useState(false)
+  const registrationPending = useRef(false)
+  // Dùng cùng điều kiện với trang đăng ký để khóa nút khi sinh viên không được đăng ký thêm.
   const [dieuKien, setDieuKien] = useState(null)
   const dieuKienKey = useRef('')
   useEffect(() => {
@@ -39,9 +52,9 @@ export default function GoiYCongTyAIPage() {
   }, [selectedMaSV, maDot])
   const dotDangMo = selectedDot?.trangThai === 'DangDienRa'
   const lyDoKhongDangKy = !dotDangMo
-    ? 'Đợt đang chọn không mở đăng ký nguyện vọng; gợi ý chỉ để tham khảo.'
+    ? 'Đợt này chưa mở hoặc đã kết thúc nhận đăng ký.'
     : roundLock.structureBlocked
-      ? 'Đợt đã khóa thay đổi đăng ký; gợi ý chỉ để tham khảo.'
+      ? 'Đợt này đã khóa đăng ký.'
       : dieuKien == null
         ? 'Đang kiểm tra điều kiện đăng ký…'
         : !dieuKien.duocDangKy
@@ -49,9 +62,29 @@ export default function GoiYCongTyAIPage() {
           : null
   const daCoNoiThucTap = Boolean(dieuKien && !dieuKien.duocDangKy && !dieuKien.loiTai)
   const showToast = msg => { setToastMsg(msg); setTimeout(() => setToastMsg(''), 4000) }
-  const dangKyNguyenVong = item => {
-    if (lyDoKhongDangKy || item.maDot !== maDot || data?.maDot !== maDot || loading) return
-    navigate('/sinh-vien/dang-ky', { state: { maCongTy: item.maCongTy, maViTri: item.maViTri, maDot } })
+  const dangKyNguyenVong = async item => {
+    if (lyDoKhongDangKy || item.maDot !== maDot || data?.maDot !== maDot || loading || registrationPending.current) return
+    const key = contextKey
+    registrationPending.current = true
+    setCheckingRegistration(true)
+    try {
+      const [offers, condition] = await Promise.all([availability.refresh(), dangKyThucTapService.getDieuKien(maDot)])
+      if (current.current !== key) return
+      setDieuKien(condition)
+      if (!offers) return
+      if (!currentOffer(item, offers)) {
+        showToast(closedOfferMessage(item))
+        setSelectedCompany(null)
+        return
+      }
+      if (!condition?.duocDangKy) { showToast(condition?.lyDo || 'Hiện chưa đủ điều kiện đăng ký.'); return }
+      navigate('/sinh-vien/dang-ky', { state: { maCongTy: item.maCongTy, maViTri: item.maViTri, maDot } })
+    } catch {
+      if (current.current === key) showToast('Không kiểm tra được điều kiện đăng ký. Vui lòng thử lại.')
+    } finally {
+      registrationPending.current = false
+      setCheckingRegistration(false)
+    }
   }
 
   const loadData = useCallback(async (student, k, recalculate = false) => {
@@ -79,8 +112,13 @@ export default function GoiYCongTyAIPage() {
     return invalidateRequests
   }, [selectedMaSV, topK, loadData, invalidateRequests])
 
+  useEffect(() => {
+    if (data?.maDot === maDot) refreshAvailability()
+  }, [data, maDot, refreshAvailability])
+
   const handleRecalculate = async () => {
-    if (await loadData(selectedMaSV, topK, true)) showToast('Đã cập nhật gợi ý tham khảo từ hồ sơ và JD hiện tại.')
+    const [loaded] = await Promise.all([loadData(selectedMaSV, topK, true), availability.refresh()])
+    if (loaded) showToast('Đã cập nhật danh sách gợi ý.')
   }
   const handleOpenEdit = () => {
     if (!data || data.maDot !== maDot) return
@@ -105,12 +143,19 @@ export default function GoiYCongTyAIPage() {
   }
 
   const sv = data?.sinhVien
-  const topList = data?.topKGoiY || []
+  const topList = refreshRecommendedOffers(data?.topKGoiY || [], availability.offers)
+  const registrationDisabled = Boolean(lyDoKhongDangKy) || loading || checkingRegistration || availability.checking
+    || !availability.offers || Boolean(availability.error)
+  const modalCompany = selectedCompany && refreshRecommendedOffers([selectedCompany], availability.offers)[0]
 
   if (!selectedMaSV) return <NoLinkedAccount type="sinh viên" />
 
   return (
     <div className="space-y-6">
+      {availability.error && <div role="alert" className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+        {availability.error} <button type="button" onClick={availability.refresh} className="underline font-semibold">Thử lại</button>
+      </div>}
+      {selectedCompany && !modalCompany && <div role="status" className="p-3 bg-amber-50 rounded-xl text-sm text-amber-800">{closedOfferMessage(selectedCompany)}</div>}
       {/* Toast thông báo */}
       {toastMsg && (
         <div className="fixed bottom-6 right-6 z-50 bg-emerald-700 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 animate-in fade-in duration-200">
@@ -119,7 +164,7 @@ export default function GoiYCongTyAIPage() {
         </div>
       )}
 
-      {/* 1. Header Trang & Bộ chọn Sinh viên Test nhanh */}
+      {/* Tiêu đề và số lượng gợi ý */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-3">
@@ -129,7 +174,7 @@ export default function GoiYCongTyAIPage() {
             <div>
               <h1 className="text-xl font-bold text-slate-900">Gợi ý doanh nghiệp thực tập phù hợp hồ sơ</h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Đối sánh hồ sơ năng lực và yêu cầu tuyển dụng để hỗ trợ chọn nơi thực tập phù hợp.
+                Tìm nơi thực tập dựa trên kỹ năng, kinh nghiệm và yêu cầu tuyển dụng.
               </p>
             </div>
           </div>
@@ -175,7 +220,7 @@ export default function GoiYCongTyAIPage() {
           Tham khảo các vị trí đã được Khoa phê duyệt, còn chỉ tiêu và phù hợp với hồ sơ năng lực của bạn.
         </p>
         <p className="text-slate-500 m-0 italic">
-          Gợi ý mang tính tham khảo. Sinh viên chủ động lựa chọn nơi thực tập và đăng ký theo quy định của đợt.
+          Bạn có thể tham khảo danh sách này để chọn nơi thực tập và đăng ký trong thời hạn của đợt.
         </p>
       </div>
       {lyDoKhongDangKy && dieuKien != null && (
@@ -183,7 +228,7 @@ export default function GoiYCongTyAIPage() {
           <span className="material-symbols-outlined text-base mt-0.5">{daCoNoiThucTap ? 'verified' : 'info'}</span>
           <div>
             <p className="font-semibold">{lyDoKhongDangKy}</p>
-            <p className="text-xs mt-0.5">Nút “Đăng ký” trên các gợi ý đã được tắt. Danh sách bên dưới (nếu có) chỉ để tham khảo.</p>
+            <p className="text-xs mt-0.5">Bạn vẫn có thể xem thông tin doanh nghiệp nhưng chưa thể đăng ký thêm.</p>
           </div>
         </div>
       )}
@@ -205,7 +250,7 @@ export default function GoiYCongTyAIPage() {
         </div>
       ) : (
         <>
-          {/* 2. Thẻ Thông Tin Hồ Sơ Năng Lực Hiện Tại */}
+          {/* Hồ sơ sinh viên */}
           {sv && (
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
@@ -231,7 +276,7 @@ export default function GoiYCongTyAIPage() {
                 </button>
               </div>
 
-              {/* Chi tiết nội dung hồ sơ vector hóa */}
+              {/* Kỹ năng và công nghệ trong hồ sơ */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                 <div className="p-3.5 bg-slate-50 rounded-xl space-y-1">
                   <p className="text-[11px] font-bold uppercase text-slate-400">Kỹ năng cốt lõi</p>
@@ -249,7 +294,7 @@ export default function GoiYCongTyAIPage() {
                 </div>
               </div>
 
-              {/* Văn bản hồ sơ trích xuất (NDHoSo) */}
+              {/* Mô tả năng lực */}
               <div className="p-3 bg-purple-50/50 rounded-xl border border-purple-100 text-xs text-purple-900 flex items-start gap-2">
                 <span className="material-symbols-outlined text-purple-600 text-base mt-0.5">dataset</span>
                 <div>
@@ -260,7 +305,7 @@ export default function GoiYCongTyAIPage() {
             </div>
           )}
 
-          {/* 3. Danh sách Top-K Gợi ý Doanh Nghiệp */}
+          {/* Danh sách doanh nghiệp được gợi ý */}
           <div className="space-y-4">
             {topList.length > 0 && (
               <div className="flex items-center justify-between">
@@ -272,10 +317,10 @@ export default function GoiYCongTyAIPage() {
                     </span>
                   </h2>
                   <p className="text-xs font-medium text-slate-600 mt-1" role="status">
-                    Gợi ý mức độ phù hợp giữa hồ sơ năng lực và yêu cầu tuyển dụng của doanh nghiệp (dùng tham khảo).
+                    Các doanh nghiệp được sắp xếp theo mức độ phù hợp với hồ sơ của bạn.
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Kết quả đối sánh chuyên môn giữa hồ sơ sinh viên và mô tả công việc (JD). Tỷ lệ hiển thị phản ánh mức độ phù hợp kỹ năng, không phải cam kết tuyển dụng hay xác suất trúng tuyển.
+                    Điểm gợi ý dựa trên thông tin trong hồ sơ và mô tả công việc (JD), không phải xác suất trúng tuyển.
                   </p>
                 </div>
 
@@ -294,10 +339,12 @@ export default function GoiYCongTyAIPage() {
                 <div className="max-w-md mx-auto space-y-2">
                   <h3 className="text-base font-bold text-slate-900">Chưa có doanh nghiệp được gợi ý</h3>
                   <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                    {data?.thongBao || 'Chưa có công ty/JD hợp lệ còn nhận đăng ký trong đợt đang chọn.'}
+                    {availability.offers && data?.topKGoiY?.length > 0
+                      ? 'Các vị trí trong danh sách đã ngừng nhận đăng ký. Bấm Tìm gợi ý mới để cập nhật danh sách.'
+                      : data?.thongBao || 'Chưa có vị trí còn nhận đăng ký trong đợt này.'}
                   </p>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Chỉ hiển thị các vị trí tuyển dụng đã được Khoa phê duyệt kế hoạch, đúng đợt thực tập và còn chỉ tiêu tiếp nhận.
+                    Danh sách gồm các vị trí được Khoa duyệt, còn hạn đăng ký và còn chỗ trong đợt này.
                   </p>
                 </div>
 
@@ -317,7 +364,7 @@ export default function GoiYCongTyAIPage() {
                     className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-sm">sync</span>
-                    <span>Thử tính lại</span>
+                    <span>Tìm gợi ý mới</span>
                   </button>
                 </div>
               </div>
@@ -359,8 +406,10 @@ export default function GoiYCongTyAIPage() {
                           <p className="text-xs text-slate-600 line-clamp-2">
                             <strong>Mô tả JD:</strong> {item.yeuCau || 'Chưa cập nhật chi tiết yêu cầu tuyển dụng.'}
                           </p>
+                          <RecruitmentDetails item={item} />
+                          <p className="text-xs text-slate-500 whitespace-pre-line">Địa chỉ: {item.diaChi || 'Chưa cập nhật địa chỉ'}</p>
 
-                          {/* Explainable AI (XAI) - Kỹ năng trùng khớp */}
+                          {/* Từ khóa kỹ năng có trong hồ sơ và JD */}
                           <div className="flex items-center gap-1.5 flex-wrap pt-1">
                             <span className="text-[11px] font-bold text-slate-400 flex items-center gap-1">
                               <span className="material-symbols-outlined text-sm text-purple-600">auto_awesome</span>
@@ -389,13 +438,13 @@ export default function GoiYCongTyAIPage() {
                                   </span>
                                 ))
                               ) : (
-                                <span className="text-[11px] text-slate-400 italic">Đang đối sánh yêu cầu công việc</span>
+                                <span className="text-[11px] text-slate-400 italic">Chưa có từ khóa kỹ năng trùng khớp</span>
                               );
                             })()}
                           </div>
                         </div>
 
-                        {/* Cột 2: Điểm tương đồng AI */}
+                        {/* Điểm gợi ý */}
                         <div className="flex lg:flex-col items-center lg:items-end justify-between border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-100 gap-2 min-w-[200px]">
                           <RecommendationScore item={item} index={index} total={data?.tongSoCongTyKhaoSat} />
 
@@ -411,7 +460,7 @@ export default function GoiYCongTyAIPage() {
                             <button
                               type="button"
                               onClick={() => dangKyNguyenVong(item)}
-                              disabled={Boolean(lyDoKhongDangKy)}
+                              disabled={registrationDisabled}
                               title={lyDoKhongDangKy || 'Mở form đăng ký nguyện vọng cho doanh nghiệp này'}
                               className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 transition-colors shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-purple-700"
                             >
@@ -429,7 +478,7 @@ export default function GoiYCongTyAIPage() {
         </>
       )}
 
-      {/* MODAL 1: Chỉnh Sửa Hồ Sơ Năng Lực & Tái Huấn Luyện AI */}
+      {/* Chỉnh sửa hồ sơ năng lực */}
       {showEditModal && (
         <ModalOverlay onClose={() => setShowEditModal(false)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
@@ -522,7 +571,7 @@ export default function GoiYCongTyAIPage() {
       )}
 
       {/* MODAL 2: Xem Chi Tiết JD Công Ty */}
-      {selectedCompany && (
+      {modalCompany && (
         <ModalOverlay onClose={() => setSelectedCompany(null)}>
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -566,6 +615,8 @@ export default function GoiYCongTyAIPage() {
                   <strong className="text-slate-800">{selectedCompany.thoiGian || '—'}</strong>
                 </div>
               </div>
+              <RecruitmentDetails item={modalCompany} />
+              <p className="text-xs text-slate-600 whitespace-pre-line">Địa chỉ: {modalCompany.diaChi || 'Chưa cập nhật địa chỉ'}</p>
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
@@ -579,7 +630,7 @@ export default function GoiYCongTyAIPage() {
               <button
                 type="button"
                 onClick={() => dangKyNguyenVong(selectedCompany)}
-                disabled={Boolean(lyDoKhongDangKy)}
+                disabled={registrationDisabled}
                 title={lyDoKhongDangKy || undefined}
                 className="px-4 py-2 text-xs font-bold text-white bg-purple-700 hover:bg-purple-800 rounded-xl shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
               >

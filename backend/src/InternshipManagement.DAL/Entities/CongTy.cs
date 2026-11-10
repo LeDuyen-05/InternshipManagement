@@ -4,6 +4,7 @@ public class CongTy
 {
     public string MaCongTy { get; set; } = default!;
     public string TenCongTy { get; set; } = default!;
+    public string? DiaChi { get; set; }
     public string? ViTriTuyen { get; set; }
     public string? ThoiGian { get; set; }
     public int? SoLuongNhan { get; set; }

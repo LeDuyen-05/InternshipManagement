@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace InternshipManagement.BLL.Services.Recommendation;
 
-// Both API contracts share business eligibility, LTR and the explicit baseline fallback.
+// Hai API gợi ý dùng chung bộ lọc vị trí và cách xếp hạng.
 public class RecommendationService(AppDbContext db, TimeProvider? clock = null, ILtrScorer? scorer = null)
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
@@ -47,7 +47,7 @@ public class RecommendationService(AppDbContext db, TimeProvider? clock = null, 
         var attempt = scorer is null ? new LtrAttempt(null, "Disabled") : await scorer.ScoreAsync(
             new(profileText, student.Gpa is null ? null : (double)student.Gpa.Value), jobs, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        // Inference may take seconds: re-read business data before returning any result.
+        // Kiểm tra lại JD sau khi tính điểm vì hạn và chỉ tiêu có thể vừa thay đổi.
         var latest = (await new Admin.CompanyRoundService(db, _clock).AvailableAsync(maDot))
             .Where(x => !string.IsNullOrWhiteSpace(x.YeuCau)).OrderBy(x => x.MaCongTy, StringComparer.Ordinal).ThenBy(x => x.MaViTri, StringComparer.Ordinal).ToList();
         if (latest.Count == 0) return Empty("Không còn JD hợp lệ nhận đăng ký trong đợt; danh sách vừa được cập nhật.");
@@ -81,7 +81,7 @@ public class RecommendationService(AppDbContext db, TimeProvider? clock = null, 
                 Math.Round(x.Cosine, 6), trained ? null : Math.Round(x.Score * 100, 2), index + 1, x.Offer.YeuCau!, round.MaSo,
                 x.Offer.ViTriTuyen!, x.Offer.SoLuongNhan ?? 0,
                 query.Keys.Intersect(x.Document.Keys).OrderBy(t => t, StringComparer.Ordinal).Take(12).ToList(), x.Offer.MaViTri,
-                trained ? x.Score : null)).ToList();
+                trained ? x.Score : null, x.Offer.DaTiepNhan, x.Offer.ConLai, x.Offer.HanDangKy, x.Offer.DiaChi)).ToList();
         return new(student.MaSV, student.HoTen, student.HoSoNangLuc?.MaHoSo ?? "CHUA_CO_HO_SO", k, ranked, round.MaSo,
             eligibleCompanyCount, ranked.Count == 0 ? "Chưa tìm thấy nội dung hồ sơ khớp với JD đang mở trong đợt. Có thể tìm công ty hoặc liên hệ Khoa hỗ trợ."
                 : trained ? "Gợi ý LambdaMART tham khảo, huấn luyện/đánh giá trên nhãn luật; chưa có đánh giá người chấm độc lập."
@@ -97,7 +97,7 @@ public class RecommendationService(AppDbContext db, TimeProvider? clock = null, 
         Validate(maDot, k);
         if (!await db.SinhViens.AnyAsync(x => x.MaSV == maSV)) throw new KeyNotFoundException("Không tìm thấy sinh viên.");
         if (!await db.DotThucTaps.AnyAsync(x => x.MaSo == maDot)) throw new KeyNotFoundException("Không tìm thấy đợt thực tập.");
-        // Không dùng phân bổ/nguyện vọng hiện tại làm nhãn test hoặc trả NDCG giả cho web.
+        // NDCG được đánh giá trên bộ dữ liệu riêng, không tính từ đăng ký hiện tại.
         return new(k);
     }
 

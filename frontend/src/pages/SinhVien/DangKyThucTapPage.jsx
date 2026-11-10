@@ -729,6 +729,7 @@ export default function DangKyThucTapPage() {
                       <h3 className="font-bold text-slate-900 text-base leading-snug line-clamp-1 group-hover:text-blue-700 transition-colors m-0">
                         {c.tenCongTy}
                       </h3>
+                      <p className="text-xs text-slate-500 mt-1 whitespace-pre-line">Địa chỉ: {c.diaChi || 'Chưa cập nhật địa chỉ'}</p>
                       <div className="text-xs font-semibold text-blue-700 mt-1 flex items-center gap-1.5">
                         <span className="material-symbols-outlined text-[16px]">work</span>
                         <span>{c.viTriTuyen || 'Thực tập sinh'}</span>
@@ -996,6 +997,7 @@ export default function DangKyThucTapPage() {
                   Doanh nghiệp tiếp nhận
                 </div>
                 <div className="text-base font-bold text-slate-900 mt-1">{selectedCompany.tenCongTy}</div>
+                <p className="text-xs text-slate-500 whitespace-pre-line">Địa chỉ: {selectedCompany.diaChi || 'Chưa cập nhật địa chỉ'}</p>
                 <div className="text-xs text-slate-600 mt-0.5">
                   Vị trí: <span className="font-semibold text-blue-700">{selectedCompany.viTriTuyen}</span>
                 </div>

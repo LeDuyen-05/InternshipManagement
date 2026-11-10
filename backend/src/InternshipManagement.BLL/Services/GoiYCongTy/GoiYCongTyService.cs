@@ -18,7 +18,7 @@ public class GoiYCongTyService(IGoiYCongTyRepository repository, RecommendationS
             MaDot = ranked.MaDot, K = ranked.K, ModelStatus = ranked.ModelStatus,
             ModelVersion = ranked.ModelVersion, FallbackReason = ranked.FallbackReason,
             DaSuDungModelTrain = ranked.DaSuDungModelTrain, ThongBao = ranked.ThongBao, YNghiaDiem = ranked.YNghiaDiem,
-            ThuatToan = ranked.ThuatToan, NguonDuLieu = "Hồ sơ hiện hành và kế hoạch/JD của đúng DN–đợt, tính trực tiếp",
+            ThuatToan = ranked.ThuatToan, NguonDuLieu = "Hồ sơ sinh viên và JD trong đợt đang chọn",
             TongSoCongTyKhaoSat = ranked.TongCongTyHopLe,
             SinhVien = new()
             {
@@ -31,6 +31,8 @@ public class GoiYCongTyService(IGoiYCongTyRepository repository, RecommendationS
             {
                 MaCongTy = x.MaCongTy, MaViTri = x.MaViTri, MaDot = x.MaDot, TenCongTy = x.TenCongTy, ViTriTuyen = x.ViTriTuyen,
                 ThoiGian = "Theo đợt " + ranked.MaDot, SoLuongNhan = x.SoLuongNhan, YeuCau = x.YeuCau,
+                DaTiepNhan = x.DaTiepNhan, ConLai = x.ConLai, HanDangKy = x.HanDangKy,
+                DiaChi = x.DiaChi,
                 TiLeTuongThich = x.TiLeTuongThich, RankingScore = x.RankingScore, NgayGoiY = (clock ?? TimeProvider.System).GetUtcNow().ToOffset(TimeSpan.FromHours(7)).DateTime,
                 KyNangPhuHop = x.TuKhoaTrungKhop.ToList(), DanhGiaDoTuongThich = ranked.DaSuDungModelTrain ? "Thứ hạng tham khảo" : "Tham khảo theo nội dung"
             }).ToList()

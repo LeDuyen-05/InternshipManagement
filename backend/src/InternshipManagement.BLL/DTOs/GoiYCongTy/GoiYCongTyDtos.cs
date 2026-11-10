@@ -6,15 +6,19 @@ public class GoiYCongTyItemDto
     public string? MaViTri { get; set; }
     public string MaCongTy { get; set; } = default!;
     public string TenCongTy { get; set; } = default!;
+    public string? DiaChi { get; set; }
     public string? ViTriTuyen { get; set; }
     public string? ThoiGian { get; set; }
     public int? SoLuongNhan { get; set; }
+    public int DaTiepNhan { get; set; }
+    public int? ConLai { get; set; }
+    public DateTimeOffset? HanDangKy { get; set; }
     public string? YeuCau { get; set; }
-    public double? TiLeTuongThich { get; set; } // Baseline cosine only; null for LTR.
+    public double? TiLeTuongThich { get; set; } // Điểm cosine; để null khi xếp hạng bằng LTR.
     public double? RankingScore { get; set; }
     public DateTime NgayGoiY { get; set; }
     public List<string> KyNangPhuHop { get; set; } = new();
-    public string DanhGiaDoTuongThich { get; set; } = "Phù hợp"; // "Rất phù hợp (Top Match)", "Phù hợp tốt", "Tiềm năng"
+    public string DanhGiaDoTuongThich { get; set; } = "Phù hợp";
 }
 
 public class HoSoSinhVienDto

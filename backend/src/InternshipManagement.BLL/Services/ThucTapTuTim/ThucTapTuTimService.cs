@@ -128,6 +128,7 @@ public class ThucTapTuTimService(AppDbContext db)
                 if (await db.CongTys.AnyAsync(x => x.TenCongTy.Trim().ToLower() == item.TenCongTy.ToLower()))
                     throw new InvalidOperationException("Tên công ty đã tồn tại. Khoa hãy chọn đúng công ty có sẵn hoặc kiểm tra lại hồ sơ.");
                 company = new CongTy { MaCongTy = IdGenerator.New("CT"), TenCongTy = item.TenCongTy,
+                    DiaChi = item.DiaChi,
                     ViTriTuyen = item.ViTri, ThoiGian = $"{item.NgayBatDau:dd/MM/yyyy} - {item.NgayKetThuc:dd/MM/yyyy}",
                     TrangThai = "DaDuyet", MaSVDeXuat = item.MaSV, ChiTiepNhanTuTim = true };
                 db.CongTys.Add(company);
