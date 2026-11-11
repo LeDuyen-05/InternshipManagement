@@ -60,7 +60,10 @@ export const gvHuongDanService = {
 
   // Khoa: Xác nhận lưu kết quả phân công tự động vào Database
   xacNhanPhanCongTuDong: (danhSachPhanCong, maDot) =>
-    apiClient.post(`${API_ROUTES.GV_HUONG_DAN}/khoa/phan-cong/tu-dong-xac-nhan`, { danhSachPhanCong, maDot }),
+    apiClient.post(`${API_ROUTES.GV_HUONG_DAN}/khoa/phan-cong/tu-dong-xac-nhan`, {
+      danhSachPhanCong: danhSachPhanCong.map(item => ({ ...item, maDot: item.maDot || maDot })),
+      maDot,
+    }),
 
   // Khoa: Xuất danh sách phân công ra file Excel (.xlsx) chuẩn HUIT (chỉ 1 sheet DanhSachPhanCong, đã loại bỏ các cột không cần thiết)
   exportExcelPhanCong: async (danhSachPhanCong, danhSachGiangVien, customFileName, customSubTitle, preparedBy) => {

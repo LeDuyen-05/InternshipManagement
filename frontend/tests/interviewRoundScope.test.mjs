@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import { transformSync } from 'esbuild'
+import { formatInterviewMethod } from '../src/utils/interviewMethod.js'
 
 // 04/11/2026: delayed interview responses must not change another round's capacity.
 function harness() {
@@ -15,7 +16,7 @@ function harness() {
   }
   const scope = {
     React: { createElement: (type, props, ...children) => ({ type, props: props || {}, children }) },
-    Date, setInterval: () => 1, clearInterval() {}, setTimeout() {},
+    Date, formatInterviewMethod, setInterval: () => 1, clearInterval() {}, setTimeout() {},
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial; return [slots[i], v => { slots[i] = typeof v === 'function' ? v(slots[i]) : v }] },
     useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial } },
     useMemo: memo,

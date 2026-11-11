@@ -6,9 +6,9 @@ import { recruitmentStatusLabel } from '../../utils/recruitmentStatus'
 
 // Trạng thái hợp tác do Khoa phê duyệt (CONGTY.trangThai)
 const HOP_TAC = {
-  DaDuyet: { label: 'Đối tác đã được Nhà trường phê duyệt', icon: 'verified', cls: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30' },
-  ChoDuyet: { label: 'Đang chờ Nhà trường thẩm định', icon: 'hourglass_top', cls: 'bg-amber-500/20 text-amber-100 border-amber-400/30' },
-  TuChoi: { label: 'Nhà trường chưa chấp thuận hợp tác', icon: 'block', cls: 'bg-rose-500/20 text-rose-100 border-rose-400/30' },
+  DaDuyet: { label: 'Khoa đã duyệt doanh nghiệp', icon: 'verified', cls: 'bg-emerald-500/20 text-emerald-100 border-emerald-400/30' },
+  ChoDuyet: { label: 'Chờ Khoa duyệt', icon: 'hourglass_top', cls: 'bg-amber-500/20 text-amber-100 border-amber-400/30' },
+  TuChoi: { label: 'Khoa chưa chấp thuận hợp tác', icon: 'block', cls: 'bg-rose-500/20 text-rose-100 border-rose-400/30' },
   DongBang: { label: 'Tạm ngưng hợp tác', icon: 'pause_circle', cls: 'bg-slate-500/20 text-slate-100 border-slate-400/30' },
 }
 
@@ -49,7 +49,7 @@ export default function EnterpriseDashboardPage() {
   const trangThaiCongTy = data?.congTy?.trangThai || activeCompany?.trangThai
   const hopTac = HOP_TAC[trangThaiCongTy] || HOP_TAC.ChoDuyet
 
-  // Tính toán trạng thái các bước quy trình dựa trên dữ liệu thật từ DB
+  // Trạng thái tiếp nhận của doanh nghiệp trong đợt.
   const step1Done = thongKe.soViTriTuyen > 0
   const step2Active = thongKe.soChoDuyet > 0
   const step2Done = thongKe.soUngVien > 0 && thongKe.soChoDuyet === 0
@@ -57,11 +57,11 @@ export default function EnterpriseDashboardPage() {
   const step4Active = thongKe.soThucTapSinh > 0
 
   const stageLabel = (() => {
-    if (step4Active) return 'Giai đoạn 3: Thực tập & Đánh giá'
-    if (step3Active) return 'Giai đoạn 2: Phỏng vấn ứng viên'
-    if (step2Active || thongKe.soUngVien > 0) return 'Giai đoạn 2: Sàng lọc hồ sơ'
-    if (step1Done) return 'Giai đoạn 1: Đã đăng tin tuyển'
-    return 'Giai đoạn 1: Chuẩn bị tuyển dụng'
+    if (step4Active) return 'Đã tiếp nhận thực tập sinh'
+    if (step3Active) return 'Đã có lịch phỏng vấn'
+    if (step2Active || thongKe.soUngVien > 0) return 'Xử lý hồ sơ ứng tuyển'
+    if (step1Done) return 'Đã có tin tuyển dụng'
+    return 'Chưa có tin tuyển dụng'
   })()
 
   return (
@@ -83,7 +83,7 @@ export default function EnterpriseDashboardPage() {
                 {activeCompany?.tenCongTy || 'Doanh Nghiệp Tuyển Dụng'}
               </h1>
               <p className="text-sm text-indigo-200/90 mt-1 max-w-2xl">
-                Cổng tiếp nhận và quản lý công tác thực tập tốt nghiệp: Đăng tin tuyển dụng, sàng lọc hồ sơ CV, tổ chức phỏng vấn và đánh giá kết quả thực tập sinh.
+                Quản lý tin tuyển dụng, hồ sơ ứng viên, lịch phỏng vấn và đánh giá sinh viên.
               </p>
             </div>
 
@@ -130,7 +130,7 @@ export default function EnterpriseDashboardPage() {
         </div>
       )}
 
-      {/* 2. 4 Thẻ KPI Bento Grid */}
+      {/* Thống kê trong đợt */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {/* KPI 1 */}
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs hover:border-indigo-300 transition-all">
@@ -206,7 +206,7 @@ export default function EnterpriseDashboardPage() {
         <div className="lg:col-span-2 rounded-2xl bg-white p-6 border border-slate-200 shadow-xs">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-base font-bold text-slate-800">Quy trình Hợp tác & Tuyển dụng Thực tập</h2>
+              <h2 className="text-base font-bold text-slate-800">Các bước tiếp nhận thực tập sinh</h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {chiTieu?.tenDot ? `Tiến độ ${chiTieu.tenDot}` : 'Chưa có đợt thực tập đang diễn ra'}
               </p>
@@ -259,7 +259,7 @@ export default function EnterpriseDashboardPage() {
                 }`}>
                   {step2Done ? '✓' : '2'}
                 </div>
-                <div className="font-bold text-xs text-slate-900">2. Sàng lọc hồ sơ</div>
+                <div className="font-bold text-xs text-slate-900">2. Duyệt hồ sơ</div>
                 <p className="text-[11px] text-slate-500 mt-1">
                   {step2Active
                     ? `${thongKe.soChoDuyet} hồ sơ chờ duyệt`
@@ -379,8 +379,8 @@ export default function EnterpriseDashboardPage() {
         {/* Cột phải: Lối tắt 4 phân hệ */}
         <div className="rounded-2xl bg-white p-6 border border-slate-200 shadow-xs flex flex-col justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-800 mb-1">Lối tắt Quản trị Doanh nghiệp</h2>
-            <p className="text-xs text-slate-500 mb-4">Truy cập nhanh các nghiệp vụ tuyển dụng và đánh giá</p>
+            <h2 className="text-base font-bold text-slate-800 mb-1">Truy cập nhanh</h2>
+            <p className="text-xs text-slate-500 mb-4">Tin tuyển dụng, ứng viên, phỏng vấn và đánh giá.</p>
 
             <div className="space-y-3">
               <Link

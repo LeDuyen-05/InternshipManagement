@@ -12,9 +12,10 @@ import { BAO_CAO, PHAN_BO } from '../../utils/trangThai'
 import { Link } from 'react-router-dom'
 import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
 import { submissionBlock, revisionDeadline } from '../../utils/reportDeadline'
+import { studentReportPeriod, academicReportEntries, reportWeekLabel } from '../../utils/lecturerDashboard'
 
 // Khung báo cáo tuần theo kế hoạch: công việc – kết quả – khó khăn – minh chứng
-const MAU_BAO_CAO = `1. Công việc đã thực hiện trong tuần:
+const MAU_BAO_CAO = `1. Công việc đã thực hiện trong 2 tuần:
 -
 
 2. Kết quả đạt được:
@@ -33,8 +34,8 @@ export default function NopTienDoSVPage() {
   const { selectedDot, roundLock } = useDotThucTap()
 
   const [reports, setReports] = useState([])
-  const pagination = usePagination(reports, JSON.stringify([maSV, selectedDot?.maDot]))
   const [placement, setPlacement] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
   const [loading, setLoading] = useState(true)
   const [openSlotId, setOpenSlotId] = useState(null)
   const [toast, setToast] = useState(null)
@@ -49,6 +50,10 @@ export default function NopTienDoSVPage() {
   const contextKey = `${maSV}|${maDot}`
   const currentContext = useRef(contextKey)
   currentContext.current = contextKey
+  const reportPeriod = studentReportPeriod(placement, selectedDot)
+  const reportEntries = academicReportEntries(reports, reportPeriod)
+  const historicalIds = new Set(reportEntries.history.map(report => report.maTienDo))
+  const pagination = usePagination(showHistory ? reports : reportEntries.current, JSON.stringify([maSV, maDot, showHistory]))
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type })
@@ -105,6 +110,7 @@ export default function NopTienDoSVPage() {
 
   // Mở modal nộp / sửa báo cáo
   const handleOpenSubmitModal = (slot) => {
+    if (historicalIds.has(slot.maTienDo)) return
     if (roundLock.blocked) return showToast('Đợt đã khóa hoặc chưa xác minh trạng thái khóa.', 'error')
     if (lyDoChuaNop || loading) return
     const block = submissionBlock(slot)
@@ -153,11 +159,11 @@ export default function NopTienDoSVPage() {
   }
 
   // Thống kê tiến độ
-  const totalSlots = reports.length
-  const approvedCount = reports.filter((r) => r.trangThaiDuyet === 'DaDuyet').length
-  const pendingCount = reports.filter((r) => r.trangThaiDuyet === 'DaNop').length
-  const needEditCount = reports.filter((r) => r.trangThaiDuyet === 'YeuCauSua').length
-  const submittedCount = reports.filter((r) => r.trangThaiDuyet !== 'ChuaNop').length
+  const totalSlots = reportEntries.current.length
+  const approvedCount = reportEntries.current.filter((r) => r.trangThaiDuyet === 'DaDuyet').length
+  const pendingCount = reportEntries.current.filter((r) => r.trangThaiDuyet === 'DaNop').length
+  const needEditCount = reportEntries.current.filter((r) => r.trangThaiDuyet === 'YeuCauSua').length
+  const submittedCount = reportEntries.current.filter((r) => r.trangThaiDuyet !== 'ChuaNop').length
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -217,7 +223,7 @@ export default function NopTienDoSVPage() {
             </span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-            Theo dõi Tiến độ & Nộp Báo cáo Tuần
+            Báo cáo thực tập · 2 tuần/lần
           </h1>
           <p className="text-sm text-slate-500 mt-0.5">
             Cập nhật kết quả làm việc định kỳ hàng tuần, nhận đánh giá phản hồi từ Giảng viên hướng dẫn.
@@ -314,7 +320,7 @@ export default function NopTienDoSVPage() {
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-blue-700 text-[22px]">view_timeline</span>
             <h2 className="text-base font-bold text-slate-900">
-              Lộ trình Báo cáo ({totalSlots} Mốc báo cáo)
+              Lịch báo cáo ({totalSlots}/6 kỳ · 12 tuần)
             </h2>
           </div>
           <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -333,6 +339,7 @@ export default function NopTienDoSVPage() {
           </div>
         </div>
 
+        {reportEntries.history.length > 0 && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHistory} onChange={event => setShowHistory(event.target.checked)} />Xem thêm {reportEntries.history.length} báo cáo lịch sử (chỉ xem)</label>}
         {loading ? (
           <div className="flex flex-col items-center justify-center p-16 bg-white rounded-xl border border-slate-200">
             <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -351,10 +358,10 @@ export default function NopTienDoSVPage() {
         ) : (
           <div className="flex flex-col gap-3">
 
-            {pagination.items.map((rep, idx) => {
+            {pagination.items.map((rep) => {
               const isOpen = openSlotId === rep.maTienDo
               const canSubmitOrEdit =
-                !roundLock.blocked && !lyDoChuaNop && !submissionBlock(rep) && !rep.maPhanBoLuuTru && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
+                !roundLock.blocked && !lyDoChuaNop && !submissionBlock(rep) && !historicalIds.has(rep.maTienDo) && (rep.trangThaiDuyet === 'ChuaNop' || rep.trangThaiDuyet === 'YeuCauSua')
 
               let statusIcon = 'pending'
               let iconColor = 'bg-slate-100 text-slate-500'
@@ -388,7 +395,7 @@ export default function NopTienDoSVPage() {
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">Tuần {pagination.start + idx}</span>
+                          <span className="font-bold text-sm text-slate-900">{reportWeekLabel(rep, reportPeriod)}{historicalIds.has(rep.maTienDo) ? ' · Lịch sử' : ''}</span>
                           {getStatusBadge(rep.trangThaiDuyet)}
                           {rep.maPhanBoLuuTru && <span className="hint">Lịch sử trước khi đổi nơi — chỉ xem</span>}
                           {nopTre(rep) && (
@@ -481,7 +488,7 @@ export default function NopTienDoSVPage() {
                               className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-blue-700 hover:bg-blue-800 text-white shadow-xs transition-colors"
                             >
                               <span className="material-symbols-outlined text-[16px]">post_add</span>
-                              Nộp báo cáo tuần {pagination.start + idx}
+                              Nộp báo cáo {reportWeekLabel(rep, reportPeriod).toLocaleLowerCase('vi')}
                             </button>
                           )}
                         </div>

@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const AuthPage = lazy(() => import('../pages/Auth/AuthPage.jsx'))
@@ -72,6 +72,11 @@ function RootRedirect() {
   return <Navigate to="/dashboard" replace />
 }
 
+function LegacyFacultyGradingRoute() {
+  const { search } = useLocation()
+  return <Navigate to={`/giang-vien/cham-diem${search}`} replace />
+}
+
 export default function AppRoutes() {
   return (
     <Suspense fallback={<div role="status" aria-live="polite" className="p-6 text-slate-600">Đang tải trang…</div>}>
@@ -124,6 +129,7 @@ export default function AppRoutes() {
         <Route path="/khoa/han-bao-cao" element={<Guard roles={['VT02']}><KhoaDeadlinesPage /></Guard>} />
         <Route path="/khoa/thong-ke" element={<Navigate to="/khoa/thong-ke-clo" replace />} />
         <Route path="/khoa/thong-ke-clo" element={<Guard roles={['VT02']}><ThongKeCLOPage /></Guard>} />
+        <Route path="/khoa/cham-diem" element={<Guard roles={['VT02']}><LegacyFacultyGradingRoute /></Guard>} />
         <Route path="/khoa/bao-cao-tien-do" element={<Guard roles={['VT02']}><ThongKeBaoCaoPage /></Guard>} />
         <Route path="/khoa/hoi-dong" element={<Guard roles={['VT02']}><KhoaCommitteePage /></Guard>} />
         <Route path="/khoa/tieu-chi" element={<Guard roles={['VT02']}><KhoaCriteriaPage /></Guard>} />

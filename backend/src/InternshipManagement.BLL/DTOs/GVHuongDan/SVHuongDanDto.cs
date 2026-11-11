@@ -14,6 +14,8 @@ public class SVHuongDanDto
     public string? ChuyenNganh { get; set; }
     public decimal? Gpa { get; set; }
     public string? TenCongTy { get; set; }
+    public DateTime? NgayBatDauThucTap { get; set; }
+    public DateTime? NgayKetThucThucTap { get; set; }
     public DateTime NgayPC { get; set; }
     public string TrangThai { get; set; } = "DangHuongDan";
 }

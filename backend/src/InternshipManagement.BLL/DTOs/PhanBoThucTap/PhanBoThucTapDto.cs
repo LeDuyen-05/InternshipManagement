@@ -19,6 +19,8 @@ public class PhanBoThucTapDto
     public DateTimeOffset? HanXacNhanSV { get; set; }
     public bool QuaHanXacNhan { get; set; }
     public DateTime? NgayKhoaDuyet { get; set; }
+    public DateTime? NgayBatDauThucTap { get; set; }
+    public DateTime? NgayKetThucThucTap { get; set; }
 
     // Thông tin GVHD
     public string? GiangVienHD { get; set; }

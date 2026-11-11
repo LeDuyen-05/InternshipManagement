@@ -142,14 +142,14 @@ export default function QuanLyUngVienPage() {
       {/* Header Page */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Quản lý Ứng Viên & Sàng Lọc CV</h1>
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Duyệt hồ sơ ứng viên</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Đánh giá năng lực hồ sơ, kỹ năng chuyên môn và duyệt sinh viên ứng tuyển vào vị trí thực tập
+            Xem CV, kỹ năng và kinh nghiệm của sinh viên trước khi duyệt hồ sơ.
           </p>
         </div>
       </div>
 
-      {/* 4 Bento Metrics */}
+      {/* Thống kê hồ sơ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng ứng viên nộp</div>
@@ -471,7 +471,7 @@ export default function QuanLyUngVienPage() {
                     <span className="material-symbols-outlined text-[22px]">picture_as_pdf</span>
                   </div>
                   <div>
-                    <div className="font-bold text-slate-800 text-xs">File CV Năng lực Sinh viên</div>
+                    <div className="font-bold text-slate-800 text-xs">CV của sinh viên</div>
                     <div className="text-[11px] text-indigo-700 truncate max-w-[280px]">
                       {selectedCandidate.fileCV || 'Chưa đính kèm đường dẫn CV'}
                     </div>

@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import DanhSachDieuChinhGVHDPanel from '../../components/khoa/DanhSachDieuChinhGVHDPanel'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
-import { summarizeAssignmentResult } from '../../utils/phanCongResult'
+import { summarizeAssignmentResult, assignmentErrorMessage } from '../../utils/phanCongResult'
 import { useDotThucTap } from '../../contexts/DotThucTapContext'
 import apiClient from '../../services/api'
 
@@ -337,7 +337,7 @@ export default function PhanCongGVHDPage() {
       setSelectedGvList([])
       await loadData({ preserveFeedback: true })
     } catch (err) {
-      toast.error('Lỗi khi lưu kết quả chia đều: ' + (err.response?.data?.message || err.message))
+      if (roundRef.current === maDot) toast.error('Không lưu được danh sách phân công: ' + assignmentErrorMessage(err))
     } finally {
       setSavingBatchSplit(false)
     }
@@ -426,7 +426,7 @@ export default function PhanCongGVHDPage() {
       setShowAutoModal(false)
       await loadData({ preserveFeedback: true })
     } catch (err) {
-      toast.error('Lỗi khi lưu phân công tự động: ' + (err.response?.data?.message || err.message))
+      if (roundRef.current === maDot) toast.error('Không lưu được phân công tự động: ' + assignmentErrorMessage(err))
     } finally {
       setConfirmingAuto(false)
     }

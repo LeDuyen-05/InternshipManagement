@@ -1,3 +1,9 @@
+export function assignmentErrorMessage(error) {
+  const data = error.response?.data
+  const validation = data?.errors && Object.values(data.errors).flat().filter(value => typeof value === 'string').join('; ')
+  return data?.message || data?.detail || validation || error.message || 'Không lưu được phân công. Vui lòng thử lại.'
+}
+
 export function summarizeAssignmentResult(result) {
   if (!Array.isArray(result?.thanhCong) || !Array.isArray(result?.khongThanhCong)) {
     throw new Error('Phản hồi phân công không hợp lệ. Vui lòng tải lại danh sách để kiểm tra kết quả.')

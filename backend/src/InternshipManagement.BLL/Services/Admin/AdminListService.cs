@@ -277,6 +277,10 @@ public sealed class AdminListService(AppDbContext db)
             {
                 x.MaTienDo,
                 x.MaSV,
+                x.MaDot,
+                x.MaPhanBoLuuTru,
+                RoundStart = x.DotThucTap.ThoiGianBD,
+                RoundEnd = x.DotThucTap.ThoiGianKT,
                 HoTen = x.SinhVien.HoTen,
                 Lop = x.SinhVien.Lop,
                 x.MocThoiGian,
@@ -291,7 +295,37 @@ public sealed class AdminListService(AppDbContext db)
         var today = DateTime.Today;
         var nowOffset = DateTimeOffset.Now;
 
-        var grouped = rawSlots
+        var reportStudentIds = rawSlots.Select(x => x.MaSV).Distinct().ToList();
+        var schedules = await db.PhanBoThucTaps.AsNoTracking()
+            .Where(x => reportStudentIds.Contains(x.MaSinhVien) && (maDot == null || x.MaDot == maDot))
+            .Select(x => new { x.MaPhanBo, x.MaSinhVien, x.MaDot, x.TrangThai, x.DaDuocKhoaDuyet,
+                x.NgayPhanBo, x.NgayBatDauThucTap, x.NgayKetThucThucTap })
+            .ToListAsync(ct);
+
+        var periodRows = rawSlots.GroupBy(x => new { x.MaSV, x.MaDot, x.MaPhanBoLuuTru })
+            .SelectMany(g =>
+            {
+                var placement = schedules.Where(p => p.MaSinhVien == g.Key.MaSV && p.MaDot == g.Key.MaDot
+                    && (g.Key.MaPhanBoLuuTru != null ? p.MaPhanBo == g.Key.MaPhanBoLuuTru
+                        : p.TrangThai != "Huy" && p.DaDuocKhoaDuyet))
+                    .OrderByDescending(p => p.NgayPhanBo).FirstOrDefault();
+                var start = (placement?.NgayBatDauThucTap ?? g.First().RoundStart).Date;
+                var deadlines = ReportSchedule.Deadlines(start, placement?.NgayKetThucThucTap ?? g.First().RoundEnd);
+                var periods = g.Where(x => x.MocThoiGian.Date >= start && x.MocThoiGian.Date <= deadlines[^1])
+                    .GroupBy(x => ReportSchedule.Period(x.MocThoiGian, start))
+                    .ToDictionary(p => p.Key, p => p.OrderByDescending(x => x.TrangThaiDuyet != "ChuaNop")
+                        .ThenByDescending(x => x.NgayNop).ThenByDescending(x => x.MocThoiGian).First());
+                // Một kỳ chỉ được tính một lần. Giữ báo cáo ngoài lịch trong lịch sử, không cộng vào tiến độ.
+                return deadlines.Select((due, index) =>
+                {
+                    periods.TryGetValue(index + 1, out var report);
+                    return new { g.First().MaSV, g.First().HoTen, g.First().Lop,
+                        MocThoiGian = report?.MocThoiGian ?? due, report?.NgayNop,
+                        TrangThaiDuyet = report?.TrangThaiDuyet ?? "ChuaNop", report?.HanNopBoSung };
+                });
+            }).ToList();
+
+        var grouped = periodRows
             .GroupBy(x => new { x.MaSV, x.HoTen, x.Lop })
             .Select(g => new
             {
@@ -405,7 +439,7 @@ public sealed class AdminListService(AppDbContext db)
                         studentRows = studentRows.Where(x => x.TinhTrang == f.TrangThai).ToList();
                 }
                 return TabularExport.Xlsx(
-                    ["STT", "Mã SV", "Họ và tên", "Lớp", "Nơi thực tập", "GVHD", "Đã nộp", "Tổng tuần", "Tỷ lệ", "Đã duyệt", "Chờ duyệt", "Cần sửa", "Tình trạng học vụ", "Lần nộp gần nhất"],
+                    ["STT", "Mã SV", "Họ và tên", "Lớp", "Nơi thực tập", "GVHD", "Đã nộp", "Tổng kỳ", "Tỷ lệ", "Đã duyệt", "Chờ duyệt", "Cần sửa", "Tình trạng học vụ", "Lần nộp gần nhất"],
                     studentRows.Select((x, idx) => new object?[] {
                         idx + 1,
                         x.MaSinhVien,

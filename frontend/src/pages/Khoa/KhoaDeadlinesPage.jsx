@@ -35,11 +35,7 @@ export default function KhoaDeadlinesPage() {
   const [generating, setGenerating] = useState(false)
   const pagination = usePagination(deadlines, round)
 
-  const calcRoundWeeks = (bd, kt) => {
-    if (!bd || !kt) return 10
-    const diff = Math.round((new Date(kt) - new Date(bd)) / (7 * 24 * 60 * 60 * 1000))
-    return diff > 0 ? diff : 10
-  }
+  const calcRoundWeeks = () => 12
 
   const handleSelectCreateRound = (selectedId) => {
     setCreateRound(selectedId)
@@ -262,7 +258,7 @@ export default function KhoaDeadlinesPage() {
                   Tạo mốc báo cáo định kỳ cho đợt
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
-                  Khởi tạo các mốc báo cáo tiến độ tuần theo kế hoạch đào tạo của đợt thực tập.
+                  Tạo 6 kỳ báo cáo cho học phần 12 tuần, nộp 2 tuần/lần.
                 </p>
               </div>
 
@@ -298,21 +294,19 @@ export default function KhoaDeadlinesPage() {
 
                 <div className="w-40">
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Số tuần báo cáo <span className="text-rose-500">*</span>
+                    Thời lượng học phần
                   </label>
                   <input
                     type="number"
-                    min="1"
-                    max="24"
+                    min="12"
+                    max="12"
+                    readOnly
                     value={soTuan}
                     onChange={(e) => setSoTuan(e.target.value)}
                     className="w-full px-3.5 py-2 text-xs rounded-xl border border-slate-300 font-semibold text-slate-900 bg-slate-50 focus:bg-white"
                     required
                   />
-                  <p className="text-[11px] text-slate-500 font-medium mt-1">Chuẩn theo đợt: {(() => {
-                    const activeRoundInfo = rounds.find((r) => r.maSo === createRound)
-                    return activeRoundInfo ? `${calcRoundWeeks(activeRoundInfo.thoiGianBD, activeRoundInfo.thoiGianKT)} tuần` : '10 – 12 tuần'
-                  })()}</p>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1">12 tuần · 2 tuần/lần · 6 kỳ báo cáo</p>
                 </div>
 
                 <div className="w-52">
@@ -329,16 +323,17 @@ export default function KhoaDeadlinesPage() {
                   <p className="text-[11px] text-slate-500 font-medium mt-1">
                     {ngayBatDau ? `Bắt đầu: ${formatDateVN(ngayBatDau)}` : 'Chưa chọn'}
                     {ngayBatDau && Number(soTuan) > 0 && (() => {
-                      const d = new Date(ngayBatDau)
-                      d.setDate(d.getDate() + Number(soTuan) * 7)
+                      const d = new Date(`${ngayBatDau}T00:00:00Z`)
+                      d.setUTCDate(d.getUTCDate() + Number(soTuan) * 7 - 1)
+                      const endDate = d.toISOString().slice(0, 10)
                       const activeRoundInfo = rounds.find((r) => r.maSo === createRound)
-                      const isPastRoundEnd = activeRoundInfo?.thoiGianKT && d > new Date(activeRoundInfo.thoiGianKT)
+                      const isPastRoundEnd = activeRoundInfo?.thoiGianKT && endDate > activeRoundInfo.thoiGianKT.slice(0, 10)
                       return (
                         <>
-                          <span>{` → Kết thúc: ${formatDateVN(d.toISOString())}`}</span>
+                          <span>{` → Kết thúc: ${endDate.split('-').reverse().join('/')}`}</span>
                           {isPastRoundEnd && (
                             <span className="block text-rose-500 font-bold mt-0.5">
-                              ⚠️ Vượt quá ngày kết thúc đợt (${formatDateVN(activeRoundInfo.thoiGianKT)})
+                              Vượt quá ngày kết thúc đợt ({formatDateVN(activeRoundInfo.thoiGianKT)})
                             </span>
                           )}
                         </>
@@ -484,7 +479,7 @@ export default function KhoaDeadlinesPage() {
                     {!deadlines.length && (
                       <tr>
                         <td colSpan="8" className="p-6 text-center text-slate-500 italic">
-                          Chưa có mốc báo cáo để quản lý. Khoa có thể dùng form bên trên để tạo mốc tuần cho đợt.
+                          Chưa có mốc báo cáo để quản lý. Khoa có thể dùng form bên trên để tạo 6 kỳ báo cáo.
                         </td>
                       </tr>
                     )}

@@ -46,6 +46,7 @@ function harness(file, component) {
     setRound(value) { round = value }, setMode(value) { mode = value },
     text: () => JSON.stringify(tree),
     chooseRound(value) { nodes(tree).filter(x => x.type === 'select')[1].props.onChange({ target: { value } }) },
+    changeStart(value) { nodes(tree).find(x => x.type === 'input' && x.props.type === 'date').props.onChange({ target: { value } }) },
   }
 }
 function nodes(node) {
@@ -79,4 +80,28 @@ test('faculty deadlines hide previous rows immediately and ignore a late respons
   a.resolve({ data: [{ maDot: 'A_STALE', mocThoiGian: '2029-01-01' }] })
   await tick(); h.render()
   assert.match(h.text(), /B_ONLY/); assert.doesNotMatch(h.text(), /A_STALE/)
+})
+
+test('twelve weeks from 28 September end on 20 December without a false warning', async () => {
+  const h = harness('KhoaDeadlinesPage.jsx', 'KhoaDeadlinesPage')
+  h.render()
+  h.requests.find(x => x.path === '/khoa/dot-thuc-tap').resolve({ data: [{
+    maSo: 'D', tenDot: 'Đợt', trangThai: 'DangDienRa', thoiGianBD: '2026-09-28T00:00:00', thoiGianKT: '2026-12-20T00:00:00+07:00',
+  }] })
+  await tick(); h.render()
+  assert.match(h.text(), /Kết thúc: 20\/12\/2026/)
+  assert.doesNotMatch(h.text(), /Vượt quá ngày kết thúc đợt/)
+})
+
+test('warning appears only when the twelve-week end date actually exceeds the round date', async () => {
+  const h = harness('KhoaDeadlinesPage.jsx', 'KhoaDeadlinesPage')
+  h.render()
+  h.requests.find(x => x.path === '/khoa/dot-thuc-tap').resolve({ data: [{
+    maSo: 'D', tenDot: 'Đợt', trangThai: 'DangDienRa', thoiGianBD: '2026-09-28T00:00:00', thoiGianKT: '2026-12-20T00:00:00',
+  }] })
+  await tick(); h.render()
+  h.changeStart('2026-09-29'); h.render()
+  assert.match(h.text(), /Kết thúc: 21\/12\/2026/)
+  assert.match(h.text(), /Vượt quá ngày kết thúc đợt/)
+  assert.doesNotMatch(h.text(), /\(\$/)
 })

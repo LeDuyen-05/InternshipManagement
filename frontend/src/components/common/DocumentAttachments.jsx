@@ -51,7 +51,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
       const params = { kind, resourceId }
       const [list, p] = await Promise.all([
         apiClient.get('/documents', { params }),
-        apiClient.get('/documents/permission', { params }),
+        readOnly ? Promise.resolve({ data: null }) : apiClient.get('/documents/permission', { params }),
       ])
       if (current.current !== key || request !== version.current) return
       setRows(list.data)
@@ -66,7 +66,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
     } finally {
       if (current.current === key && request === version.current) setLoading(false)
     }
-  }, [kind, resourceId, key])
+  }, [kind, resourceId, key, readOnly])
 
   useEffect(() => {
     operation.current++
@@ -255,7 +255,7 @@ export default function DocumentAttachments({ kind, resourceId, readOnly = false
       )}
 
       {/* Thông báo lý do permission */}
-      {permission?.reason && (
+      {!readOnly && permission?.reason && (
         <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 text-xs text-slate-500 flex items-center gap-2">
           <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />

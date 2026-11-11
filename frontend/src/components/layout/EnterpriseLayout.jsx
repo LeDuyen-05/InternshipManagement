@@ -70,7 +70,7 @@ export default function EnterpriseLayout() {
 
   return (
     <EnterpriseContext.Provider value={{ activeCompany: company, setActiveCompany: handleSelectCompany, updateChiTieu, maDot, loading: loading || !ready }}>
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
+      <div className="min-h-screen bg-slate-50 font-portal antialiased text-slate-900">
         <ResponsiveNavigation><EnterpriseSidebar activeCompany={company} /></ResponsiveNavigation>
         <div className="lg:pl-64 flex flex-col min-h-screen">
           <EnterpriseHeader activeCompany={company} onSelectCompany={handleSelectCompany} />

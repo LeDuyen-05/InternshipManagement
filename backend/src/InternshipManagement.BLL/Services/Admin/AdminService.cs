@@ -1,4 +1,5 @@
 using InternshipManagement.BLL.DTOs.Admin;
+using InternshipManagement.BLL.Common;
 using System.Data;
 using System.Security.Cryptography;
 using InternshipManagement.DAL;
@@ -746,45 +747,44 @@ public class AdminService
         if (string.IsNullOrWhiteSpace(request.MaDot))
             throw new ArgumentException("Mã đợt thực tập không được để trống.");
 
-        if (request.SoTuan is < 1 or > 104)
-            throw new ArgumentException("Số tuần phải từ 1 đến 104.");
+        if (request.SoTuan != ReportSchedule.TotalWeeks)
+            throw new ArgumentException("Lịch báo cáo gồm 12 tuần, nộp 2 tuần/lần (6 kỳ).");
         await using var tx = _db.Database.IsRelational() ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable) : null;
         await _db.LockRoundsAsync([request.MaDot]);
         var round = await _db.DotThucTaps.AsNoTracking().SingleOrDefaultAsync(x => x.MaSo == request.MaDot)
             ?? throw new KeyNotFoundException($"Không tìm thấy đợt thực tập {request.MaDot}.");
 
         var startDate = request.NgayBatDau ?? round.ThoiGianBD;
-        var weeks = request.SoTuan;
         if (startDate.Date < round.ThoiGianBD.Date || startDate.Date > round.ThoiGianKT.Date)
             throw new ArgumentException("Ngày bắt đầu tạo mốc phải thuộc thời gian thực tập của đợt.");
 
         var assignedStudents = await _db.PhanBoThucTaps
             .AsNoTracking()
             .Where(p => p.MaDot == request.MaDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet)
-            .Select(p => p.MaSinhVien)
+            .OrderByDescending(p => p.NgayPhanBo).ThenBy(p => p.MaPhanBo)
+            .Select(p => new { p.MaSinhVien, p.NgayBatDauThucTap, p.NgayKetThucThucTap })
             .ToListAsync();
 
-        var studentIds = assignedStudents.Distinct().ToList();
-        if (studentIds.Count == 0) return 0;
+        var placements = assignedStudents.GroupBy(p => p.MaSinhVien).Select(g => g.First()).ToList();
+        if (placements.Count == 0) return 0;
 
         var existingSlots = await _db.TienDoThucTaps
             .AsNoTracking()
-            .Where(t => t.MaDot == request.MaDot)
+            .Where(t => t.MaDot == request.MaDot && t.MaPhanBoLuuTru == null)
             .Select(t => new { t.MaSV, t.MocThoiGian })
             .ToListAsync();
 
-        var existingSet = new HashSet<(string MaSV, DateTime Moc)>(
-            existingSlots.Select(x => (x.MaSV, x.MocThoiGian.Date))
-        );
-
         int createdCount = 0;
-        foreach (var svId in studentIds)
+        foreach (var placement in placements)
         {
-            for (int k = 1; k <= weeks; k++)
+            var svId = placement.MaSinhVien;
+            var studentStart = placement.NgayBatDauThucTap ?? startDate;
+            var dates = ReportSchedule.Deadlines(studentStart, placement.NgayKetThucThucTap ?? round.ThoiGianKT);
+            for (int k = 0; k < dates.Count; k++)
             {
-                var moc = startDate.Date.AddDays(7 * k);
-                if (moc > round.ThoiGianKT.Date) break;
-                if (existingSet.Contains((svId, moc.Date)))
+                var moc = dates[k];
+                if (existingSlots.Any(x => x.MaSV == svId && x.MocThoiGian.Date >= studentStart.Date
+                    && x.MocThoiGian.Date <= dates[^1] && ReportSchedule.Period(x.MocThoiGian, studentStart) == k + 1))
                     continue;
 
                 _db.TienDoThucTaps.Add(new InternshipManagement.DAL.Entities.TienDoThucTap
@@ -795,7 +795,6 @@ public class AdminService
                     MocThoiGian = moc,
                     TrangThaiDuyet = "ChuaNop"
                 });
-                existingSet.Add((svId, moc.Date));
                 createdCount++;
             }
         }

@@ -525,7 +525,7 @@ export default function KhoaOperationsPage({ mode }) {
                 <div className="bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-1.5 overflow-x-auto" role="tablist" aria-label="Chế độ theo dõi tiến độ">
                   {[
                     { id: 'summary', label: '1. Tổng hợp theo Sinh viên', icon: 'groups', badge: summary.chamTienDo > 0 ? `${summary.chamTienDo} chậm nộp` : null, badgeClass: 'bg-rose-100 text-rose-800' },
-                    { id: 'detail', label: '2. Chi tiết từng bài báo cáo tuần', icon: 'view_list', badge: (summary.baoCaoChoDuyet || summary.pending) > 0 ? `${summary.baoCaoChoDuyet || summary.pending} chờ duyệt` : null, badgeClass: 'bg-amber-100 text-amber-800' },
+                    { id: 'detail', label: '2. Chi tiết báo cáo', icon: 'view_list', badge: (summary.baoCaoChoDuyet || summary.pending) > 0 ? `${summary.baoCaoChoDuyet || summary.pending} chờ duyệt` : null, badgeClass: 'bg-amber-100 text-amber-800' },
                   ].map((tab) => {
                     const active = progressTab === tab.id
                     return (
@@ -621,7 +621,7 @@ export default function KhoaOperationsPage({ mode }) {
                         ? 'Danh sách nguyện vọng đăng ký trên hệ thống'
                         : progressTab === 'summary'
                         ? 'Bảng tổng hợp tiến độ thực tập sinh viên'
-                        : 'Danh sách chi tiết bài báo cáo tuần'}
+                        : 'Danh sách chi tiết báo cáo'}
                     </h3>
                     <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                       {totalItems} {isRegistration ? 'nguyện vọng' : progressTab === 'summary' ? 'sinh viên' : 'báo cáo'}
@@ -811,7 +811,7 @@ export default function KhoaOperationsPage({ mode }) {
                             <th className="py-3 px-4 w-24">Lớp</th>
                             <th className="py-3 px-4 min-w-[170px]">Nơi thực tập</th>
                             <th className="py-3 px-4 min-w-[150px]">GVHD</th>
-                            <th className="py-3 px-4 text-center w-28" title="Số tuần đã nộp / Tổng số tuần báo cáo trong đợt">Số tuần nộp</th>
+                            <th className="py-3 px-4 text-center w-28" title="Số kỳ đã nộp / Tổng số kỳ báo cáo">Kỳ đã nộp</th>
                             <th className="py-3 px-4 w-36">Tiến độ</th>
                             <th className="py-3 px-4 text-center min-w-[140px]">Tình trạng học vụ</th>
                             <th className="py-3 px-4 text-right w-36">Thao tác</th>
@@ -949,9 +949,9 @@ export default function KhoaOperationsPage({ mode }) {
                               <td className="py-3.5 px-4 text-center">
                                 <span
                                   className="inline-flex items-center px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200"
-                                  title={`Đã nộp ${r.soTuanDaNop} bài trên tổng số ${r.tongSoTuan} tuần báo cáo`}
+                                  title={`Đã nộp ${r.soTuanDaNop} trên tổng số ${r.tongSoTuan} kỳ báo cáo`}
                                 >
-                                  {r.soTuanDaNop} / {r.tongSoTuan} tuần
+                                  {r.soTuanDaNop} / {r.tongSoTuan} kỳ
                                 </span>
                               </td>
                               <td className="py-3.5 px-4">
@@ -983,10 +983,10 @@ export default function KhoaOperationsPage({ mode }) {
                                 {r.tinhTrang === 'ChamTienDo' && (
                                   <span
                                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200"
-                                    title={`Có ${r.soTuanQuaHan} tuần quá hạn chưa nộp bài`}
+                                    title={`Có ${r.soTuanQuaHan} kỳ quá hạn chưa nộp bài`}
                                   >
                                     <span className="material-symbols-outlined text-[14px]">warning</span>
-                                    Chậm {r.soTuanQuaHan} tuần
+                                    Quá hạn {r.soTuanQuaHan} kỳ
                                   </span>
                                 )}
                                 {r.tinhTrang === 'DangThucHien' && (
@@ -1012,7 +1012,7 @@ export default function KhoaOperationsPage({ mode }) {
                                     type="button"
                                     onClick={() => openStudentDetail(r)}
                                     className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold transition border border-blue-200 cursor-pointer shadow-xs"
-                                    title="Xem lịch sử nộp báo cáo từng tuần của sinh viên này"
+                                    title="Xem lịch sử nộp báo cáo của sinh viên này"
                                   >
                                     <span className="material-symbols-outlined text-[15px]">visibility</span>
                                     <span>Xem chi tiết</span>
@@ -1151,8 +1151,8 @@ export default function KhoaOperationsPage({ mode }) {
                 {/* KPI Mini Row */}
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                   <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase">Tổng số tuần</p>
-                    <p className="text-base font-black text-slate-800">{detailStudent.tongSoTuan} tuần</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase">Tổng số kỳ</p>
+                    <p className="text-base font-black text-slate-800">{detailStudent.tongSoTuan} kỳ</p>
                   </div>
                   <div className="bg-blue-50 p-2.5 rounded-xl border border-blue-200 text-center">
                     <p className="text-[10px] font-bold text-blue-600 uppercase">Đã nộp bài</p>
@@ -1172,22 +1172,23 @@ export default function KhoaOperationsPage({ mode }) {
                   </div>
                 </div>
 
-                {/* Weekly Reports Table */}
+                <p className="text-xs text-slate-500">Tiến độ tính theo kỳ 2 tuần trong lịch thực tập đã xác nhận. Lịch sử bên dưới giữ cả báo cáo cũ, ngoài lịch và trùng kỳ.</p>
+                {/* Report history */}
                 {loadingDetails ? (
                   <div className="py-12 text-center text-slate-400">
                     <div className="inline-block animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mb-2"></div>
-                    <p className="text-xs">Đang tải lịch sử báo cáo các tuần…</p>
+                    <p className="text-xs">Đang tải lịch sử báo cáo…</p>
                   </div>
                 ) : detailReports.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 text-xs">
-                    Chưa có dữ liệu báo cáo tuần cho sinh viên này.
+                    Chưa có báo cáo của sinh viên này.
                   </div>
                 ) : (
                   <div className="border border-slate-200 rounded-xl overflow-hidden">
                     <table className="w-full text-xs text-left">
                       <thead>
                         <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase tracking-wider text-[11px]">
-                          <th className="py-2.5 px-3 w-16 text-center">Tuần</th>
+                          <th className="py-2.5 px-3 w-16 text-center">Bản ghi</th>
                           <th className="py-2.5 px-3 w-28">Hạn báo cáo</th>
                           <th className="py-2.5 px-3 w-28">Ngày nộp</th>
                           <th className="py-2.5 px-3 w-28 text-center">Trạng thái</th>

@@ -34,7 +34,7 @@ public class ReportSlotBoundsTests
         db.DotThucTaps.Add(new() { MaSo = "D", TenDot = "Đợt mẫu", NamHoc = "2028-2029", ThoiGianBD = new(2029, 1, 1), ThoiGianKT = new(2029, 1, 31) });
         await db.SaveChangesAsync();
         var service = new AdminService(db, Mock.Of<IGVHuongDanService>(), new PasswordService(), new SinhVienValidator());
-        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateReportSlotsAsync(new("D", 4, DateTime.Parse(date))));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.GenerateReportSlotsAsync(new("D", 12, DateTime.Parse(date))));
         Assert.Empty(db.TienDoThucTaps);
     }
 }

@@ -11,12 +11,12 @@ import ModalOverlay from '../../components/common/ModalOverlay'
 import DocumentAttachments from '../../components/common/DocumentAttachments'
 import { enterprisePrintScore, enterpriseGradeComplete } from '../../utils/enterprisePrintScore'
 
-// Gợi ý nhận xét học vụ chuẩn mực giúp người hướng dẫn điền nhanh
+// Mẫu nhận xét để người hướng dẫn tham khảo.
 const QUICK_REMARKS = [
-  'Sinh viên có tinh thần kỷ luật tốt, chấp hành nghiêm quy định và hoàn thành tốt nhiệm vụ được giao.',
-  'Chủ động học hỏi, nắm bắt công nghệ nhanh và hòa nhập hiệu quả với môi trường dự án thực tế.',
-  'Kỹ năng chuyên môn tốt, có trách nhiệm cao trong công việc và phối hợp làm việc nhóm tích cực.',
-  'Thái độ làm việc chuyên nghiệp, tiếp thu nhanh các góp ý và có tiến bộ rõ rệt trong kỳ thực tập.',
+  'Chấp hành nội quy và hoàn thành công việc được giao.',
+  'Chủ động hỏi khi chưa rõ và tiếp thu hướng dẫn.',
+  'Có trách nhiệm với công việc, phối hợp tốt với nhóm.',
+  'Biết sửa lỗi sau góp ý và có tiến bộ trong thời gian thực tập.',
 ]
 
 // Modal Xác Nhận Nộp & Khóa Điểm Chính Thức
@@ -30,7 +30,7 @@ function ConfirmLockModal({ intern, totalScore, onConfirm, onCancel, busy }) {
           </div>
           <div>
             <h3 className="font-extrabold text-slate-900 text-base">
-              Nộp & Khóa điểm chính thức
+              Nộp và khóa điểm
             </h3>
             <p className="text-xs text-slate-500">Xác nhận gửi điểm đến Khoa</p>
           </div>
@@ -54,7 +54,7 @@ function ConfirmLockModal({ intern, totalScore, onConfirm, onCancel, busy }) {
         <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs leading-relaxed flex items-start gap-2">
           <span className="material-symbols-outlined text-[18px] text-amber-700 shrink-0 mt-0.5">info</span>
           <div>
-            <span className="font-bold">Lưu ý quan trọng:</span> Sau khi nộp và khóa điểm, doanh nghiệp sẽ <strong>không thể tự điều chỉnh lại</strong>. Bảng đánh giá sẽ được ghi nhận chính thức vào hệ thống học vụ của Khoa và GVHD để tổng kết điểm thực tập.
+            Sau khi nộp, điểm sẽ được <strong>khóa và gửi đến Khoa</strong>. Nếu cần sửa, liên hệ Khoa để được mở lại.
           </div>
         </div>
 
@@ -74,7 +74,7 @@ function ConfirmLockModal({ intern, totalScore, onConfirm, onCancel, busy }) {
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-800 active:bg-indigo-900 text-white font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-[16px]">{busy ? 'sync' : 'lock'}</span>
-            <span>{busy ? 'Đang khóa điểm…' : 'Đồng ý nộp & Khóa điểm'}</span>
+            <span>{busy ? 'Đang khóa điểm…' : 'Xác nhận nộp và khóa điểm'}</span>
           </button>
         </div>
       </div>
@@ -462,7 +462,7 @@ function GradeInternModal({
       if (hasNext) {
         onNavigate(1)
       } else {
-        setSaveToast('Đã lưu điểm thành công! Đã là sinh viên cuối danh sách.')
+        setSaveToast('Đã lưu điểm. Đây là sinh viên cuối danh sách.')
         setTimeout(() => setSaveToast(''), 3000)
       }
     } catch (err) {
@@ -489,7 +489,7 @@ function GradeInternModal({
     try {
       await performSave(true)
       setShowConfirmLock(false)
-      setSaveToast('Đã nộp và khóa điểm đánh giá chính thức thành công!')
+      setSaveToast('Đã nộp và khóa điểm đánh giá.')
       setTimeout(() => setSaveToast(''), 4000)
     } catch (err) {
       setError(err.response?.data?.message || err.message || 'Không thể khóa điểm đánh giá.')
@@ -525,7 +525,7 @@ function GradeInternModal({
                   {isLocked && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-extrabold text-[10px] border border-emerald-200">
                       <span className="material-symbols-outlined text-[13px]">lock</span>
-                      Đã nộp & Khóa điểm
+                      Đã nộp và khóa điểm
                     </span>
                   )}
                   {correctingSubmitted && (
@@ -545,10 +545,10 @@ function GradeInternModal({
                 type="button"
                 onClick={() => onOpenPrint(intern)}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 text-slate-700 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-                title="Xem trước & In Phiếu nhận xét chuẩn mẫu HUIT"
+                title="Xem và in phiếu nhận xét HUIT"
               >
                 <span className="material-symbols-outlined text-[16px] text-indigo-600">print</span>
-                <span className="hidden sm:inline">In Phiếu HUIT</span>
+                <span className="hidden sm:inline">In phiếu HUIT</span>
               </button>
 
               {/* Bộ điều hướng Next/Prev */}
@@ -595,10 +595,10 @@ function GradeInternModal({
                 <span className="material-symbols-outlined text-[22px] text-indigo-700 shrink-0">lock</span>
                 <div>
                   <div className="font-bold text-slate-900">
-                    Kết quả đánh giá đã được nộp và khóa chính thức
+                    Phiếu đánh giá đã nộp
                   </div>
                   <div className="text-[11px] text-slate-500 font-medium">
-                    Bảng điểm đã được chuyển đến Khoa và GVHD để tính điểm học phần. Điểm số ở chế độ chỉ xem (Read-only), không thể chỉnh sửa.
+                    Khoa và GVHD đã có thể xem kết quả. Bạn chỉ được xem phiếu; nếu cần sửa, liên hệ Khoa để mở lại.
                   </div>
                 </div>
               </div>
@@ -631,10 +631,10 @@ function GradeInternModal({
                     : 'bg-amber-100 text-amber-800 border border-amber-200'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isLocked ? 'bg-emerald-600' : isFullGraded ? 'bg-blue-600' : 'bg-amber-600'}`}></span>
-                  <span>{isLocked ? 'Đã khóa điểm chính thức' : isFullGraded ? 'Đã nhập đủ tiêu chí' : 'Chưa hoàn tất điểm'}</span>
+                  <span>{isLocked ? 'Đã khóa điểm' : isFullGraded ? 'Đã nhập đủ điểm' : 'Chưa nhập đủ điểm'}</span>
                 </span>
                 <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-                  Chuẩn đầu ra CLO4 (HUIT)
+                  Phần doanh nghiệp · CLO4
                 </span>
               </div>
 
@@ -651,7 +651,7 @@ function GradeInternModal({
             <div className="space-y-3">
               <div className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[16px] text-indigo-600">fact_check</span>
-                <span>Tiêu chí đánh giá của doanh nghiệp (Tối đa 5.00 điểm):</span>
+                <span>Điểm doanh nghiệp (tối đa 5 điểm)</span>
               </div>
 
               {criteria.length === 0 && !error && (
@@ -686,11 +686,11 @@ function GradeInternModal({
                           {/* Chú giải học vụ chuẩn HUIT */}
                           <div className="text-[11px] text-indigo-800 font-medium">
                             {is41
-                              ? '📌 Tương ứng mục "Điểm chuyên cần, phong cách" trên phiếu nhận xét HUIT (Quy đổi tối đa 2.00đ)'
-                              : '📌 Tương ứng mục "Điểm chuyên môn" trên phiếu nhận xét HUIT (Quy đổi tối đa 3.00đ)'}
+                              ? 'Trên phiếu HUIT: Điểm chuyên cần, phong cách.'
+                              : 'Trên phiếu HUIT: Điểm chuyên môn.'}
                           </div>
                           <div className="text-[11px] text-slate-500">
-                            Thang điểm chuẩn: <span className="font-semibold text-slate-700">0.00 — {maxVal.toFixed(2)} điểm</span>
+                            Khoảng điểm: <span className="font-semibold text-slate-700">0.00 — {maxVal.toFixed(2)} điểm</span>
                           </div>
                         </div>
 
@@ -743,7 +743,7 @@ function GradeInternModal({
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5 uppercase tracking-wider">
                   <span className="material-symbols-outlined text-[16px] text-indigo-600">rate_review</span>
-                  <span>Nhận xét quá trình thực tập & đóng góp:</span>
+                  <span>Nhận xét của doanh nghiệp</span>
                 </span>
                 <span className="text-[11px] text-slate-400 font-medium">
                   {review.length} ký tự
@@ -755,14 +755,14 @@ function GradeInternModal({
                 disabled={isLocked || busy || !deadline.canGrade}
                 value={review}
                 onChange={(e) => updateDraft(scores, e.target.value)}
-                placeholder="Nhận xét cụ thể về tinh thần kỷ luật, thái độ làm việc, kỹ năng chuyên môn và kết quả đóng góp của sinh viên tại công ty..."
+                placeholder="Nhận xét về thái độ, công việc đã làm và những điểm sinh viên cần cải thiện."
                 className="w-full p-3 rounded-xl border border-slate-300 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white shadow-2xs disabled:bg-slate-100 disabled:text-slate-600 disabled:cursor-not-allowed leading-relaxed"
               />
 
               {/* Gợi ý nhận xét mẫu (ẩn khi đã khóa) */}
               {!isLocked && deadline.canGrade && (
                 <div className="space-y-1 pt-1">
-                  <div className="text-[11px] font-semibold text-slate-500">Gợi ý nhận xét nhanh:</div>
+                  <div className="text-[11px] font-semibold text-slate-500">Câu tham khảo (chỉ chọn nếu phù hợp):</div>
                   <div className="flex flex-wrap gap-1.5">
                     {QUICK_REMARKS.map((rm, idx) => (
                       <button
@@ -784,10 +784,10 @@ function GradeInternModal({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[16px] text-indigo-600">attach_file</span>
-                  <span>Phiếu nhận xét có chữ ký / đóng dấu (Tùy chọn):</span>
+                  <span>Phiếu nhận xét đã ký, đóng dấu (nếu có)</span>
                 </span>
                 <span className="text-[10px] text-slate-400">
-                  Sau khi in và đóng dấu, có thể scan đính kèm tại đây
+                  Có thể tải bản quét lên tại đây.
                 </span>
               </div>
               <div className="bg-white p-2.5 rounded-lg border border-slate-200/70">
@@ -805,9 +805,9 @@ function GradeInternModal({
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
             <div className="text-[11px] text-slate-500 italic">
               {isLocked
-                ? 'Phiếu đã nộp chính thức. Liên hệ Khoa nếu cần đính chính.'
-                : correctingSubmitted ? 'Khoa đã mở đính chính có thời hạn. Phiếu đã nộp được giữ trong lịch sử chốt.'
-                : 'Lưu tạm để tiếp tục chỉnh sửa; nộp chính thức khi đã kiểm tra đủ điểm.'}
+                ? 'Phiếu đã khóa. Liên hệ Khoa nếu cần sửa điểm.'
+                : correctingSubmitted ? 'Khoa đã mở lại phiếu. Hãy sửa và lưu trong thời hạn cho phép.'
+                : 'Lưu tạm nếu chưa chấm xong. Kiểm tra điểm trước khi nộp.'}
             </div>
 
             <div className="flex items-center gap-2 justify-end">
@@ -841,7 +841,7 @@ function GradeInternModal({
                     title="Nộp bảng điểm chính thức và khóa không cho chỉnh sửa thêm"
                   >
                     <span className="material-symbols-outlined text-[16px]">lock</span>
-                    <span>{correctingSubmitted ? 'Xác nhận đính chính' : 'Nộp & Khóa điểm chính thức'}</span>
+                    <span>{correctingSubmitted ? 'Xác nhận đính chính' : 'Nộp và khóa điểm'}</span>
                   </button>
 
                   {hasNext && (
@@ -980,7 +980,7 @@ export default function DanhGiaThucTapSinhPage() {
       })
       setLockingIntern(null)
       await loadInterns()
-      setToastMessage(`Đã nộp và khóa điểm chính thức cho sinh viên ${lockingIntern.hoTenSV} thành công!`)
+      setToastMessage(`Đã nộp và khóa điểm của ${lockingIntern.hoTenSV}.`)
       setTimeout(() => setToastMessage(''), 4000)
     } catch (err) {
       toast.error(err.response?.data?.message || err.message || 'Không thể khóa điểm.')
@@ -1018,7 +1018,7 @@ export default function DanhGiaThucTapSinhPage() {
         </div>
       )}
 
-      {/* Bento Header */}
+      {/* Tiêu đề trang */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 lg:p-6 shadow-xs">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
@@ -1037,7 +1037,7 @@ export default function DanhGiaThucTapSinhPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 max-w-2xl leading-relaxed">
-              Doanh nghiệp nhập và cập nhật điểm đánh giá chuẩn đầu ra CLO4 (CLO4.1 & CLO4.2, tối đa 5.00 điểm) theo quy định của HUIT. Sau khi hoàn tất, vui lòng <strong>Nộp & Khóa điểm chính thức</strong>.
+              Nhập điểm CLO4.1 và CLO4.2 (tổng tối đa 5 điểm), kiểm tra nhận xét rồi chọn <strong>Nộp và khóa điểm</strong>.
             </p>
           </div>
 
@@ -1054,7 +1054,7 @@ export default function DanhGiaThucTapSinhPage() {
           </div>
         </div>
 
-        {/* 4 Thẻ Bento KPI */}
+        {/* Thống kê đánh giá */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mt-5 pt-5 border-t border-slate-100">
           <div className="bg-slate-50/70 border border-slate-200/70 rounded-xl p-3.5">
             <div className="flex items-center justify-between text-slate-500 mb-1">
@@ -1399,7 +1399,7 @@ export default function DanhGiaThucTapSinhPage() {
                               type="button"
                               onClick={() => setLockingIntern(intern)}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-900 active:bg-black text-white font-bold text-xs shadow-2xs transition-all cursor-pointer"
-                              title="Nộp & Khóa điểm chính thức"
+                              title="Nộp và khóa điểm"
                             >
                               <span className="material-symbols-outlined text-[14px]">lock</span>
                               <span>Khóa</span>

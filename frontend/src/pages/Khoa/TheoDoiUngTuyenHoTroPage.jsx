@@ -165,37 +165,37 @@ export default function TheoDoiUngTuyenHoTroPage() {
     switch (tt) {
       case 'DaCoNoi':
         return (
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             Đã có nơi chính thức
           </span>
         )
       case 'ChoXacNhan':
         return (
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
             Chờ xác nhận / Chốt
           </span>
         )
       case 'ChuaCoNoi':
         return (
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
             Chưa có nơi thực tập
           </span>
         )
       case 'KhongHoanTat':
         return (
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-800">
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-slate-200 text-slate-800">
             Không hoàn tất đợt
           </span>
         )
       case 'CanKiemTra':
         return (
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
             Cần kiểm tra
           </span>
         )
       default:
         return (
-          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600">
             {tt || '—'}
           </span>
         )
@@ -286,16 +286,16 @@ export default function TheoDoiUngTuyenHoTroPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <table className="w-full min-w-[1120px] text-left text-xs">
               <thead className="bg-slate-50/80 text-slate-600 font-bold border-b border-slate-200">
                 <tr>
-                  <th className="py-3 px-4">Sinh viên</th>
-                  <th className="py-3 px-4">Công ty (lượt gần nhất)</th>
-                  <th className="py-3 px-4 text-center">Kết quả ứng tuyển</th>
-                  <th className="py-3 px-4 text-center">Đạt / Không đạt</th>
-                  <th className="py-3 px-4 text-center">Lần hỗ trợ</th>
-                  <th className="py-3 px-4 text-center">Nơi thực tập</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
+                  <th className="min-w-[180px] py-3 px-4">Sinh viên</th>
+                  <th className="min-w-[240px] py-3 px-4">Công ty (lượt gần nhất)</th>
+                  <th className="min-w-[160px] py-3 px-4 text-center">Kết quả ứng tuyển</th>
+                  <th className="min-w-[112px] py-3 px-4 text-center">Đạt / Không đạt</th>
+                  <th className="min-w-[130px] py-3 px-4 text-center">Lần hỗ trợ</th>
+                  <th className="min-w-[190px] py-3 px-4 text-center">Nơi thực tập</th>
+                  <th className="min-w-[120px] py-3 px-4 text-right">Thao tác</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -380,7 +380,7 @@ export default function TheoDoiUngTuyenHoTroPage() {
                           {renderTinhTrangNoiBadge(item.tinhTrangNoi)}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => openDetail(item.maSV)}

@@ -3,29 +3,35 @@ import assert from 'node:assert/strict'
 import vm from 'node:vm'
 import { readFileSync } from 'node:fs'
 import { transformSync } from 'esbuild'
-import { submissionBlock } from '../src/utils/reportDeadline.js'
+import { submissionBlock, revisionWindowStatus } from '../src/utils/reportDeadline.js'
+import { findReviewReport, responseList, reportReviewUrl, reportsOutsideRound, reportWeekLabel, studentReportPeriod, academicReportEntries } from '../src/utils/lecturerDashboard.js'
+import { scheduleDate, scheduleRoster } from '../src/utils/lecturerSchedule.js'
+import { formatTenDot } from '../src/utils/dotThucTap.js'
 
 // 04/11/2026: delayed lecturer report/deadline writes cannot alter a newly selected context.
-function harness(path, component, identity = { maGV: 'GV', role: 'VT03' }, student = 'S') {
+function harness(path, component, identity = { maGV: 'GV', role: 'VT03' }, student = 'S', options = {}) {
   const slots = [], requests = []
-  let cursor = 0, effects = [], tree, dirty = true, writes = 0
+  let cursor = 0, effects = [], tree, dirty = true, writes = 0, selectedRound = 'A'
   const queue = (method, url, payload) => new Promise((resolve, reject) => requests.push({ method, url, payload, resolve, reject }))
   const context = {
     React: { createElement: (type, props, ...children) => ({ type, props: props || {}, children }) },
-    URLSearchParams, setTimeout() {}, console, submissionBlock,
+    URLSearchParams, setTimeout() {}, console, submissionBlock, revisionWindowStatus, findReviewReport,
+    responseList, reportReviewUrl, reportsOutsideRound, reportWeekLabel, studentReportPeriod, academicReportEntries, scheduleDate, scheduleRoster, formatTenDot, NoLinkedAccount: 'NoLinkedAccount',
     useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === 'function' ? initial() : initial; return [slots[i], value => { const next = typeof value === 'function' ? value(slots[i]) : value; if (!Object.is(next, slots[i])) { slots[i] = next; dirty = true; writes++ } }] },
     useRef(initial) { const i = cursor++; return slots[i] ??= { current: initial } },
     useMemo(factory, deps) { const i = cursor++; if (!slots[i] || deps.some((v, j) => v !== slots[i].deps[j])) slots[i] = { deps, value: factory() }; return slots[i].value },
     useEffect(fn, deps) { const i = cursor++; if (!slots[i] || deps.some((v, j) => v !== slots[i].deps[j])) effects.push(() => { slots[i]?.cleanup?.(); slots[i] = { deps, cleanup: fn() } }) },
-    useDotThucTap: () => ({ selectedDot: { maDot: 'A', tenDot: 'Đợt A' }, roundLock: { blocked: false } }),
+    useDotThucTap: () => ({ selectedDot: { maDot: selectedRound, tenDot: `Đợt ${selectedRound}`, thoiGianBD: '2026-09-28' },
+      danhSachNamHoc: [{ dots: ['A', 'B'].map(maDot => ({ maDot, tenDot: `Đợt ${maDot}` })) }],
+      changeDot: dot => { selectedRound = dot.maDot; dirty = true }, roundLock: { blocked: Boolean(options.blocked), loading: false } }),
     useRoundLock: () => ({ blocked: false }), deadlineText: v => v || '',
     useIdentity: () => identity, useNavigate: () => () => {},
-    useSearchParams: () => [new URLSearchParams(student ? `sv=${student}` : ''), () => {}],
+    useSearchParams: () => [new URLSearchParams(options.query || (student ? `sv=${student}` : '')), () => {}],
     usePagination: items => ({ items }), Pagination: 'Pagination', Link: 'Link', DocumentAttachments: 'DocumentAttachments', RoundLockNotice: 'RoundLockNotice',
     toast: { error() { throw Error('Stale request emitted a global error') } },
     apiClient: { get: url => queue('GET', url), put: (url, payload) => queue('PUT', url, payload) },
-    gvHuongDanService: { getSVTheoGiangVien: (...args) => queue('GET', 'students', args), getGiangVienTai: (...args) => queue('GET', 'lecturers', args) },
-    tienDoThucTapService: { getTienDoBySinhVien: (...args) => queue('GET', 'reports', args) },
+    gvHuongDanService: { getSVTheoGiangVien: (...args) => queue('GET', 'students', args), getGiangVienTai: (...args) => queue('GET', 'lecturers', args), getProfile: (...args) => queue('GET', 'profile', args) },
+    tienDoThucTapService: { getTienDoBySinhVien: (...args) => queue('GET', 'reports', args), getBaoCaoChoDuyet: (...args) => queue('GET', 'pendingReports', args) },
   }
   const source = readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8').replace(/^import .*$/gm, '').replace('export default function', 'function')
   const Component = new vm.Script(transformSync(source + `\n${component}`, { loader: 'jsx' }).code).runInNewContext(context)
@@ -36,6 +42,60 @@ function harness(path, component, identity = { maGV: 'GV', role: 'VT03' }, stude
   }
 }
 function nodes(node) { if (Array.isArray(node)) return node.flatMap(nodes); return node && typeof node === 'object' ? [node, ...nodes(node.children)] : [] }
+
+for (const scenario of [
+  { status: 'DaNop', title: 'Duyệt báo cáo', role: 'VT03' },
+  { status: 'DaDuyet', title: 'Chi tiết báo cáo', role: 'VT03' },
+  { status: 'DaNop', blocked: true, title: 'Chi tiết báo cáo', role: 'VT03' },
+  { status: 'DaNop', title: 'Duyệt báo cáo', role: 'VT02' },
+]) test(`report link opens the exact report (${scenario.role}, ${scenario.status}, locked=${Boolean(scenario.blocked)})`, async () => {
+  const h = harness('pages/GiangVien/TienDoThucTapSVPage.jsx', 'ProgressStudentPage',
+    { maGV: scenario.role === 'VT03' ? 'GV' : null, role: scenario.role }, 'S',
+    { query: 'gv=GV&sv=S&dot=A&report=TARGET', blocked: scenario.blocked })
+  h.render()
+  assert.equal(h.requests.find(r => r.url === 'students').payload[0], 'GV')
+  h.requests.find(r => r.url === 'students').resolve({ data: { data: [{ maSV: 'S', hoTen: 'Sinh viên S' }] } })
+  h.requests.find(r => r.url === 'lecturers').resolve({ data: { data: [] } })
+  await h.settle()
+  h.requests.find(r => r.url === 'reports').resolve({ data: [
+    { maTienDo: 'OTHER', maSV: 'S', maDot: 'A', mocThoiGian: '2026-10-01', trangThaiDuyet: 'DaNop' },
+    { maTienDo: 'TARGET', maSV: 'S', maDot: 'A', mocThoiGian: '2026-11-08', trangThaiDuyet: scenario.status },
+  ] })
+  await h.settle()
+  const heading = nodes(h.tree).find(n => n.type === 'h3' && JSON.stringify(n.children).includes(scenario.title))
+  assert.ok(heading, 'Opens the review/view dialog')
+  assert.match(JSON.stringify(heading.children), /08\/11\/2026/)
+  const weekCells = nodes(h.tree).filter(n => n.type === 'td' && n.props.className?.includes('font-bold text-slate-800 align-top'))
+  assert.ok(weekCells.length > 0)
+  for (const cell of weekCells) {
+    assert.match(JSON.stringify(cell.children), /Tuần/)
+    assert.doesNotMatch(JSON.stringify(cell.children), /TARGET|OTHER/)
+  }
+  assert.ok(nodes(h.tree).some(n => n.type === 'DocumentAttachments' && n.props.resourceId === 'TARGET'))
+  assert.ok(!nodes(h.tree).some(n => n.type === 'DocumentAttachments' && n.props.resourceId === 'OTHER'))
+  const close = nodes(h.tree).find(n => n.type === 'button' && JSON.stringify(n.children).includes('close'))
+  close.props.onClick()
+  await h.settle()
+  assert.ok(!nodes(h.tree).some(n => n.type === 'h3' && JSON.stringify(n.children).includes(scenario.title)), 'Does not reopen after closing')
+  h.unmount()
+})
+
+test('a report link cannot open a report from a different student', async () => {
+  const h = harness('pages/GiangVien/TienDoThucTapSVPage.jsx', 'ProgressStudentPage', undefined, 'S',
+    { query: 'sv=S&dot=A&report=TARGET' })
+  h.render()
+  h.requests.find(r => r.url === 'students').resolve({ data: { data: [{ maSV: 'S', hoTen: 'Sinh viên S' }] } })
+  h.requests.find(r => r.url === 'lecturers').resolve({ data: { data: [] } })
+  await h.settle()
+  h.requests.find(r => r.url === 'reports').resolve({ data: [
+    { maTienDo: 'TARGET', maSV: 'OTHER', maDot: 'A', mocThoiGian: '2026-11-08', trangThaiDuyet: 'DaNop' },
+  ] })
+  await h.settle()
+  assert.match(h.text(), /Không tìm thấy báo cáo trong liên kết/)
+  assert.ok(!nodes(h.tree).some(n => n.type === 'DocumentAttachments'))
+  h.unmount()
+})
+
 const dates = year => ({ moChamGV: `${year}-01-01T00:00:00+07:00`, hanChamGV: `${year}-02-01T00:00:00+07:00`, hanChamDN: `${year}-02-01T00:00:00+07:00`, phienBanThoiHan: 1 })
 
 test('submission stays open through the due day and the exact approved extension deadline in Vietnam time', () => {
@@ -92,5 +152,8 @@ for (const [deadline, extra, expected] of [
   const h = harness('pages/GiangVien/TienDoThucTapSVPage.jsx', 'ProgressStudentPage')
   h.render(); h.requests.find(r => r.url === 'students').resolve({ data: [{ maSV: 'S', hoTen: 'Sinh viên S' }] }); h.requests.find(r => r.url === 'lecturers').resolve({ data: { data: [] } })
   await h.settle(); h.requests.find(r => r.url === 'reports').resolve([{ maTienDo: 'R', maSV: 'S', mocThoiGian: deadline, hanNopBoSung: extra, trangThaiDuyet: 'ChuaNop' }])
-  await h.settle(); assert.ok(h.text().includes(expected)); h.unmount()
+  await h.settle()
+  const historyToggle = nodes(h.tree).find(n => n.type === 'input' && n.props.type === 'checkbox')
+  if (historyToggle) { historyToggle.props.onChange({ target: { checked: true } }); await h.settle() }
+  assert.ok(h.text().includes(expected)); h.unmount()
 })

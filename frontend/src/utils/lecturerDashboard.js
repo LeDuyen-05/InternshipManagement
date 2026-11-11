@@ -14,7 +14,71 @@ export function lecturerLoad(lecturer, assignedCount) {
   return { quota, used, percent: quota > 0 ? Math.round(used / quota * 1000) / 10 : null }
 }
 
-// Group by the calendar week of the original deadline, Monday–Sunday in Vietnam.
+export function reportDeadlineLabel(report) {
+  const date = vietnamDateTimeParts(report.mocThoiGian).date
+  return date ? `Hạn nộp: ${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : 'Chưa có hạn nộp'
+}
+
+export function reportReviewUrl(lecturer, report) {
+  const params = new URLSearchParams({ gv: lecturer, sv: report.maSV, dot: report.maDot, report: report.maTienDo })
+  return `/giang-vien/tien-do?${params}`
+}
+
+export function findReviewReport(reports, id, student, round) {
+  return reports.find(report => report.maTienDo === id && report.maSV === student && report.maDot === round)
+}
+
+export function reportWeekLabel(report, round) {
+  if (!round?.thoiGianBD || !report?.mocThoiGian) return 'Chưa xác định tuần'
+  const start = vietnamDateTimeParts(round.thoiGianBD).date
+  const due = vietnamDateTimeParts(report.mocThoiGian).date
+  const end = round.thoiGianKT && vietnamDateTimeParts(round.thoiGianKT).date
+  if (!start || !due) return 'Chưa xác định tuần'
+  if (due < start || (end && due > end)) return 'Ngoài lịch đợt'
+  const days = (Date.parse(`${due}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000
+  const period = Math.max(1, Math.ceil(days / 14))
+  return period <= 6 ? `Tuần ${period * 2 - 1}–${period * 2}` : 'Ngoài lịch đợt'
+}
+
+export function studentReportPeriod(student, round) {
+  const start = student?.ngayBatDauThucTap || round?.thoiGianBD
+  const end = student?.ngayKetThucThucTap || round?.thoiGianKT
+  if (!start) return { thoiGianBD: start, thoiGianKT: end }
+  const date = vietnamDateTimeParts(start).date
+  if (!date) return { thoiGianBD: start, thoiGianKT: end }
+  const cap = new Date(Date.parse(`${date}T00:00:00Z`) + 83 * 86400000).toISOString().slice(0, 10)
+  const endDate = end && vietnamDateTimeParts(end).date
+  return { thoiGianBD: start, thoiGianKT: endDate && endDate < cap ? end : cap }
+}
+
+export function academicReportEntries(reports, period) {
+  const groups = new Map()
+  const eligible = reports.filter(report => !report.maPhanBoLuuTru && reportWeekLabel(report, period).startsWith('Tuần '))
+  for (const report of [...eligible].sort((a, b) => {
+    const submitted = item => item.trangThaiDuyet !== 'ChuaNop' || Boolean(item.ngayNop)
+    return Number(submitted(b)) - Number(submitted(a))
+      || (interviewInstant(b.ngayNop) || 0) - (interviewInstant(a.ngayNop) || 0)
+      || String(a.maTienDo).localeCompare(String(b.maTienDo))
+  })) {
+    const key = reportWeekLabel(report, period)
+    if (!groups.has(key)) groups.set(key, report)
+  }
+  const current = [...groups.values()].sort((a, b) => interviewInstant(a.mocThoiGian) - interviewInstant(b.mocThoiGian))
+  const ids = new Set(current.map(report => report.maTienDo))
+  return { current, history: reports.filter(report => !ids.has(report.maTienDo)) }
+}
+
+export function reportsOutsideRound(reports, round) {
+  const start = vietnamDateTimeParts(round?.thoiGianBD).date
+  const end = vietnamDateTimeParts(round?.thoiGianKT).date
+  if (!round?.thoiGianBD || !round?.thoiGianKT || !start || !end) return []
+  return reports.filter(report => {
+    const date = report.mocThoiGian && vietnamDateTimeParts(report.mocThoiGian).date
+    return date && (date < start || date > end)
+  })
+}
+
+// Đếm báo cáo theo tuần có hạn nộp, từ thứ Hai đến Chủ nhật theo giờ Việt Nam.
 export function weeklyReports(reports) {
   const weeks = new Map()
   let invalidDates = 0

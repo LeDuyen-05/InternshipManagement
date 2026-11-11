@@ -31,6 +31,8 @@ public class GVHuongDanService : IGVHuongDanService
             ChuyenNganh = g.SinhVien.ChuyenNganh,
             Gpa = g.SinhVien.Gpa,
             TenCongTy = g.SinhVien.PhanBoThucTaps.Where(p => p.MaDot == g.MaDot && p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
+            NgayBatDauThucTap = ConfirmedPeriod(g).Start,
+            NgayKetThucThucTap = ConfirmedPeriod(g).End,
             NgayPC = g.NgayPC,
             TrangThai = g.TrangThai
         }).ToList();
@@ -497,6 +499,14 @@ public class GVHuongDanService : IGVHuongDanService
         return BangLinhVuc.Where(x => x.TuKhoa.Any(k => t.Contains(k))).Select(x => x.LinhVuc).ToHashSet();
     }
 
+    private static (DateTime? Start, DateTime? End) ConfirmedPeriod(DAL.Entities.GVHuongDan record)
+    {
+        var placement = record.SinhVien?.PhanBoThucTaps
+            .Where(p => p.MaDot == record.MaDot && p.TrangThai != "Huy" && p.DaDuocKhoaDuyet)
+            .OrderByDescending(p => p.NgayPhanBo).ThenBy(p => p.MaPhanBo).FirstOrDefault();
+        return (placement?.NgayBatDauThucTap, placement?.NgayKetThucThucTap);
+    }
+
     private static SVHuongDanDto ToDto(DAL.Entities.GVHuongDan record) => new()
     {
         MaSo = record.MaSo,
@@ -507,6 +517,8 @@ public class GVHuongDanService : IGVHuongDanService
         ChuyenNganh = record.SinhVien?.ChuyenNganh,
         Gpa = record.SinhVien?.Gpa,
         TenCongTy = record.SinhVien?.PhanBoThucTaps.Where(p => p.MaDot == record.MaDot && p.TrangThai != "Huy").OrderByDescending(p => p.NgayPhanBo).FirstOrDefault()?.CongTy?.TenCongTy ?? "Chưa phân bổ",
+        NgayBatDauThucTap = ConfirmedPeriod(record).Start,
+        NgayKetThucThucTap = ConfirmedPeriod(record).End,
         NgayPC = record.NgayPC,
         TrangThai = record.TrangThai
     };

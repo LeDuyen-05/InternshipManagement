@@ -202,7 +202,7 @@ export default function QuanLyTinTuyenDungPage() {
           soLuongNhan: parseInt(posForm.soLuongNhan, 10),
           hoatDong: posForm.hoatDong,
         })
-        setBanner({ type: 'success', message: 'Cập nhật thông tin vị trí tuyển dụng thành công!' })
+        setBanner({ type: 'success', message: 'Đã cập nhật vị trí tuyển dụng.' })
       } else {
         // Thêm vị trí mới
         await doanhNghiepService.themViTri({
@@ -212,7 +212,7 @@ export default function QuanLyTinTuyenDungPage() {
           yeuCau: posForm.yeuCau.trim(),
           soLuongNhan: parseInt(posForm.soLuongNhan, 10),
         })
-        setBanner({ type: 'success', message: 'Thêm vị trí tuyển dụng mới thành công!' })
+        setBanner({ type: 'success', message: 'Đã thêm vị trí tuyển dụng.' })
       }
       setPositionModal({ open: false, isEdit: false, position: null })
       await fetchJobPosting()
@@ -343,7 +343,7 @@ export default function QuanLyTinTuyenDungPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1.5 max-w-2xl leading-relaxed">
-              Doanh nghiệp có thể đăng và quản lý <strong>nhiều vị trí tuyển dụng</strong> trong cùng một đợt thực tập. Sinh viên sẽ nộp hồ sơ trực tuyến theo đúng vị trí và yêu cầu kỹ năng (JD) tương ứng.
+              Đăng vị trí tuyển dụng, cập nhật mô tả công việc và số lượng sinh viên cần nhận trong đợt.
             </p>
           </div>
 
@@ -432,10 +432,10 @@ export default function QuanLyTinTuyenDungPage() {
           </div>
           <div className="space-y-1">
             <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
-              Cơ chế tiếp nhận Đa vị trí giữa Doanh nghiệp và Nhà trường
+              Vị trí và yêu cầu tuyển dụng
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Doanh nghiệp có thể thiết lập nhiều vị trí công việc với các yêu cầu kỹ năng (JD) khác nhau. Sinh viên khi nộp đơn sẽ lựa chọn vị trí chuyên môn phù hợp nhất để tham gia phỏng vấn và thực tập.
+              Mỗi vị trí có mô tả công việc, yêu cầu và chỉ tiêu riêng. Sinh viên chọn vị trí khi nộp hồ sơ.
             </p>
           </div>
         </div>

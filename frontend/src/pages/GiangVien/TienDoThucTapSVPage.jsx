@@ -8,7 +8,8 @@ import tienDoThucTapService from '../../services/tienDoThucTapService'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { useIdentity } from '../../hooks/useIdentity'
-import { submissionBlock, revisionDeadline, SO_NGAY_NOP_LAI } from '../../utils/reportDeadline'
+import { submissionBlock, revisionWindowStatus, SO_NGAY_NOP_LAI } from '../../utils/reportDeadline'
+import { findReviewReport, reportsOutsideRound, responseList, reportWeekLabel, studentReportPeriod, academicReportEntries } from '../../utils/lecturerDashboard'
 
 // Định dạng ngày chuẩn Việt Nam DD/MM/YYYY
 const formatDateVN = (dateStr) => {
@@ -25,7 +26,10 @@ export default function TienDoThucTapSVPage() {
   const [params] = useSearchParams()
   const { selectedDot } = useDotThucTap()
   const identity = useIdentity() || {}
-  return <ProgressStudentPage key={JSON.stringify([identity.role, identity.maGV, params.get('gv'), params.get('sv'), selectedDot?.maDot])} />
+  if (params.get('dot') && params.get('dot') !== selectedDot?.maDot) {
+    return <div role="status" className="p-4 rounded-xl bg-amber-50 text-amber-800">Báo cáo trong liên kết thuộc đợt khác. Hãy chọn đúng đợt thực tập để xem.</div>
+  }
+  return <ProgressStudentPage key={JSON.stringify([identity.role, identity.maGV, params.get('gv'), params.get('sv'), params.get('report'), selectedDot?.maDot])} />
 }
 
 function ProgressStudentPage() {
@@ -48,6 +52,10 @@ function ProgressStudentPage() {
   const [selectedMaSV, setSelectedMaSV] = useState(urlMaSV || '')
 
   const [listTienDo, setListTienDo] = useState([])
+  const [loadedReportKey, setLoadedReportKey] = useState('')
+  const [reviewNotice, setReviewNotice] = useState('')
+  const openedReportLink = useRef('')
+  const linkedReportId = searchParams.get('report')
   const [loading, setLoading] = useState(false)
   const [loadingStudents, setLoadingStudents] = useState(true)
   const [error, setError] = useState(null)
@@ -64,6 +72,7 @@ function ProgressStudentPage() {
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [sortOrder, setSortOrder] = useState('PRIORITY')
   const [searchKeyword, setSearchKeyword] = useState('')
+  const [showHistory, setShowHistory] = useState(false)
   const [modalMode, setModalMode] = useState('duyet')
 
   // 1. Tải danh sách sinh viên do GV hướng dẫn từ cơ sở dữ liệu thật theo currentMaGV
@@ -89,6 +98,8 @@ function ProgressStudentPage() {
             hoTen: item.sinhVien?.hoTen || item.hoTen,
             lop: item.sinhVien?.lop || item.lop || '—',
             tenCongTy: item.congTy?.tenCongTy || item.tenCongTy || 'Chưa phân bổ công ty',
+            ngayBatDauThucTap: item.ngayBatDauThucTap,
+            ngayKetThucThucTap: item.ngayKetThucThucTap,
           }))
           setStudentList(mapped)
           if (!urlMaSV) {
@@ -134,8 +145,9 @@ function ProgressStudentPage() {
       setError(null)
       const res = await tienDoThucTapService.getTienDoBySinhVien(svId, selectedDot?.maDot)
       if (!mounted.current || request !== reportRequest.current) return
-      const data = Array.isArray(res) ? res : (res.data?.data || res.data || [])
-      setListTienDo(Array.isArray(data) ? data : [])
+      const data = responseList(res)
+      setListTienDo(data)
+      setLoadedReportKey(JSON.stringify([svId, selectedDot?.maDot]))
     } catch (err) {
       if (!mounted.current || request !== reportRequest.current) return
       console.error('Lỗi tải tiến độ thực tập:', err)
@@ -157,6 +169,10 @@ function ProgressStudentPage() {
 
   // Sinh viên hiện tại
   const currentStudent = studentList.find((s) => s.maSV === selectedMaSV)
+  const reportPeriod = studentReportPeriod(currentStudent, selectedDot)
+  const reportStart = reportPeriod.thoiGianBD, reportEnd = reportPeriod.thoiGianKT
+  const reportEntries = useMemo(() => academicReportEntries(listTienDo, { thoiGianBD: reportStart, thoiGianKT: reportEnd }), [listTienDo, reportStart, reportEnd])
+  const historicalIds = useMemo(() => new Set(reportEntries.history.map(report => report.maTienDo)), [reportEntries])
 
   // Xử lý khi đổi sinh viên trong dropdown
   const handleSelectStudent = (newMaSV) => {
@@ -164,13 +180,15 @@ function ProgressStudentPage() {
     setSearchParams(previous => {
       const next = new URLSearchParams(previous)
       next.set('sv', newMaSV)
+      next.delete('report')
+      next.delete('dot')
       return next
     })
   }
 
   const handleOpenDuyet = (item) => {
     if (roundLock.blocked) return
-    if (item.maPhanBoLuuTru || item.trangThaiDuyet !== 'DaNop') return
+    if (historicalIds.has(item.maTienDo) || item.trangThaiDuyet !== 'DaNop') return
     setSelectedTienDo(item)
     setDuyetStatus('DaDuyet')
     setNhanXetGV(item.nhanXetGV || '')
@@ -185,10 +203,29 @@ function ProgressStudentPage() {
     setShowModal(true)
   }
 
+  useEffect(() => {
+    if (!linkedReportId || loading || loadingStudents || roundLock.loading
+      || loadedReportKey !== JSON.stringify([selectedMaSV, selectedDot?.maDot])) return
+    const linkKey = JSON.stringify([currentMaGV, selectedMaSV, selectedDot?.maDot, linkedReportId])
+    if (openedReportLink.current === linkKey) return
+    openedReportLink.current = linkKey
+    const report = findReviewReport(listTienDo, linkedReportId, selectedMaSV, selectedDot?.maDot)
+    if (!report) {
+      setReviewNotice('Không tìm thấy báo cáo trong liên kết. Báo cáo có thể đã thay đổi hoặc không thuộc sinh viên và đợt đang xem.')
+      return
+    }
+    setSelectedTienDo(report)
+    setNhanXetGV(report.nhanXetGV || '')
+    setDuyetStatus('DaDuyet')
+    setModalMode(report.trangThaiDuyet === 'DaNop' && !historicalIds.has(report.maTienDo) && !roundLock.blocked ? 'duyet' : 'view')
+    setShowModal(true)
+  }, [linkedReportId, loading, loadingStudents, roundLock.loading, roundLock.blocked, loadedReportKey,
+    selectedMaSV, selectedDot?.maDot, currentMaGV, listTienDo, historicalIds])
+
   // 3. Phê duyệt tiến độ — CHỈ cập nhật UI khi database cập nhật thành công!
   const handleSaveDuyet = async () => {
     if (roundLock.blocked || submitting || !mounted.current) return
-    if (!selectedTienDo || selectedTienDo.maPhanBoLuuTru || selectedTienDo.trangThaiDuyet !== 'DaNop') return
+    if (!selectedTienDo || historicalIds.has(selectedTienDo.maTienDo) || selectedTienDo.trangThaiDuyet !== 'DaNop') return
     if (duyetStatus === 'YeuCauSua' && !nhanXetGV.trim()) {
       toast.error('Nhập nhận xét nêu rõ nội dung sinh viên cần sửa/bổ sung trước khi yêu cầu sửa.')
       return
@@ -203,7 +240,7 @@ function ProgressStudentPage() {
       if (!mounted.current) return
 
       setShowModal(false)
-      setToastMessage(`Đã cập nhật trạng thái duyệt cho báo cáo Tuần ${weekMap.get(selectedTienDo.maTienDo) || selectedTienDo.maTienDo} thành công!`)
+      setToastMessage('Đã lưu kết quả duyệt báo cáo.')
       setTimeout(() => setToastMessage(''), 4000)
     } catch (err) {
       if (!mounted.current) return
@@ -234,9 +271,9 @@ function ProgressStudentPage() {
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
             <span className="material-symbols-outlined text-xs">edit</span>
             Yêu cầu sửa
-            {revisionDeadline(report)
+            {revisionWindowStatus(report) === 'open'
               ? ` · nộp lại đến ${new Date(report.hanNopLai).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
-              : report?.hanNopLai && submissionBlock(report) ? ' · quá hạn nộp lại' : ''}
+              : revisionWindowStatus(report) === 'expired' ? ' · đã hết hạn nộp lại' : ' · chưa có hạn nộp lại'}
           </span>
         )
       case 'ChuaNop':
@@ -258,26 +295,18 @@ function ProgressStudentPage() {
   }
 
   // Thống kê tiến độ trực tiếp từ danh sách DB
-  const currentReports = listTienDo.filter((t) => !t.maPhanBoLuuTru)
-  const archivedCount = listTienDo.length - currentReports.length
-  const totalWeeks = currentReports.length
+  const currentReports = reportEntries.current
+  const archivedCount = reportEntries.history.length
+  const totalReports = currentReports.length
   const daDuyetCount = currentReports.filter((t) => t.trangThaiDuyet === 'DaDuyet').length
   const choDuyetCount = currentReports.filter((t) => t.trangThaiDuyet === 'DaNop').length
   const yeuCauSuaCount = currentReports.filter((t) => t.trangThaiDuyet === 'YeuCauSua').length
   const chuaNopCount = currentReports.filter((t) => t.trangThaiDuyet === 'ChuaNop' || !t.trangThaiDuyet).length
 
-    // Lập bản đồ số thứ tự tuần học vụ chuẩn theo trình tự thời gian (Tuần 1 -> Tuần N)
-  const weekMap = useMemo(() => {
-    const sorted = [...listTienDo].sort((a, b) => new Date(a.mocThoiGian || 0) - new Date(b.mocThoiGian || 0))
-    const map = new Map()
-    sorted.forEach((item, index) => {
-      map.set(item.maTienDo, index + 1)
-    })
-    return map
-  }, [listTienDo])
+  const outsideRoundCount = reportsOutsideRound(listTienDo, reportPeriod).length
 
   // Danh sách đã lọc theo trạng thái và từ khóa tìm kiếm
-  const filteredReports = listTienDo.filter((item) => {
+  const filteredReports = (showHistory ? listTienDo : currentReports).filter((item) => {
     if (statusFilter === 'DaNop' && item.trangThaiDuyet !== 'DaNop') return false
     if (statusFilter === 'DaDuyet' && item.trangThaiDuyet !== 'DaDuyet') return false
     if (statusFilter === 'YeuCauSua' && item.trangThaiDuyet !== 'YeuCauSua') return false
@@ -323,6 +352,8 @@ function ProgressStudentPage() {
 
   return (
     <div className="space-y-6">
+      {reviewNotice && <div role="status" className="p-3 rounded-xl bg-amber-50 text-amber-800 text-sm">{reviewNotice}</div>}
+      {!loading && outsideRoundCount > 0 && <div role="status" className="p-3 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 text-sm">Có {outsideRoundCount} báo cáo cũ nằm ngoài thời gian thực tập của sinh viên. Các báo cáo đã nộp được giữ nguyên để đối chiếu lịch sử.</div>}
       {/* 1. Header Trang & Thông tin Đợt */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -338,7 +369,7 @@ function ProgressStudentPage() {
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-0.5">
                 <span>{selectedDot?.tenDot || 'Đợt thực tập hiện hành'}</span>
                 <span>•</span>
-                <span className="text-blue-600 font-bold">Theo Dõi Tiến Độ Báo Cáo Tuần</span>
+                <span className="text-blue-600 font-bold">Theo dõi báo cáo tiến độ</span>
               </div>
               <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                 Chi Tiết Tiến Độ Thực Tập
@@ -417,7 +448,7 @@ function ProgressStudentPage() {
                   title="Nhấn để xem tất cả báo cáo"
                 >
                   <span className="text-slate-500 block font-medium">Tổng mốc báo cáo</span>
-                  <span className="text-lg font-black text-blue-700 font-mono">{totalWeeks}</span>
+                  <span className="text-lg font-black text-blue-700 font-mono">{totalReports}</span>
                 </button>
 
                 <button
@@ -501,13 +532,13 @@ function ProgressStudentPage() {
                 Nhật Ký Báo Cáo Thực Tập Định Kỳ
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Sinh viên nộp báo cáo định kỳ theo từng tuần. Giảng viên nhận xét và phê duyệt kết quả thực tập.
-                {archivedCount > 0 && ` (Ghi nhận ${archivedCount} báo cáo trước khi chuyển đơn vị thực tập — chỉ xem lịch sử)`}
+                Lịch báo cáo: {formatDateVN(reportPeriod.thoiGianBD)} – {formatDateVN(reportPeriod.thoiGianKT)}. Học phần 12 tuần, nộp 2 tuần/lần (6 kỳ).
               </p>
             </div>
           </div>
 
           {/* Thanh công cụ Lọc trạng thái & Tìm kiếm */}
+          {archivedCount > 0 && <label className="flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={showHistory} onChange={event => setShowHistory(event.target.checked)} />Xem thêm {archivedCount} báo cáo lịch sử (chỉ xem)</label>}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pt-2 border-t border-slate-200/60">
             {/* Tabs trạng thái */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-semibold">
@@ -520,7 +551,7 @@ function ProgressStudentPage() {
                     : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                Tất cả ({totalWeeks})
+                Tất cả ({totalReports})
               </button>
 
               <button
@@ -645,14 +676,14 @@ function ProgressStudentPage() {
         ) : listTienDo.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-xs space-y-2">
             <span className="material-symbols-outlined text-4xl text-slate-300">history_edu</span>
-            <p>Sinh viên này chưa nộp báo cáo tiến độ nào trong đợt thực tập này.</p>
+            <p>Chưa có mốc báo cáo được lưu cho sinh viên trong đợt này.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4 min-w-[140px]">Kỳ / Mã tiến độ</th>
+                  <th className="py-3 px-4 min-w-[140px]">Tuần báo cáo</th>
                   <th className="py-3 px-4 w-32">Mốc thời gian</th>
                   <th className="py-3 px-4 w-32">Ngày nộp</th>
                   <th className="py-3 px-4 min-w-[240px]">Nội dung công việc & Kết quả</th>
@@ -665,25 +696,7 @@ function ProgressStudentPage() {
                 {pagination.items.map((item, idx) => (
                   <tr key={item.maTienDo || idx} className="hover:bg-slate-50/70 transition-colors">
                     <td className="py-3.5 px-4 font-bold text-slate-800 align-top">
-                      {item.maTienDo?.length <= 8 ? (
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-slate-900 text-xs">
-                            Tuần {weekMap.get(item.maTienDo)}
-                          </span>
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-mono font-bold text-[11px]">
-                            {item.maTienDo}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs"
-                            title={`Mã hệ thống: ${item.maTienDo}`}
-                          >
-                            Tuần {weekMap.get(item.maTienDo)}
-                          </span>
-                        </div>
-                      )}
+                      <span className={`inline-block rounded-md border px-2.5 py-1 text-xs font-semibold ${reportWeekLabel(item, reportPeriod) === 'Ngoài lịch đợt' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-slate-200 bg-slate-50 text-slate-700'}`}>{reportWeekLabel(item, reportPeriod)}</span>
                     </td>
                     <td className="py-3.5 px-4 text-slate-700 align-top font-medium">
                       {formatDateVN(item.mocThoiGian)}
@@ -719,11 +732,11 @@ function ProgressStudentPage() {
                     </td>
                     <td className="py-3.5 px-4 text-center align-top">
                       {getStatusBadge(item.trangThaiDuyet, item)}
-                      {item.maPhanBoLuuTru && <div className="text-[11px] text-slate-500 mt-1">Lịch sử trước khi đổi nơi — chỉ xem</div>}
+                      {historicalIds.has(item.maTienDo) && <div className="text-[11px] text-slate-500 mt-1">Báo cáo lịch sử — chỉ xem</div>}
                     </td>
                     <td className="py-3.5 px-4 text-center align-top">
                       <div className="flex items-center justify-center gap-1.5">
-                        {!item.maPhanBoLuuTru && item.trangThaiDuyet === 'DaNop' ? (
+                        {!historicalIds.has(item.maTienDo) && item.trangThaiDuyet === 'DaNop' ? (
                           <button
                             onClick={() => handleOpenDuyet(item)}
                             disabled={roundLock.blocked}
@@ -773,7 +786,7 @@ function ProgressStudentPage() {
                   {modalMode === 'duyet' ? 'rate_review' : 'assignment'}
                 </span>
                 <h3 className="text-base font-bold text-slate-900">
-                  {modalMode === 'duyet' ? 'Phê Duyệt Tiến Độ' : 'Chi Tiết Báo Cáo'} — Tuần {weekMap.get(selectedTienDo.maTienDo)}{selectedTienDo.maTienDo?.length <= 8 ? ` (${selectedTienDo.maTienDo})` : ''}
+                  {modalMode === 'duyet' ? 'Duyệt báo cáo' : 'Chi tiết báo cáo'} — {reportWeekLabel(selectedTienDo, reportPeriod)} · {formatDateVN(selectedTienDo.mocThoiGian)}
                 </h3>
               </div>
               <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
@@ -785,7 +798,7 @@ function ProgressStudentPage() {
               {/* Thông tin mốc thời gian & ngày nộp */}
               <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100 text-slate-600">
                 <div>
-                  <span className="text-slate-400 block text-[11px]">Mốc thời gian:</span>
+                  <span className="text-slate-400 block text-[11px]">Hạn nộp ban đầu:</span>
                   <span className="font-semibold text-slate-800">
                     {formatDateVN(selectedTienDo.mocThoiGian)}
                   </span>
@@ -801,6 +814,10 @@ function ProgressStudentPage() {
                     </span>
                   )}
                 </div>
+                {revisionWindowStatus(selectedTienDo) && <div className="col-span-2 border-t border-slate-200 pt-2">
+                  <span className="text-slate-400 block text-[11px]">Hạn nộp lại theo yêu cầu sửa:</span>
+                  <span className="font-semibold text-slate-800">{new Date(selectedTienDo.hanNopLai).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (giờ Việt Nam)</span>
+                </div>}
               </div>
 
               {/* Form duyệt hoặc Trạng thái hiện tại */}
@@ -840,7 +857,7 @@ function ProgressStudentPage() {
               <div>
                 <label className="font-bold text-slate-700 block mb-1">Tệp đính kèm & Minh chứng:</label>
                 <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-                  <DocumentAttachments key={selectedTienDo.maTienDo} kind="Progress" resourceId={selectedTienDo.maTienDo} readOnly />
+                  <DocumentAttachments key={selectedTienDo.maTienDo} kind="Progress" resourceId={selectedTienDo.maTienDo} readOnly title="Tệp sinh viên đã nộp" />
                 </div>
               </div>
 

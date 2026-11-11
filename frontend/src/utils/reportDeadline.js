@@ -15,7 +15,12 @@ export function submissionBlock(report, now = Date.now()) {
     : 'Đã khóa nộp quá hạn. Lên Khoa trình bày lý do; chỉ nộp khi được Khoa chấp thuận và mở hạn bổ sung.'
 }
 
-// Hạn nộp lại còn hiệu lực của báo cáo bị yêu cầu sửa (null nếu không có).
+// Hạn nộp lại được lưu của báo cáo bị yêu cầu sửa (kể cả hạn đã qua).
 export function revisionDeadline(report) {
   return Number.isFinite(revisionEnd(report)) ? report.hanNopLai : null
+}
+
+export function revisionWindowStatus(report, now = Date.now()) {
+  const end = revisionEnd(report)
+  return Number.isFinite(end) ? (now <= end ? 'open' : 'expired') : null
 }

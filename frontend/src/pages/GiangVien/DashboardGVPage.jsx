@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useDotThucTap } from '../../contexts/DotThucTapContext.jsx'
 import { gvHuongDanService } from '../../services/gvHuongDanService'
@@ -7,7 +7,7 @@ import { phieuChamDiemService } from '../../services/phieuChamDiemService'
 import { useIdentity } from '../../hooks/useIdentity'
 import NoLinkedAccount from '../../components/common/NoLinkedAccount.jsx'
 import { formatTenDot, getLoaiThucTapInfo } from '../../utils/dotThucTap'
-import { loadLecturerDashboard, lecturerLoad } from '../../utils/lecturerDashboard'
+import { loadLecturerDashboard, lecturerLoad, reportDeadlineLabel, reportReviewUrl } from '../../utils/lecturerDashboard'
 import { useTenKhoa } from '../../contexts/AuthContext.jsx'
 import {
   ResponsiveContainer,
@@ -41,7 +41,6 @@ export default function DashboardGVPage() {
   const [pendingReports, setPendingReports] = useState([])
   const [gradedCount, setGradedCount] = useState(0)
   const [gvGradedCount, setGvGradedCount] = useState(0)
-  const [dnGradedCount, setDnGradedCount] = useState(0)
   const [avgScore, setAvgScore] = useState(0)
 
   const [weekly, setWeekly] = useState({ rows: [], invalidDates: 0 })
@@ -50,7 +49,7 @@ export default function DashboardGVPage() {
 
   useEffect(() => {
     let active = true
-    setLecturers([]); setStudents([]); setPendingReports([]); setGradedCount(0); setGvGradedCount(0); setDnGradedCount(0); setAvgScore(0)
+    setLecturers([]); setStudents([]); setPendingReports([]); setGradedCount(0); setGvGradedCount(0); setAvgScore(0)
     setWeekly({ rows: [], invalidDates: 0 }); setError(null)
     if (!currentMaGV || !maDot) { setLoading(false); return () => { active = false } }
     setLoading(true)
@@ -61,7 +60,6 @@ export default function DashboardGVPage() {
       setLecturers(data.lecturers); setStudents(data.students); setPendingReports(data.pendingReports)
       setGradedCount(data.completed.count)
       setGvGradedCount(data.gvGradedCount ?? data.completed.count)
-      setDnGradedCount(data.dnGradedCount ?? data.completed.count)
       setAvgScore(data.completed.average == null ? 0 : data.completed.average.toFixed(2))
       setWeekly(data.weekly)
     }).catch(err => {
@@ -84,21 +82,7 @@ export default function DashboardGVPage() {
     { name: 'Chờ GV chấm điểm', value: waitingLecturer, color: '#F59E0B' },
   ].filter(d => d.value > 0)
 
-  // Chuẩn hóa số liệu biểu đồ cột theo số lượng sinh viên phụ trách (tránh vọt số ảo khi tuần có nhiều mốc nộp)
-  const normalizedWeeklyRows = useMemo(() => {
-    if (!weekly?.rows || !students.length) return weekly?.rows || []
-    const maxStudents = students.length
-    return weekly.rows.map(row => {
-      const totalInWeek = (row.nop || 0) + (row.tre || 0) + (row.chuaNop || 0) + (row.chuaRo || 0)
-      if (totalInWeek <= maxStudents) return row
-      const factor = maxStudents / totalInWeek
-      const nop = Math.round((row.nop || 0) * factor)
-      const tre = Math.round((row.tre || 0) * factor)
-      const chuaRo = Math.round((row.chuaRo || 0) * factor)
-      const chuaNop = Math.max(0, maxStudents - nop - tre - chuaRo)
-      return { ...row, nop, tre, chuaNop, chuaRo }
-    })
-  }, [weekly?.rows, students.length])
+  const weeklyRows = weekly.rows
 
   if (!currentMaGV) return <NoLinkedAccount type="giảng viên (Khoa cần chọn GV để xem)" />
   if (!maDot) return <div role="status">Chọn đợt thực tập để xem thống kê giảng viên.</div>
@@ -114,7 +98,7 @@ export default function DashboardGVPage() {
             <span className="text-blue-600 font-bold">Cổng Giảng Viên</span>
           </div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            Bảng Điều Khiển Tổng Quan
+            Tổng quan hướng dẫn
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse"></span>
               {formatTenDot(selectedDot)}
@@ -124,7 +108,7 @@ export default function DashboardGVPage() {
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-1">
-            Theo dõi tổng quan tình hình hướng dẫn, báo cáo tiến độ tuần và đánh giá kết quả thực tập tốt nghiệp của sinh viên.
+            Theo dõi sinh viên hướng dẫn, báo cáo tuần và kết quả chấm điểm trong đợt.
           </p>
 
           {isStaff && currentLecturer && (
@@ -158,7 +142,7 @@ export default function DashboardGVPage() {
       {loading || readyKey !== `${maDot}|${currentMaGV}` ? (
         <div className="p-16 text-center text-slate-400 bg-white rounded-2xl border border-slate-200">
           <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-          Đang tổng hợp dữ liệu điều hành...
+          Đang tải thống kê…
         </div>
       ) : error ? (
         <div className="p-8 text-center text-red-600 bg-white rounded-2xl border border-red-200 text-sm">
@@ -183,7 +167,7 @@ export default function DashboardGVPage() {
                   <span className="text-xs font-semibold text-slate-400">/ {load.quota ?? '—'} chỉ tiêu</span>
                 </div>
                 <span className="inline-block mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
-                  {load.quota == null ? 'Chưa có dữ liệu chỉ tiêu' : load.quota === 0 ? 'Chỉ tiêu 0 — không nhận thêm' : `${load.percent}% tải hướng dẫn (${load.used}/${load.quota})`}
+                  {load.quota == null ? 'Chưa có dữ liệu chỉ tiêu' : load.quota === 0 ? 'Chưa có chỉ tiêu nhận thêm' : `Đang hướng dẫn ${load.used}/${load.quota} sinh viên`}
                 </span>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition flex items-center justify-center">
@@ -292,10 +276,10 @@ export default function DashboardGVPage() {
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-blue-600">notification_important</span>
                   <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                    Việc Cần Xử Lý Ngay ({pendingReports.length})
+                    Báo cáo chờ duyệt ({pendingReports.length})
                   </h2>
                 </div>
-                <Link to="/giang-vien/tien-do" className="text-xs text-blue-600 font-bold hover:underline">
+                <Link to={`/giang-vien/tien-do?gv=${encodeURIComponent(currentMaGV)}`} className="text-xs text-blue-600 font-bold hover:underline">
                   Xem tất cả tiến độ →
                 </Link>
               </div>
@@ -305,7 +289,7 @@ export default function DashboardGVPage() {
                   <div className="py-8 text-center text-slate-500 text-xs space-y-3">
                     <span className="material-symbols-outlined text-4xl text-amber-500">pending_actions</span>
                     <div>
-                      <p className="font-semibold text-slate-800 text-sm">Tất cả báo cáo tuần đã được xử lý</p>
+                      <p className="font-semibold text-slate-800 text-sm">Không có báo cáo đang chờ duyệt</p>
                       <p className="text-slate-500 mt-1">Hiện có <strong>{waitingLecturer} sinh viên</strong> đang chờ Giảng viên đánh giá & chấm điểm CLO.</p>
                     </div>
                     <Link
@@ -336,7 +320,7 @@ export default function DashboardGVPage() {
                             {r.maSV}
                           </span>
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                            {r.maTienDo}
+                            {reportDeadlineLabel(r)}
                           </span>
                         </div>
                         <p className="text-xs text-slate-600 line-clamp-1">
@@ -345,10 +329,10 @@ export default function DashboardGVPage() {
                       </div>
 
                       <Link
-                        to={`/giang-vien/tien-do?sv=${r.maSV}`}
+                        to={reportReviewUrl(currentMaGV, r)}
                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition whitespace-nowrap"
                       >
-                        Duyệt ngay
+                        Duyệt báo cáo
                       </Link>
                     </div>
                   ))}
@@ -418,19 +402,19 @@ export default function DashboardGVPage() {
             </div>
           </div>
 
-          {/* 4. Biểu đồ Tiến độ Nộp Báo Cáo Theo Tuần (Chuẩn hóa số liệu, không bị vọt số ảo) */}
+          {/* Số báo cáo theo tuần có hạn nộp */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                  Tiến Độ Nộp Báo Cáo Theo Tuần Của Sinh Viên Phụ Trách
+                  Tình hình nộp báo cáo theo tuần
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Thống kê tình hình nộp báo cáo của sinh viên theo các tuần thực tập.
+                  Đếm theo số báo cáo có hạn nộp trong từng tuần. Một sinh viên có thể có nhiều báo cáo trong tuần.
                 </p>
               </div>
-              <Link to="/giang-vien/lich-deadline" className="text-xs text-blue-600 font-bold hover:underline">
-                Xem lịch & deadline chi tiết →
+              <Link to={`/giang-vien/lich-deadline?gv=${encodeURIComponent(currentMaGV)}`} className="text-xs text-blue-600 font-bold hover:underline">
+                Xem lịch và hạn nộp →
               </Link>
             </div>
 
@@ -438,23 +422,24 @@ export default function DashboardGVPage() {
               <span><span className="inline-block w-2 h-2 rounded-full bg-blue-600 mr-1" />Đã nộp đúng hạn</span>
               <span><span className="inline-block w-2 h-2 rounded-full bg-red-500 mr-1" />Nộp sau hạn gốc</span>
               <span><span className="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1" />Chưa nộp</span>
-              {normalizedWeeklyRows.some(row => row.chuaRo > 0) && <span><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />Chưa xác định</span>}
+              {weeklyRows.some(row => row.chuaRo > 0) && <span><span className="inline-block w-2 h-2 rounded-full bg-amber-500 mr-1" />Chưa xác định</span>}
             </div>
+            {weekly.invalidDates > 0 && <p role="status" className="text-xs text-amber-700">Có {weekly.invalidDates} báo cáo chưa có hạn nộp hợp lệ nên chưa được tính vào biểu đồ.</p>}
 
-            {!normalizedWeeklyRows.length ? (
+            {!weeklyRows.length ? (
               <p className="py-10 text-center text-slate-500">Chưa có mốc báo cáo trong đợt này cho sinh viên phụ trách.</p>
             ) : (
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={normalizedWeeklyRows} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <BarChart data={weeklyRows} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                     <XAxis dataKey="tuan" tick={{ fontSize: 11 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} domain={[0, Math.max(4, students.length)]} />
-                    <Tooltip formatter={(value) => [`${value} sinh viên`]} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} domain={[0, 'auto']} />
+                    <Tooltip formatter={(value) => [`${value} báo cáo`]} />
                     <Bar dataKey="nop" name="Đã nộp đúng hạn" fill="#2563EB" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="tre" name="Nộp sau hạn gốc" fill="#EF4444" radius={[4, 4, 0, 0]} />
                     <Bar dataKey="chuaNop" name="Chưa nộp" fill="#94A3B8" radius={[4, 4, 0, 0]} />
-                    {normalizedWeeklyRows.some(row => row.chuaRo > 0) && (
+                    {weeklyRows.some(row => row.chuaRo > 0) && (
                       <Bar dataKey="chuaRo" name="Chưa xác định" fill="#F59E0B" radius={[4, 4, 0, 0]} />
                     )}
                   </BarChart>

@@ -77,6 +77,8 @@ public class PhongVanService : IPhongVanService
             HanXacNhanSV = !pb.DaDuocKhoaDuyet ? pb.DotThucTap?.HanXacNhanSV : null,
             QuaHanXacNhan = InternshipManagement.DAL.Common.ConfirmationDeadlinePolicy.Overdue(pb, _clock.GetUtcNow()),
             NgayKhoaDuyet = pb.NgayKhoaDuyet,
+            NgayBatDauThucTap = start,
+            NgayKetThucThucTap = end,
 
             GiangVienHD = gv?.HoTen,
             ChuyenMonGV = gv?.ChuyenMon,

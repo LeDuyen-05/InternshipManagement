@@ -7,24 +7,10 @@ import doanhNghiepService from '../../services/doanhNghiepService.js'
 import ModalOverlay from '../../components/common/ModalOverlay.jsx'
 
 import { formatInterviewDate, formatInterviewTime, hasInterviewStarted, interviewFormTimestamp, isFutureInterview, vietnamDateTimeParts } from '../../utils/interviewTime'
+import { formatInterviewMethod } from '../../utils/interviewMethod'
 
 function formatHinhThucDisplay(val) {
-  if (!val) return 'Trực tuyến qua Google Meet'
-  let s = String(val).trim()
-  if (s.includes('Trá»±c tiáº¿p') || s.includes('Tr?c ti?p') || s.toLowerCase().includes('trực tiếp')) {
-    if (s.includes('FPT')) return 'Trực tiếp tại văn phòng FPT Software'
-    if (s.includes('VNG')) return 'Trực tiếp tại trụ sở VNG Campus'
-    if (s.includes('Viettel')) return 'Trực tiếp tại tòa nhà Viettel'
-    if (s.toLowerCase().includes('công ty')) return 'Trực tiếp tại văn phòng công ty'
-    return 'Trực tiếp tại văn phòng'
-  }
-  if (s.includes('Trá»±c tuyáº¿n') || s.includes('Tr?c tuy?n') || s.toLowerCase().includes('trực tuyến')) {
-    if (s.toLowerCase().includes('meet')) return 'Trực tuyến qua Google Meet'
-    if (s.toLowerCase().includes('zoom')) return 'Trực tuyến qua Zoom'
-    if (s.toLowerCase().includes('teams')) return 'Trực tuyến qua Microsoft Teams'
-    return 'Trực tuyến qua Google Meet'
-  }
-  return s
+  return formatInterviewMethod(val)
 }
 
 
@@ -245,13 +231,13 @@ function InterviewRoundPage() {
 
       {correction && <InterviewCorrectionPanel key={correction.maPV} interview={correction} maDot={correction.maDot}
         canEdit={!correction.daKhoaDot && ['Dat', 'KhongDat', 'Vang'].includes(correction.ketQua)}
-        onClose={() => setCorrection(null)} onChanged={async () => { await fetchData(); setToast({ type: 'success', message: 'Đã lưu điều chỉnh PV và lịch sử.' }) }}/>}
+        onClose={() => setCorrection(null)} onChanged={async () => { await fetchData(); setToast({ type: 'success', message: 'Đã lưu thay đổi kết quả phỏng vấn.' }) }}/>}
       {/* Header Page */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Lịch phỏng vấn</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Lịch dùng giờ Việt Nam (UTC+7). DN chủ động thông báo lịch và thay đổi qua email/điện thoại bên ngoài hệ thống.
+            Thời gian theo giờ Việt Nam. Doanh nghiệp cần thông báo lịch hoặc thay đổi lịch cho ứng viên qua email, điện thoại.
           </p>
         </div>
         <button
@@ -262,11 +248,11 @@ function InterviewRoundPage() {
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold shadow-sm transition-all"
         >
           <span className="material-symbols-outlined text-[18px]">add_circle</span>
-          <span>Lên lịch phỏng vấn mới</span>
+          <span>Tạo lịch phỏng vấn</span>
         </button>
       </div>
 
-      {/* 4 Bento Metrics */}
+      {/* Thống kê phỏng vấn */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="rounded-2xl bg-white p-5 border border-slate-200 shadow-xs">
           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tổng buổi phỏng vấn</div>
@@ -297,7 +283,7 @@ function InterviewRoundPage() {
       <div className="rounded-2xl bg-white border border-slate-200 shadow-xs overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-            Danh sách lịch phỏng vấn tuyển dụng
+            Danh sách phỏng vấn
           </h2>
           <span className="text-xs text-slate-500">{filtered.length} / {interviews.length} buổi phỏng vấn</span>
         </div>
@@ -423,7 +409,7 @@ function InterviewRoundPage() {
                               hoTenSV: item.hoTenSV,
                               ngayPV: ngay < homNay() ? homNay() : ngay,
                               gioPV: gio,
-                              hinhThuc: item.hinhThuc || 'Trực tuyến qua Google Meet',
+                              hinhThuc: formatInterviewMethod(item.hinhThuc || 'Trực tuyến qua Google Meet'),
                               maDaiDien: item.maDaiDien,
                             })
                           }}
@@ -462,7 +448,7 @@ function InterviewRoundPage() {
         </div>
       </div>
 
-      {/* Modal Lên lịch phỏng vấn mới */}
+      {/* Modal Tạo lịch phỏng vấn */}
       {showScheduleModal && (
         <ModalOverlay onClose={() => setShowScheduleModal(false)}>
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">

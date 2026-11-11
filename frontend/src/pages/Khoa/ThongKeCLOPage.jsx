@@ -1,5 +1,4 @@
 import { toast } from "../../contexts/ToastContext.jsx"
-import { Link } from 'react-router-dom'
 import { usePagination } from '../../hooks/usePagination'
 import Pagination from '../../components/common/Pagination'
 import { useState, useEffect, useMemo, useRef } from 'react'
@@ -876,9 +875,23 @@ export default function ThongKeCLOPage() {
                 </div>
               </div>
 
+              {!loadingScoreDetail && scoreDetailData?.allCriteria?.length > 0 && displayCriteriaList.some(tc => tc.diemCham == null) && (
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 space-y-1" role="status">
+                  <p className="font-semibold">Chưa đủ điểm để xếp loại. Tổng điểm hiện tại là tạm tính.</p>
+                  {['GV', 'DN'].map(group => {
+                    const missing = displayCriteriaList.filter(tc => tc.diemCham == null && (tc.nhom === 'DN' ? 'DN' : 'GV') === group)
+                    return missing.length > 0 && (
+                      <p key={group}>
+                        {group === 'DN' ? 'Doanh nghiệp' : 'GVHD'} chưa chấm: {missing.map(tc => tc.maCLO || tc.maTieuChi).join(', ')}.
+                      </p>
+                    )
+                  })}
+                </div>
+              )}
+
               {/* Footer info kết quả */}
-              <div className="flex items-center justify-between p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 text-blue-900">
-                <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80 text-blue-900">
+                <div className="flex flex-wrap items-center gap-4">
                   <div>
                     <span className="text-[10px] uppercase font-bold text-slate-500 block">Xếp loại</span>
                     <strong className="text-sm text-slate-900">{selectedStudentScore.xepLoai || '—'}</strong>
@@ -890,14 +903,7 @@ export default function ThongKeCLOPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Link
-                    to={`/khoa/cham-diem?sv=${selectedStudentScore.maSV}`}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors inline-flex items-center gap-1.5 shadow-xs"
-                  >
-                    <span className="material-symbols-outlined text-sm">edit_note</span>
-                    <span>Nhập điểm học vụ</span>
-                  </Link>
+                <div className="flex justify-end shrink-0">
                   <button
                     type="button"
                     onClick={() => { setSelectedStudentScore(null); setScoreDetailData(null) }}
